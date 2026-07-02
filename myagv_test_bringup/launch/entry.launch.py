@@ -202,36 +202,36 @@ def generate_launch_description():
         cmd=['gzclient'],
         cwd=[launch_dir], output='screen')
 
-    # locationpub_cmd = Node(
-    #     package='locationpub',
-    #     executable='locationpub',
-    #     name='locationpub',
-    #     output='screen',
-    #     parameters=[{'use_sim_time': use_sim_time},
-    #                 {'parent_frame': 'map'},
-    #                 {'child_frame': 'turtlebot3_waffle'},
-    #                 {'x': 0.569},
-    #                 {'y': 0.541},
-    #                 {'z': 0.0},
-    #                 {'yaw': 0.0},
-    #                 {'tf_time_offset': 0.2},
-    #                 {'publish_rate': 30.0}])
+    locationpub_cmd = Node(
+        package='locationpub',
+        executable='locationpub',
+        name='locationpub',
+        output='screen',
+        parameters=[{'use_sim_time': use_sim_time},
+                    {'parent_frame': 'map'},
+                    {'child_frame': 'turtlebot3_waffle'},
+                    {'x': 0.569},
+                    {'y': 0.541},
+                    {'z': 0.0},
+                    {'yaw': 0.0},
+                    {'tf_time_offset': 0.2},
+                    {'publish_rate': 30.0}])
 
-    # laserpub_cmd = Node(
-    #     package='laserpub',
-    #     executable='laserpub',
-    #     name='laserpub',
-    #     output='screen',
-    #     parameters=[{'use_sim_time': use_sim_time},
-    #                 {'topic': 'scan'},
-    #                 {'frame_id': 'base_link'},
-    #                 {'angle_min': -3.141592653589793},
-    #                 {'angle_max': 3.141592653589793},
-    #                 {'range_min': 0.12},
-    #                 {'range_max': 3.5},
-    #                 {'default_range': 3.5},
-    #                 {'sample_count': 360},
-    #                 {'publish_rate': 10.0}])
+    laserpub_cmd = Node(
+        package='laserpub',
+        executable='laserpub',
+        name='laserpub',
+        output='screen',
+        parameters=[{'use_sim_time': use_sim_time},
+                    {'topic': 'scan'},
+                    {'frame_id': 'base_link'},
+                    {'angle_min': -3.141592653589793},
+                    {'angle_max': 3.141592653589793},
+                    {'range_min': 0.12},
+                    {'range_max': 3.5},
+                    {'default_range': 3.5},
+                    {'sample_count': 360},
+                    {'publish_rate': 10.0}])
 
     static_robot_to_base_link_cmd = Node(
         package='tf2_ros',
