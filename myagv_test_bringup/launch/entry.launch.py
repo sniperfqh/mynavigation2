@@ -26,6 +26,7 @@ from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.descriptions import ParameterFile
 from nav2_common.launch import RewrittenYaml
+import xacro
 
 
 def generate_launch_description():
@@ -61,6 +62,9 @@ def generate_launch_description():
     robot_name = LaunchConfiguration('robot_name')
     robot_sdf = LaunchConfiguration('robot_sdf')
     log_level = LaunchConfiguration('log_level')
+    robot_description_file = os.path.join(bringup_dir, 'urdf', 'turtlebot3_waffle.urdf')
+    robot_description = xacro.parse(open(robot_description_file))
+    xacro.process_doc(robot_description)
 
     remappings = [('/tf', 'tf'),
                   ('/tf_static', 'tf_static')]
@@ -198,59 +202,36 @@ def generate_launch_description():
         cmd=['gzclient'],
         cwd=[launch_dir], output='screen')
 
-    # start_robot_state_publisher_cmd = Node(
-    #     condition=IfCondition(use_robot_state_pub),
-    #     package='robot_state_publisher',
-    #     executable='robot_state_publisher',
-    #     name='robot_state_publisher',
-    #     namespace=namespace,
+    # locationpub_cmd = Node(
+    #     package='locationpub',
+    #     executable='locationpub',
+    #     name='locationpub',
     #     output='screen',
-    #     parameters=[{'use_sim_time': use_sim_time,
-    #                  'robot_description': robot_description}],
-    #     remappings=remappings)
+    #     parameters=[{'use_sim_time': use_sim_time},
+    #                 {'parent_frame': 'map'},
+    #                 {'child_frame': 'turtlebot3_waffle'},
+    #                 {'x': 0.569},
+    #                 {'y': 0.541},
+    #                 {'z': 0.0},
+    #                 {'yaw': 0.0},
+    #                 {'tf_time_offset': 0.2},
+    #                 {'publish_rate': 30.0}])
 
-    # start_gazebo_spawner_cmd = Node(
-    #     condition=IfCondition(use_simulator),
-    #     package='gazebo_ros',
-    #     executable='spawn_entity.py',
+    # laserpub_cmd = Node(
+    #     package='laserpub',
+    #     executable='laserpub',
+    #     name='laserpub',
     #     output='screen',
-    #     arguments=[
-    #         '-entity', robot_name,
-    #         '-file', robot_sdf,
-    #         '-robot_namespace', namespace,
-    #         '-x', pose['x'], '-y', pose['y'], '-z', pose['z'],
-    #         '-R', pose['R'], '-P', pose['P'], '-Y', pose['Y']])
-
-    locationpub_cmd = Node(
-        package='locationpub',
-        executable='locationpub',
-        name='locationpub',
-        output='screen',
-        parameters=[{'use_sim_time': use_sim_time},
-                    {'parent_frame': 'map'},
-                    {'child_frame': 'turtlebot3_waffle'},
-                    {'x': 0.569},
-                    {'y': 0.541},
-                    {'z': 0.0},
-                    {'yaw': 0.0},
-                    {'tf_time_offset': 0.2},
-                    {'publish_rate': 30.0}])
-
-    laserpub_cmd = Node(
-        package='laserpub',
-        executable='laserpub',
-        name='laserpub',
-        output='screen',
-        parameters=[{'use_sim_time': use_sim_time},
-                    {'topic': 'scan'},
-                    {'frame_id': 'base_link'},
-                    {'angle_min': -3.141592653589793},
-                    {'angle_max': 3.141592653589793},
-                    {'range_min': 0.12},
-                    {'range_max': 3.5},
-                    {'default_range': 3.5},
-                    {'sample_count': 360},
-                    {'publish_rate': 10.0}])
+    #     parameters=[{'use_sim_time': use_sim_time},
+    #                 {'topic': 'scan'},
+    #                 {'frame_id': 'base_link'},
+    #                 {'angle_min': -3.141592653589793},
+    #                 {'angle_max': 3.141592653589793},
+    #                 {'range_min': 0.12},
+    #                 {'range_max': 3.5},
+    #                 {'default_range': 3.5},
+    #                 {'sample_count': 360},
+    #                 {'publish_rate': 10.0}])
 
     static_robot_to_base_link_cmd = Node(
         package='tf2_ros',
@@ -258,6 +239,24 @@ def generate_launch_description():
         name='turtlebot3_waffle_to_base_link_tf',
         output='screen',
         arguments=['0', '0', '0', '0', '0', '0', 'turtlebot3_waffle', 'base_link'])
+
+    robot_state_publisher_cmd = Node(
+        package='robot_state_publisher',
+        executable='robot_state_publisher',
+        name='robot_state_publisher',
+        output='screen',
+        parameters=[{
+            'use_sim_time': use_sim_time,
+            'robot_description': robot_description.toxml()}])
+
+    joint_state_publisher_cmd = Node(
+        package='joint_state_publisher',
+        executable='joint_state_publisher',
+        name='joint_state_publisher',
+        output='screen',
+        parameters=[{
+            'use_sim_time': use_sim_time,
+            'robot_description': robot_description.toxml()}])
 
     rviz_cmd = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -331,6 +330,13 @@ def generate_launch_description():
     ld.add_action(locationpub_cmd)
     ld.add_action(laserpub_cmd)
     ld.add_action(static_robot_to_base_link_cmd)
+    ld.add_action(robot_state_publisher_cmd)
+    ld.add_action(joint_state_publisher_cmd)
+    ld.add_action(Node(
+        package='myagv_test_bringup',
+        executable='robot_description_publisher.py',
+        name='robot_description_publisher',
+        output='screen'))
     # ld.add_action(start_robot_state_publisher_cmd)
     ld.add_action(rviz_cmd)
     ld.add_action(map_server_cmd)

@@ -40,7 +40,7 @@ def generate_launch_description():
     #   lifecycle_nodes: 列表 = 需要由 lifecycle manager 管理的节点名（会传给 lifecycle_manager）
     #   remappings: 全局 remap（例如 /tf）以便 namespace 生效
     # 在文件后半部分：根据 use_composition 的值决定是用 GroupAction 启动独立节点，还是用 LoadComposableNodes 加载可组合节点。
-    bringup_dir = get_package_share_directory('myworld_bringup')
+    bringup_dir = get_package_share_directory('mytb3_bringup')
 
     namespace = LaunchConfiguration('namespace')
     use_sim_time = LaunchConfiguration('use_sim_time')
@@ -121,7 +121,7 @@ def generate_launch_description():
 
     declare_params_file_cmd = DeclareLaunchArgument(
         'params_file',
-        default_value=os.path.join(bringup_dir, 'params', 'myworld2.yaml'),
+        default_value=os.path.join(bringup_dir, 'params', 'nav2_params.yaml'),
         description='Full path to the ROS2 parameters file to use for all launched nodes')
 
     declare_autostart_cmd = DeclareLaunchArgument(
