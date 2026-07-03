@@ -26,7 +26,6 @@ from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
 from launch_ros.descriptions import ParameterFile
 from nav2_common.launch import RewrittenYaml
-import xacro
 
 
 def generate_launch_description():
@@ -62,9 +61,9 @@ def generate_launch_description():
     robot_name = LaunchConfiguration('robot_name')
     robot_sdf = LaunchConfiguration('robot_sdf')
     log_level = LaunchConfiguration('log_level')
-    robot_description_file = os.path.join(bringup_dir, 'urdf', 'turtlebot3_waffle.urdf')
-    robot_description = xacro.parse(open(robot_description_file))
-    xacro.process_doc(robot_description)
+    # robot_description_file = os.path.join(bringup_dir, 'urdf', 'turtlebot3_waffle.urdf')
+    # with open(robot_description_file, 'r', encoding='utf-8') as urdf_file:
+    #     robot_description = urdf_file.read()
 
     remappings = [('/tf', 'tf'),
                   ('/tf_static', 'tf_static')]
@@ -240,23 +239,23 @@ def generate_launch_description():
         output='screen',
         arguments=['0', '0', '0', '0', '0', '0', 'odom', 'base_link'])
 
-    robot_state_publisher_cmd = Node(
-        package='robot_state_publisher',
-        executable='robot_state_publisher',
-        name='robot_state_publisher',
-        output='screen',
-        parameters=[{
-            'use_sim_time': use_sim_time,
-            'robot_description': robot_description.toxml()}])
+    # robot_state_publisher_cmd = Node(
+    #     package='robot_state_publisher',
+    #     executable='robot_state_publisher',
+    #     name='robot_state_publisher',
+    #     output='screen',
+    #     parameters=[{
+    #         'use_sim_time': use_sim_time,
+    #         'robot_description': robot_description}])
 
-    joint_state_publisher_cmd = Node(
-        package='joint_state_publisher',
-        executable='joint_state_publisher',
-        name='joint_state_publisher',
-        output='screen',
-        parameters=[{
-            'use_sim_time': use_sim_time,
-            'robot_description': robot_description.toxml()}])
+    # joint_state_publisher_cmd = Node(
+    #     package='joint_state_publisher',
+    #     executable='joint_state_publisher',
+    #     name='joint_state_publisher',
+    #     output='screen',
+    #     parameters=[{
+    #         'use_sim_time': use_sim_time,
+    #         'robot_description': robot_description}])
 
     rviz_cmd = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
@@ -330,13 +329,13 @@ def generate_launch_description():
     # ld.add_action(locationpub_cmd)
     # ld.add_action(laserpub_cmd)
     ld.add_action(static_robot_to_base_link_cmd)
-    ld.add_action(robot_state_publisher_cmd)
-    ld.add_action(joint_state_publisher_cmd)
-    ld.add_action(Node(
-        package='myagv_test_bringup',
-        executable='robot_description_publisher.py',
-        name='robot_description_publisher',
-        output='screen'))
+    # ld.add_action(robot_state_publisher_cmd)
+    # ld.add_action(joint_state_publisher_cmd)
+    # ld.add_action(Node(
+    #     package='myagv_test_bringup',
+    #     executable='robot_description_publisher.py',
+    #     name='robot_description_publisher',
+    #     output='screen'))
     # ld.add_action(start_robot_state_publisher_cmd)
     ld.add_action(rviz_cmd)
     ld.add_action(map_server_cmd)

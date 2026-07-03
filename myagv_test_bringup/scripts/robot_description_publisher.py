@@ -6,7 +6,6 @@ import rclpy
 from ament_index_python.packages import get_package_share_directory
 from rclpy.qos import DurabilityPolicy, QoSProfile
 from std_msgs.msg import String
-import xacro
 
 
 def main():
@@ -17,14 +16,14 @@ def main():
         get_package_share_directory('myagv_test_bringup'),
         'urdf',
         'turtlebot3_waffle.urdf')
-    doc = xacro.parse(open(urdf_path))
-    xacro.process_doc(doc)
+    with open(urdf_path, 'r', encoding='utf-8') as urdf_file:
+        robot_description = urdf_file.read()
 
     qos = QoSProfile(depth=1)
     qos.durability = DurabilityPolicy.TRANSIENT_LOCAL
     publisher = node.create_publisher(String, '/robot_description', qos)
     message = String()
-    message.data = doc.toxml()
+    message.data = robot_description
 
     def publish_description():
         publisher.publish(message)
