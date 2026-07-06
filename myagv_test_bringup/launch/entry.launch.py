@@ -232,12 +232,28 @@ def generate_launch_description():
     #                 {'sample_count': 360},
     #                 {'publish_rate': 10.0}])
 
-    static_robot_to_base_link_cmd = Node(
-        package='tf2_ros',
-        executable='static_transform_publisher',
-        name='odom_to_base_link_tf',
-        output='screen',
-        arguments=['0', '0', '0', '0', '0', '0', 'odom', 'base_link'])
+    # map2base_tf_cmd = Node(
+    #     package='map2base_tf',
+    #     executable='map2baseTF',
+    #     name='map2baseTF',
+    #     output='screen',
+    #     parameters=[{'use_sim_time': use_sim_time},
+    #                 {'parent_frame': 'map'},
+    #                 {'child_frame': 'base_link'},
+    #                 {'x': 0.569},
+    #                 {'y': 0.541},
+    #                 {'z': 0.0},
+    #                 {'yaw': 0.0},
+    #                 {'publish_rate': 30.0}])
+
+    # In map->base_link localization mode, the vehicle localization system
+    # publishes map->base_link directly. Keep this disabled to avoid TF conflict.
+    # static_robot_to_base_link_cmd = Node(
+    #     package='tf2_ros',
+    #     executable='static_transform_publisher',
+    #     name='odom_to_base_link_tf',
+    #     output='screen',
+    #     arguments=['0', '0', '0', '0', '0', '0', 'odom', 'base_link'])
 
     # robot_state_publisher_cmd = Node(
     #     package='robot_state_publisher',
@@ -328,7 +344,8 @@ def generate_launch_description():
 
     # ld.add_action(locationpub_cmd)
     # ld.add_action(laserpub_cmd)
-    ld.add_action(static_robot_to_base_link_cmd)
+    # ld.add_action(map2base_tf_cmd)
+    # ld.add_action(static_robot_to_base_link_cmd)
     # ld.add_action(robot_state_publisher_cmd)
     # ld.add_action(joint_state_publisher_cmd)
     # ld.add_action(Node(
