@@ -23,7 +23,6 @@ from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import LoadComposableNodes
 from launch_ros.actions import Node
 from launch_ros.descriptions import ComposableNode, ParameterFile
-from launch_ros.parameter_descriptions import ParameterValue
 from nav2_common.launch import RewrittenYaml
 
 
@@ -41,15 +40,8 @@ def generate_launch_description():
     container_name_full = (namespace, '/', container_name)
     use_respawn = LaunchConfiguration('use_respawn')
     log_level = LaunchConfiguration('log_level')
-    localization_parent_frame = LaunchConfiguration('localization_parent_frame')
-    localization_child_frame = LaunchConfiguration('localization_child_frame')
-    localization_x = LaunchConfiguration('localization_x')
-    localization_y = LaunchConfiguration('localization_y')
-    localization_z = LaunchConfiguration('localization_z')
-    localization_yaw = LaunchConfiguration('localization_yaw')
-    localization_tf_time_offset = LaunchConfiguration('localization_tf_time_offset')
 
-    lifecycle_nodes = ['map_server']
+    lifecycle_nodes = ['map_server', 'amcl']
 
     # Map fully qualified names to relative ones so the node's namespace can be prepended.
     # In case of the transforms (tf), currently, there doesn't seem to be a better alternative
@@ -83,7 +75,7 @@ def generate_launch_description():
 
     declare_map_yaml_cmd = DeclareLaunchArgument(
         'map',
-        default_value=os.path.join(bringup_dir, 'maps', 'out.yaml'),
+        default_value=os.path.join(bringup_dir, 'maps', 'turtlebot3_world.yaml'),
         description='Full path to map yaml file to load')
 
     declare_use_sim_time_cmd = DeclareLaunchArgument(
@@ -93,7 +85,7 @@ def generate_launch_description():
 
     declare_params_file_cmd = DeclareLaunchArgument(
         'params_file',
-        default_value=os.path.join(bringup_dir, 'params', 'nav2_params.yaml'),
+        default_value=os.path.join(bringup_dir, 'params', 'waffle.yaml'),
         description='Full path to the ROS2 parameters file to use for all launched nodes')
 
     declare_autostart_cmd = DeclareLaunchArgument(
@@ -116,41 +108,6 @@ def generate_launch_description():
         'log_level', default_value='info',
         description='log level')
 
-    declare_localization_parent_frame_cmd = DeclareLaunchArgument(
-        'localization_parent_frame',
-        default_value='map',
-        description='Parent frame published by locationpub')
-
-    declare_localization_child_frame_cmd = DeclareLaunchArgument(
-        'localization_child_frame',
-        default_value='turtlebot3_waffle',
-        description='Child frame published by locationpub')
-
-    declare_localization_x_cmd = DeclareLaunchArgument(
-        'localization_x',
-        default_value='0.569',
-        description='locationpub x translation')
-
-    declare_localization_y_cmd = DeclareLaunchArgument(
-        'localization_y',
-        default_value='0.541',
-        description='locationpub y translation')
-
-    declare_localization_z_cmd = DeclareLaunchArgument(
-        'localization_z',
-        default_value='0.0',
-        description='locationpub z translation')
-
-    declare_localization_yaw_cmd = DeclareLaunchArgument(
-        'localization_yaw',
-        default_value='0.0',
-        description='locationpub yaw rotation')
-
-    declare_localization_tf_time_offset_cmd = DeclareLaunchArgument(
-        'localization_tf_time_offset',
-        default_value='0.2',
-        description='Seconds subtracted from locationpub TF stamp')
-
     load_nodes = GroupAction(
         condition=IfCondition(PythonExpression(['not ', use_composition])),
         actions=[
@@ -165,22 +122,13 @@ def generate_launch_description():
                 arguments=['--ros-args', '--log-level', log_level],
                 remappings=remappings),
             Node(
-                package='locationpub',
-                executable='locationpub',
-                name='locationpub',
+                package='nav2_amcl',
+                executable='amcl',
+                name='amcl',
                 output='screen',
                 respawn=use_respawn,
                 respawn_delay=2.0,
-                parameters=[{'use_sim_time': use_sim_time},
-                            {'parent_frame': localization_parent_frame},
-                            {'child_frame': localization_child_frame},
-                            {'x': ParameterValue(localization_x, value_type=float)},
-                            {'y': ParameterValue(localization_y, value_type=float)},
-                            {'z': ParameterValue(localization_z, value_type=float)},
-                            {'yaw': ParameterValue(localization_yaw, value_type=float)},
-                            {'tf_time_offset': ParameterValue(
-                                localization_tf_time_offset, value_type=float)},
-                            {'publish_rate': 30.0}],
+                parameters=[configured_params],
                 arguments=['--ros-args', '--log-level', log_level],
                 remappings=remappings),
             Node(
@@ -203,6 +151,12 @@ def generate_launch_description():
                 package='nav2_map_server',
                 plugin='nav2_map_server::MapServer',
                 name='map_server',
+                parameters=[configured_params],
+                remappings=remappings),
+            ComposableNode(
+                package='nav2_amcl',
+                plugin='nav2_amcl::AmclNode',
+                name='amcl',
                 parameters=[configured_params],
                 remappings=remappings),
             ComposableNode(
@@ -231,35 +185,9 @@ def generate_launch_description():
     ld.add_action(declare_container_name_cmd)
     ld.add_action(declare_use_respawn_cmd)
     ld.add_action(declare_log_level_cmd)
-    ld.add_action(declare_localization_parent_frame_cmd)
-    ld.add_action(declare_localization_child_frame_cmd)
-    ld.add_action(declare_localization_x_cmd)
-    ld.add_action(declare_localization_y_cmd)
-    ld.add_action(declare_localization_z_cmd)
-    ld.add_action(declare_localization_yaw_cmd)
-    ld.add_action(declare_localization_tf_time_offset_cmd)
 
     # Add the actions to launch all of the localiztion nodes
     ld.add_action(load_nodes)
     ld.add_action(load_composable_nodes)
-
-    ld.add_action(Node(
-        condition=IfCondition(use_composition),
-        package='locationpub',
-        executable='locationpub',
-        name='locationpub',
-        output='screen',
-        parameters=[{'use_sim_time': use_sim_time},
-                    {'parent_frame': localization_parent_frame},
-                    {'child_frame': localization_child_frame},
-                    {'x': ParameterValue(localization_x, value_type=float)},
-                    {'y': ParameterValue(localization_y, value_type=float)},
-                    {'z': ParameterValue(localization_z, value_type=float)},
-                    {'yaw': ParameterValue(localization_yaw, value_type=float)},
-                    {'tf_time_offset': ParameterValue(
-                        localization_tf_time_offset, value_type=float)},
-                    {'publish_rate': 30.0}],
-        arguments=['--ros-args', '--log-level', log_level],
-        remappings=remappings))
 
     return ld

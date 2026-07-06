@@ -3,7 +3,8 @@ import os
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription, SetEnvironmentVariable
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription
+from launch.actions import SetEnvironmentVariable, TimerAction
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
@@ -16,6 +17,7 @@ TURTLEBOT3_MODEL = os.environ.get('TURTLEBOT3_MODEL', 'waffle')
 def generate_launch_description():
     bringup_dir = get_package_share_directory('mytb3_bringup')
     launch_dir = os.path.join(bringup_dir, 'launch')
+    gazebo_partition = f'mytb3_bringup_{os.getpid()}'
 
     use_sim_time = LaunchConfiguration('use_sim_time', default='true')
     world_name = LaunchConfiguration('world_name', default='turtlebot3_world')
@@ -38,6 +40,10 @@ def generate_launch_description():
 
     world_only = os.path.join(bringup_dir, 'models', 'worlds', 'world_only.sdf')
 
+    ignition_sim = ExecuteProcess(
+        cmd=['ign', 'gazebo', '-r', '-v', '3', world_only],
+        output='screen')
+
     resource_path = [
         os.path.join('/opt/ros/humble', 'share'),
         ':' + os.path.join(bringup_dir, 'models'),
@@ -53,11 +59,15 @@ def generate_launch_description():
 
     ign_partition = SetEnvironmentVariable(
         name='IGN_PARTITION',
-        value='mytb3_bringup')
+        value=gazebo_partition)
 
     gz_partition = SetEnvironmentVariable(
         name='GZ_PARTITION',
-        value='mytb3_bringup')
+        value=gazebo_partition)
+
+    spdlog_log_dir = SetEnvironmentVariable(
+        name='SPDLOG_WRAPPER_LOG_DIR',
+        value='/tmp/nav2_logs')
 
     ignition_spawn_entity = Node(
         package='ros_gz_sim',
@@ -82,6 +92,7 @@ def generate_launch_description():
         gz_resource_path,
         ign_partition,
         gz_partition,
+        spdlog_log_dir,
 
         DeclareLaunchArgument(
             'use_sim_time',
@@ -138,16 +149,9 @@ def generate_launch_description():
             default_value=os.path.join(bringup_dir, 'rviz', 'nav2_default_view.rviz'),
             description='Full path to the RViz config file to use'),
 
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([
-                os.path.join(get_package_share_directory('ros_gz_sim'),
-                             'launch',
-                             'gz_sim.launch.py')]),
-            launch_arguments={
-                'ign_args': [' -r -v 3 ', world_only],
-            }.items()),
+        ignition_sim,
 
-        ignition_spawn_entity,
+        TimerAction(period=3.0, actions=[ignition_spawn_entity]),
 
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource([launch_dir, '/ros_ign_bridge.launch.py']),
