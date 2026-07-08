@@ -1,6 +1,8 @@
 <?xml version='1.0' encoding='utf-8'?>
 <sdf version="1.6">
+  <!-- 中文注解：nav2_simple_commander 示例使用的 Gazebo 仓库世界。 -->
   <world name="default">
+    <!-- 中文注解：基础物理配置，设置重力、步长和实时因子。 -->
     
     <gravity>0 0 -9.8</gravity>
     <physics default="0" name="default_physics" type="ode">
@@ -9,7 +11,10 @@
       <real_time_update_rate>1000</real_time_update_rate>
     </physics>
 
+    <!-- 中文注解：Gazebo Sim 运行物理、传感器和 GUI 场景更新所需的系统插件。 -->
+
     
+        <!-- 中文注解：仓库墙体、货架等模型通过 Gazebo model:// 资源加载，pose 决定它们在地图中的位置。 -->
         <!--model name="aws_robomaker_warehouse_RoofB_01_001">
         <include>
             <uri>model://aws_robomaker_warehouse_RoofB_01</uri>
@@ -633,6 +638,8 @@
         </axis>
       </joint>
 
+      <!-- 中文注解：通过 Gazebo Sim transport 发布里程计和 odom -> base_footprint TF，ROS 侧由 ros_gz_bridge 转换。 -->
+      <!-- 中文注解：Gazebo Sim 差速驱动控制器，接收桥接后的 /cmd_vel。 -->
       <plugin name="turtlebot3_diff_drive" filename="libgazebo_ros_diff_drive.so">
 
         <ros>
@@ -667,6 +674,7 @@
 
       </plugin>
 
+      <!-- 中文注解：通过 Gazebo Sim transport 发布关节状态，ROS 侧由 ros_gz_bridge 转换。 -->
       <plugin name="turtlebot3_joint_state" filename="libgazebo_ros_joint_state_publisher.so">
         <ros>
           <!-- <namespace>/tb3</namespace> -->

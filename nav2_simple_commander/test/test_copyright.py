@@ -19,5 +19,9 @@ import pytest
 @pytest.mark.copyright
 @pytest.mark.linter
 def test_copyright():
+    """Run the ament copyright linter.
+
+    中文注解：执行 ament 版权检查，确保源码文件保留合规版权头。
+    """
     rc = main(argv=['.', 'test'])
     assert rc == 0, 'Found errors'

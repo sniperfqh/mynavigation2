@@ -19,5 +19,9 @@ import pytest
 @pytest.mark.linter
 @pytest.mark.pep257
 def test_pep257():
+    """Run the ament PEP 257 docstring linter.
+
+    中文注解：执行 docstring 风格检查，确保公共 Python 接口文档格式合规。
+    """
     rc = main(argv=['.', 'test'])
     assert rc == 0, 'Found code style errors / warnings'

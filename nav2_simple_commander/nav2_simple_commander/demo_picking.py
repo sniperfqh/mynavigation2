@@ -21,6 +21,7 @@ from rclpy.duration import Duration
 
 
 # Shelf positions for picking
+# 中文注解：货架取货点位，key 是业务货架 ID，value 是 map 坐标。
 shelf_positions = {
     'shelf_A': [-3.829, -7.604],
     'shelf_B': [-3.791, -3.287],
@@ -28,6 +29,7 @@ shelf_positions = {
     'shelf_D': [-3.24, 5.861]}
 
 # Shipping destination for picked products
+# 中文注解：配送终点点位，key 是业务目的地 ID，value 是 map 坐标。
 shipping_destinations = {
     'recycling': [-0.205, 7.403],
     'pallet_jack7': [-0.073, -8.497],
@@ -39,13 +41,18 @@ Basic item picking demo. In this demonstration, the expectation
 is that there is a person at the item shelf to put the item on the robot
 and at the pallet jack to remove it
 (probably with some kind of button for 'got item, robot go do next task').
+
+中文注解：拣货业务 demo，机器人先到货架取货，再到指定出货点交付。
 """
 
 
 def main():
     # Recieved virtual request for picking item at Shelf A and bring to
+    # 中文注解：模拟上游系统发来的拣货请求。
     # worker at the pallet jack 7 for shipping. This request would
+    # 中文注解：真实请求通常包含货架 ID 和配送目的地 ID。
     # contain the shelf ID ("shelf_A") and shipping destination ("pallet_jack7")
+    # 中文注解：下面两个变量就是该请求的简化表示。
     ####################
     request_item_location = 'shelf_C'
     request_destination = 'pallet_jack7'
@@ -56,16 +63,18 @@ def main():
     navigator = BasicNavigator()
 
     # Set our demo's initial pose
+    # 中文注解：设置机器人起始位姿。
     initial_pose = PoseStamped()
     initial_pose.header.frame_id = 'map'
     initial_pose.header.stamp = navigator.get_clock().now().to_msg()
-    initial_pose.pose.position.x = 3.45
-    initial_pose.pose.position.y = 2.15
-    initial_pose.pose.orientation.z = 1.0
-    initial_pose.pose.orientation.w = 0.0
+    initial_pose.pose.position.x = -3.0
+    initial_pose.pose.position.y = -0.5
+    initial_pose.pose.orientation.z = 0.0
+    initial_pose.pose.orientation.w = 1.0
     navigator.setInitialPose(initial_pose)
 
     # Wait for navigation to fully activate
+    # 中文注解：等待 Nav2 ready。
     navigator.waitUntilNav2Active()
 
     shelf_item_pose = PoseStamped()
@@ -79,8 +88,11 @@ def main():
     navigator.goToPose(shelf_item_pose)
 
     # Do something during our route
+    # 中文注解：行驶途中可做任务排队、人员检测、到站通知等业务逻辑。
     # (e.x. queue up future tasks or detect person for fine-tuned positioning)
+    # 中文注解：示例说明可用于精定位或人机协作。
     # Simply print information for workers on the robot's ETA for the demonstation
+    # 中文注解：这里仅打印 ETA。
     i = 0
     while not navigator.isTaskComplete():
         i += 1

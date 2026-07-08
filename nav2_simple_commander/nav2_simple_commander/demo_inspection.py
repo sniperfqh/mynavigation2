@@ -23,6 +23,8 @@ import rclpy
 Basic stock inspection demo. In this demonstration, the expectation
 is that there are cameras or RFID sensors mounted on the robots
 collecting information about stock quantity and location.
+
+中文注解：库存巡检业务 demo，机器人按货架点位巡检，结束后返回起点。
 """
 
 
@@ -32,7 +34,9 @@ def main():
     navigator = BasicNavigator()
 
     # Inspection route, probably read in from a file for a real application
+    # 中文注解：真实项目中巡检路线通常来自配置文件、地图标注或任务系统。
     # from either a map or drive and repeat.
+    # 中文注解：这里用固定坐标列表模拟货架巡检路线。
     inspection_route = [
         [3.461, -0.450],
         [5.531, -0.450],
@@ -44,19 +48,22 @@ def main():
         [5.431, -5.800]]
 
     # Set our demo's initial pose
+    # 中文注解：设置 AMCL 初始位姿。
     initial_pose = PoseStamped()
     initial_pose.header.frame_id = 'map'
     initial_pose.header.stamp = navigator.get_clock().now().to_msg()
-    initial_pose.pose.position.x = 3.45
-    initial_pose.pose.position.y = 2.15
-    initial_pose.pose.orientation.z = 1.0
-    initial_pose.pose.orientation.w = 0.0
+    initial_pose.pose.position.x = -3.0
+    initial_pose.pose.position.y = -0.5
+    initial_pose.pose.orientation.z = 0.0
+    initial_pose.pose.orientation.w = 1.0
     navigator.setInitialPose(initial_pose)
 
     # Wait for navigation to fully activate
+    # 中文注解：等待 Nav2 ready 后再发送巡检任务。
     navigator.waitUntilNav2Active()
 
     # Send our route
+    # 中文注解：把二维坐标转换成 PoseStamped waypoint 列表。
     inspection_points = []
     inspection_pose = PoseStamped()
     inspection_pose.header.frame_id = 'map'
@@ -70,7 +77,9 @@ def main():
     navigator.followWaypoints(inspection_points)
 
     # Do something during our route (e.x. AI to analyze stock information or upload to the cloud)
+    # 中文注解：真实巡检中可在这里执行视觉识别、库存上传等业务逻辑。
     # Simply the current waypoint ID for the demonstation
+    # 中文注解：示例只打印当前 waypoint 序号。
     i = 0
     while not navigator.isTaskComplete():
         i += 1
@@ -88,6 +97,7 @@ def main():
         print('Inspection of shelving failed! Returning to start...')
 
     # go back to start
+    # 中文注解：巡检完成或失败后返回初始点。
     initial_pose.header.stamp = navigator.get_clock().now().to_msg()
     navigator.goToPose(initial_pose)
     while not navigator.isTaskComplete():

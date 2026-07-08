@@ -1,24 +1,36 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
+  <!-- Package identity shown by ROS 2 package discovery. -->
+  <!-- 中文注解：ROS 2 包发现时使用的包名、版本和描述。 -->
   <name>nav2_simple_commander</name>
   <version>1.1.20</version>
   <description>An importable library for writing mobile robot applications in python3</description>
   <maintainer email="stevenmacenski@gmail.com">steve</maintainer>
   <license>Apache-2.0</license>
 
+  <!-- Runtime dependencies required by the Python API and examples. -->
+  <!-- 中文注解：Python API 和示例运行时依赖的 ROS 2 包。 -->
   <exec_depend>rclpy</exec_depend>
   <exec_depend>geometry_msgs</exec_depend>
   <exec_depend>nav2_msgs</exec_depend>
   <exec_depend>action_msgs</exec_depend>
   <exec_depend>lifecycle_msgs</exec_depend>
+  <exec_depend>aws_robomaker_small_warehouse_world</exec_depend>
+  <exec_depend>robot_state_publisher</exec_depend>
+  <exec_depend>ros_gz_bridge</exec_depend>
+  <exec_depend>turtlebot3</exec_depend>
 
+  <!-- Test-only dependencies used by colcon/ament test. -->
+  <!-- 中文注解：仅测试阶段使用的依赖。 -->
   <test_depend>ament_copyright</test_depend>
   <test_depend>ament_flake8</test_depend>
   <test_depend>ament_pep257</test_depend>
   <test_depend>python3-pytest</test_depend>
 
   <export>
+    <!-- This package is built and installed with ament_python. -->
+    <!-- 中文注解：声明该包使用 ament_python 构建类型。 -->
     <build_type>ament_python</build_type>
   </export>
 </package>
