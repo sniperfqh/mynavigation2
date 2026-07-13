@@ -188,6 +188,14 @@ def generate_launch_description():
             }.items()),
 
         Node(
+            package='controlpub',
+            executable='controlpub_node',
+            name='controlpub',
+            output='screen',
+            parameters=[{'input_topic': '/cmd_vel'},
+                        {'output_topic': '/control_to_uart'}]),
+
+        Node(
             condition=IfCondition(use_rviz),
             package='rviz2',
             executable='rviz2',

@@ -91,7 +91,7 @@ def generate_launch_description():
                 'localization_x': '0.0',
                 'localization_y': '0.0',
                 'localization_z': '0.0',
-                'localization_yaw': '0.0',
+                'localization_yaw': '-1.5707963267948966',
                 'localization_tf_time_offset': '0.0'}.items(),
         ),
 

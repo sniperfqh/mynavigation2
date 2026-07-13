@@ -22,8 +22,8 @@ waypoint_follower:
   log_dir: /home/byd/logs
   max_file_size_mb: 10
   max_files: 5
-  console_level: warn
-  file_level: warn
+  console_level: trace
+  file_level: trace
   flush_interval_seconds: 0
   append_ros_timestamp: false
   raw_ros_timestamp: false
@@ -32,8 +32,8 @@ smoother_server:
   log_dir: /home/byd/logs
   max_file_size_mb: 10
   max_files: 5
-  console_level: warn
-  file_level: warn
+  console_level: trace
+  file_level: trace
   flush_interval_seconds: 0
   append_ros_timestamp: false
   raw_ros_timestamp: false
@@ -72,8 +72,8 @@ controller_server:
   log_dir: /home/byd/logs
   max_file_size_mb: 10
   max_files: 5
-  console_level: warn
-  file_level: warn
+  console_level: trace
+  file_level: trace
   flush_interval_seconds: 0
   append_ros_timestamp: false
   raw_ros_timestamp: false

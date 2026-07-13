@@ -312,6 +312,14 @@ def generate_launch_description():
                           'use_composition': use_composition,
                           'use_respawn': use_respawn}.items())
 
+    controlpub_cmd = Node(
+        package='controlpub',
+        executable='controlpub_node',
+        name='controlpub',
+        output='screen',
+        parameters=[{'input_topic': '/cmd_vel'},
+                    {'output_topic': '/control_to_uart'}])
+
     ld = LaunchDescription()
 
     ld.add_action(declare_namespace_cmd)
@@ -358,5 +366,6 @@ def generate_launch_description():
     ld.add_action(map_server_cmd)
     ld.add_action(lifecycle_manager_map_cmd)
     ld.add_action(navigation_cmd)
+    ld.add_action(controlpub_cmd)
 
     return ld

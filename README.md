@@ -8,6 +8,23 @@ myagv_test_bringup/launch/entry.launch.py
 
 该入口面向实车或板端运行：Nav2 不启动 AMCL，不启动自定义 `locationpub` / `laserpub`，定位和雷达数据由外部系统提供。
 
+## 安装依赖
+
+以下命令适用于 Ubuntu 22.04 和 ROS 2 Humble。执行前需已配置 ROS 2 官方 apt 软件源。
+
+安装 Nav2 运行依赖：
+
+```bash
+sudo apt update
+sudo apt install ros-humble-nav2
+```
+
+TEB Local Planner 还依赖 g2o：
+
+```bash
+sudo apt install ros-humble-libg2o
+```
+
 ## 1. 启动命令
 
 推荐从 install 空间启动：
