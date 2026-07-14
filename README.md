@@ -25,6 +25,46 @@ TEB Local Planner 还依赖 g2o：
 sudo apt install ros-humble-libg2o
 ```
 
+## 编译命令
+
+所有编译命令都必须在 `nav2_ws` 工作空间执行，不要在 `navigation2` 源码仓库内直接编译。
+
+首次编译或需要重建整个工作空间时：
+
+```bash
+cd /home/byd/Documents/zpy_ws/project/nav2_demo/nav2_ws
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install \
+  --cmake-args -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
+```
+
+编译 `myagv_test_bringup` 及工作空间内它依赖的包：
+
+```bash
+cd /home/byd/Documents/zpy_ws/project/nav2_demo/nav2_ws
+source /opt/ros/humble/setup.bash
+colcon build --symlink-install \
+  --packages-up-to myagv_test_bringup \
+  --cmake-args -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
+```
+
+依赖已经编译完成，只重新编译 `myagv_test_bringup` 时：
+
+```bash
+cd /home/byd/Documents/zpy_ws/project/nav2_demo/nav2_ws
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+colcon build --symlink-install \
+  --packages-select myagv_test_bringup \
+  --cmake-args -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
+```
+
+编译完成后，在当前终端加载新的 install 空间：
+
+```bash
+source install/setup.bash
+```
+
 ## 1. 启动命令
 
 推荐从 install 空间启动：
