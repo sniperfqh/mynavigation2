@@ -32,7 +32,6 @@ def generate_launch_description():
     bringup_dir = get_package_share_directory('myagv_test_bringup')
     launch_dir = os.path.dirname(__file__)
 
-    slam = LaunchConfiguration('slam')
     namespace = LaunchConfiguration('namespace')
     use_namespace = LaunchConfiguration('use_namespace')
     map_yaml_file = LaunchConfiguration('map')
@@ -41,25 +40,11 @@ def generate_launch_description():
     autostart = LaunchConfiguration('autostart')
     use_composition = LaunchConfiguration('use_composition')
     use_respawn = LaunchConfiguration('use_respawn')
-    set_initial_pose = LaunchConfiguration('set_initial_pose')
-    initial_pose_x = LaunchConfiguration('initial_pose_x')
-    initial_pose_y = LaunchConfiguration('initial_pose_y')
-    initial_pose_yaw = LaunchConfiguration('initial_pose_yaw')
-
     rviz_config_file = LaunchConfiguration('rviz_config_file')
     use_simulator = LaunchConfiguration('use_simulator')
-    use_robot_state_pub = LaunchConfiguration('use_robot_state_pub')
     use_rviz = LaunchConfiguration('use_rviz')
     headless = LaunchConfiguration('headless')
     world = LaunchConfiguration('world')
-    pose = {'x': LaunchConfiguration('x_pose', default='0.569'),
-            'y': LaunchConfiguration('y_pose', default='0.541'),
-            'z': LaunchConfiguration('z_pose', default='0.01'),
-            'R': LaunchConfiguration('roll', default='0.00'),
-            'P': LaunchConfiguration('pitch', default='0.00'),
-            'Y': LaunchConfiguration('yaw', default='0.00')}
-    robot_name = LaunchConfiguration('robot_name')
-    robot_sdf = LaunchConfiguration('robot_sdf')
     log_level = LaunchConfiguration('log_level')
     # robot_description_file = os.path.join(bringup_dir, 'urdf', 'turtlebot3_waffle.urdf')
     # with open(robot_description_file, 'r', encoding='utf-8') as urdf_file:
