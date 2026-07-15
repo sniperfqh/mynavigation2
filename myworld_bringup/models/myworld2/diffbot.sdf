@@ -254,11 +254,11 @@
           <diffuse>0.02 0.02 0.02 1</diffuse>
         </material>
       </visual>
-      <sensor name="gpu_lidar" type="gpu_lidar">
+      <sensor name="lidar" type="lidar">
         <topic>scan</topic>
         <ignition_frame_id>base_scan</ignition_frame_id>
         <update_rate>10</update_rate>
-        <ray>
+        <lidar>
           <scan>
             <horizontal>
               <samples>720</samples>
@@ -269,7 +269,7 @@
           </scan>
           <range>
             <min>0.12</min>
-            <max>20.0</max>
+            <max>10.0</max>
             <resolution>0.01</resolution>
           </range>
           <noise>
@@ -277,9 +277,9 @@
             <mean>0.0</mean>
             <stddev>0.01</stddev>
           </noise>
-        </ray>
+        </lidar>
         <always_on>true</always_on>
-        <visualize>true</visualize>
+        <visualize>false</visualize>
       </sensor>
     </link>
 

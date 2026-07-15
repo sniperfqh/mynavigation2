@@ -13,16 +13,32 @@
 # limitations under the License.
 
 import os
+import sys
 
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription
+from launch.actions import DeclareLaunchArgument, EmitEvent, ExecuteProcess
+from launch.actions import IncludeLaunchDescription, LogInfo, RegisterEventHandler
 from launch.actions import SetEnvironmentVariable
 from launch.conditions import IfCondition
+from launch.event_handlers import OnProcessExit
+from launch.events import Shutdown
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
+
+
+def start_after_preflight(event, context, *, launch_actions):
+    if event.returncode == 0:
+        return launch_actions
+
+    return [
+        LogInfo(
+            msg='ERROR: ROS graph preflight failed; follow_path demo was not started.'),
+        EmitEvent(
+            event=Shutdown(reason='Existing Nav2 or /clock publisher detected')),
+    ]
 
 
 def generate_launch_description():
@@ -40,6 +56,8 @@ def generate_launch_description():
     use_rviz = LaunchConfiguration('use_rviz')
     use_sim_time = LaunchConfiguration('use_sim_time', default='true')
     world_name = LaunchConfiguration('world_name', default='myworld2')
+    allow_existing_ros_graph = LaunchConfiguration(
+        'allow_existing_ros_graph', default='false')
     gazebo_partition = f'nav2_simple_commander_follow_path_{os.getpid()}'
 
     declare_use_rviz_cmd = DeclareLaunchArgument(
@@ -56,6 +74,13 @@ def generate_launch_description():
         'world_name',
         default_value='myworld2',
         description='World name')
+
+    declare_allow_existing_ros_graph_cmd = DeclareLaunchArgument(
+        'allow_existing_ros_graph',
+        default_value='false',
+        choices=['true', 'false'],
+        description=(
+            'Allow startup when Nav2 lifecycle services or /clock already exist'))
 
     resource_path = [
         os.path.join('/opt/ros/humble', 'share'),
@@ -80,7 +105,7 @@ def generate_launch_description():
         value='/tmp/nav2_logs')
 
     start_gazebo_server_cmd = ExecuteProcess(
-        cmd=['ign', 'gazebo', '-r', '-v', '3', world],
+        cmd=['ign', 'gazebo', '-s', '-r', '-v', '3', world],
         output='screen')
 
     ros_gz_bridge_cmd = IncludeLaunchDescription(
@@ -133,14 +158,18 @@ def generate_launch_description():
         emulate_tty=True,
         output='screen')
 
-    return LaunchDescription([
-        declare_use_rviz_cmd,
-        declare_use_sim_time_cmd,
-        declare_world_name_cmd,
-        ign_resource_path,
-        ign_partition,
-        gz_partition,
-        spdlog_log_dir,
+    preflight_cmd = ExecuteProcess(
+        cmd=[
+            sys.executable,
+            '-m',
+            'nav2_simple_commander.graph_preflight',
+            '--allow-existing',
+            allow_existing_ros_graph,
+        ],
+        name='follow_path_graph_preflight',
+        output='screen')
+
+    launch_actions = [
         start_gazebo_server_cmd,
         ros_gz_bridge_cmd,
         start_robot_state_publisher_cmd,
@@ -148,4 +177,23 @@ def generate_launch_description():
         localization_cmd,
         navigation_cmd,
         demo_cmd,
+    ]
+
+    start_after_preflight_cmd = RegisterEventHandler(
+        OnProcessExit(
+            target_action=preflight_cmd,
+            on_exit=lambda event, context: start_after_preflight(
+                event, context, launch_actions=launch_actions)))
+
+    return LaunchDescription([
+        declare_use_rviz_cmd,
+        declare_use_sim_time_cmd,
+        declare_world_name_cmd,
+        declare_allow_existing_ros_graph_cmd,
+        ign_resource_path,
+        ign_partition,
+        gz_partition,
+        spdlog_log_dir,
+        start_after_preflight_cmd,
+        preflight_cmd,
     ])
