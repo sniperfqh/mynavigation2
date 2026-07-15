@@ -392,14 +392,27 @@ Nav2Panel::onInitialize()
     "navigate_to_pose/_action/feedback",
     rclcpp::SystemDefaultsQoS(),
     [this](const nav2_msgs::action::NavigateToPose::Impl::FeedbackMessage::SharedPtr msg) {
-      navigation_feedback_indicator_->setText(getNavToPoseFeedbackLabel(msg->feedback));
+      if (feedback_source_ == FeedbackSource::NAVIGATE_TO_POSE) {
+        navigation_feedback_indicator_->setText(getNavToPoseFeedbackLabel(msg->feedback));
+      }
     });
   nav_through_poses_feedback_sub_ =
     node->create_subscription<nav2_msgs::action::NavigateThroughPoses::Impl::FeedbackMessage>(
     "navigate_through_poses/_action/feedback",
     rclcpp::SystemDefaultsQoS(),
     [this](const nav2_msgs::action::NavigateThroughPoses::Impl::FeedbackMessage::SharedPtr msg) {
-      navigation_feedback_indicator_->setText(getNavThroughPosesFeedbackLabel(msg->feedback));
+      if (feedback_source_ == FeedbackSource::NAVIGATE_THROUGH_POSES) {
+        navigation_feedback_indicator_->setText(getNavThroughPosesFeedbackLabel(msg->feedback));
+      }
+    });
+  follow_path_feedback_sub_ =
+    node->create_subscription<nav2_msgs::action::FollowPath::Impl::FeedbackMessage>(
+    "follow_path/_action/feedback",
+    rclcpp::SystemDefaultsQoS(),
+    [this](const nav2_msgs::action::FollowPath::Impl::FeedbackMessage::SharedPtr msg) {
+      if (feedback_source_ == FeedbackSource::FOLLOW_PATH) {
+        navigation_feedback_indicator_->setText(getFollowPathFeedbackLabel(msg->feedback));
+      }
     });
 
   // create action goal status subscribers
@@ -407,20 +420,60 @@ Nav2Panel::onInitialize()
     "navigate_to_pose/_action/status",
     rclcpp::SystemDefaultsQoS(),
     [this](const action_msgs::msg::GoalStatusArray::SharedPtr msg) {
-      navigation_goal_status_indicator_->setText(
-        getGoalStatusLabel(msg->status_list.back().status));
-      if (msg->status_list.back().status != action_msgs::msg::GoalStatus::STATUS_EXECUTING) {
+      if (msg->status_list.empty()) {
+        return;
+      }
+      const auto status = msg->status_list.back().status;
+      if (status == action_msgs::msg::GoalStatus::STATUS_EXECUTING) {
+        feedback_source_ = FeedbackSource::NAVIGATE_TO_POSE;
+      }
+      if (feedback_source_ != FeedbackSource::NAVIGATE_TO_POSE) {
+        return;
+      }
+      navigation_goal_status_indicator_->setText(getGoalStatusLabel(status));
+      if (status != action_msgs::msg::GoalStatus::STATUS_EXECUTING) {
         navigation_feedback_indicator_->setText(getNavToPoseFeedbackLabel());
+        feedback_source_ = FeedbackSource::NONE;
       }
     });
   nav_through_poses_goal_status_sub_ = node->create_subscription<action_msgs::msg::GoalStatusArray>(
     "navigate_through_poses/_action/status",
     rclcpp::SystemDefaultsQoS(),
     [this](const action_msgs::msg::GoalStatusArray::SharedPtr msg) {
-      navigation_goal_status_indicator_->setText(
-        getGoalStatusLabel(msg->status_list.back().status));
-      if (msg->status_list.back().status != action_msgs::msg::GoalStatus::STATUS_EXECUTING) {
+      if (msg->status_list.empty()) {
+        return;
+      }
+      const auto status = msg->status_list.back().status;
+      if (status == action_msgs::msg::GoalStatus::STATUS_EXECUTING) {
+        feedback_source_ = FeedbackSource::NAVIGATE_THROUGH_POSES;
+      }
+      if (feedback_source_ != FeedbackSource::NAVIGATE_THROUGH_POSES) {
+        return;
+      }
+      navigation_goal_status_indicator_->setText(getGoalStatusLabel(status));
+      if (status != action_msgs::msg::GoalStatus::STATUS_EXECUTING) {
         navigation_feedback_indicator_->setText(getNavThroughPosesFeedbackLabel());
+        feedback_source_ = FeedbackSource::NONE;
+      }
+    });
+  follow_path_goal_status_sub_ = node->create_subscription<action_msgs::msg::GoalStatusArray>(
+    "follow_path/_action/status",
+    rclcpp::SystemDefaultsQoS(),
+    [this](const action_msgs::msg::GoalStatusArray::SharedPtr msg) {
+      if (msg->status_list.empty()) {
+        return;
+      }
+      const auto status = msg->status_list.back().status;
+      if (status == action_msgs::msg::GoalStatus::STATUS_EXECUTING) {
+        feedback_source_ = FeedbackSource::FOLLOW_PATH;
+      }
+      if (feedback_source_ != FeedbackSource::FOLLOW_PATH) {
+        return;
+      }
+      navigation_goal_status_indicator_->setText(getGoalStatusLabel(status));
+      if (status != action_msgs::msg::GoalStatus::STATUS_EXECUTING) {
+        navigation_feedback_indicator_->setText(getFollowPathFeedbackLabel());
+        feedback_source_ = FeedbackSource::NONE;
       }
     });
 }
@@ -958,6 +1011,18 @@ Nav2Panel::getNavThroughPosesFeedbackLabel(nav2_msgs::action::NavigateThroughPos
       "<table><tr><td width=150>Poses remaining:</td><td>" +
       std::to_string(msg.number_of_poses_remaining) +
       "</td></tr>" + toLabel(msg) + "</table>").c_str());
+}
+
+inline QString
+Nav2Panel::getFollowPathFeedbackLabel(nav2_msgs::action::FollowPath::Feedback msg)
+{
+  return QString(
+    std::string(
+      "<table><tr><td width=150>Distance remaining:</td><td>" +
+      toString(msg.distance_to_goal, 2) + " m"
+      "</td></tr><tr><td width=150>Current speed:</td><td>" +
+      toString(msg.speed, 2) + " m/s"
+      "</td></tr></table>").c_str());
 }
 
 template<typename T>

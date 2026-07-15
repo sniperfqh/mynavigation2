@@ -24,6 +24,7 @@
 #include <vector>
 
 #include "nav2_lifecycle_manager/lifecycle_manager_client.hpp"
+#include "nav2_msgs/action/follow_path.hpp"
 #include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "nav2_msgs/action/navigate_through_poses.hpp"
 #include "nav2_msgs/action/follow_waypoints.hpp"
@@ -108,10 +109,24 @@ private:
     navigation_feedback_sub_;
   rclcpp::Subscription<nav2_msgs::action::NavigateThroughPoses::Impl::FeedbackMessage>::SharedPtr
     nav_through_poses_feedback_sub_;
+  rclcpp::Subscription<nav2_msgs::action::FollowPath::Impl::FeedbackMessage>::SharedPtr
+    follow_path_feedback_sub_;
   rclcpp::Subscription<nav2_msgs::action::NavigateToPose::Impl::GoalStatusMessage>::SharedPtr
     navigation_goal_status_sub_;
   rclcpp::Subscription<nav2_msgs::action::NavigateThroughPoses::Impl::GoalStatusMessage>::SharedPtr
     nav_through_poses_goal_status_sub_;
+  rclcpp::Subscription<nav2_msgs::action::FollowPath::Impl::GoalStatusMessage>::SharedPtr
+    follow_path_goal_status_sub_;
+
+  enum class FeedbackSource
+  {
+    NONE,
+    NAVIGATE_TO_POSE,
+    NAVIGATE_THROUGH_POSES,
+    FOLLOW_PATH
+  };
+
+  FeedbackSource feedback_source_{FeedbackSource::NONE};
 
   // Goal-related state
   nav2_msgs::action::NavigateToPose::Goal navigation_goal_;
@@ -176,6 +191,9 @@ private:
   static inline QString getNavThroughPosesFeedbackLabel(
     nav2_msgs::action::NavigateThroughPoses::Feedback =
     nav2_msgs::action::NavigateThroughPoses::Feedback());
+  static inline QString getFollowPathFeedbackLabel(
+    nav2_msgs::action::FollowPath::Feedback msg =
+    nav2_msgs::action::FollowPath::Feedback());
   template<typename T>
   static inline std::string toLabel(T & msg);
 
