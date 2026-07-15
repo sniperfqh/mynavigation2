@@ -346,3 +346,69 @@ ros2 lifecycle nodes
 - `/map` 正常发布。
 - 导航目标发送后 `/cmd_vel` 有输出。
 - Nav2 lifecycle 节点进入 active 状态。
+
+## 8. 终端发送导航目标
+
+发送目标前，先确认 `bt_navigator` 已进入 active 状态，且两个 Action Server 可用：
+
+```bash
+ros2 lifecycle get /bt_navigator
+ros2 action info /navigate_to_pose
+ros2 action info /navigate_through_poses
+```
+
+以下坐标取自项目根目录 `test.md` 中的导航测试案例。它们用于说明 Action 命令格式；
+在实车地图 `myagv_test_bringup/maps/out.yaml` 上运行前，必须先确认目标点位于可通行区域。
+
+### 8.1 单点 Action 导航
+
+向 `/navigate_to_pose` 发送一个 `PoseStamped` 目标：
+
+```bash
+ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose "{
+  pose: {
+    header: {frame_id: 'map'},
+    pose: {
+      position: {x: 0.570, y: -0.50, z: 0.0},
+      orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+    }
+  },
+  behavior_tree: ''
+}" --feedback
+```
+
+### 8.2 多点 Action 导航
+
+向 `/navigate_through_poses` 一次发送一组 `PoseStamped` 目标，机器人按数组顺序导航：
+
+```bash
+ros2 action send_goal /navigate_through_poses nav2_msgs/action/NavigateThroughPoses "{
+  poses: [
+    {
+      header: {frame_id: 'map'},
+      pose: {
+        position: {x: 0.570, y: -0.50, z: 0.0},
+        orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+      }
+    },
+    {
+      header: {frame_id: 'map'},
+      pose: {
+        position: {x: 1.78, y: 0.50, z: 0.0},
+        orientation: {x: 0.0, y: 0.0, z: 0.7071, w: 0.7071}
+      }
+    },
+    {
+      header: {frame_id: 'map'},
+      pose: {
+        position: {x: -0.60, y: -1.74, z: 0.0},
+        orientation: {x: 0.0, y: 0.0, z: 1.0, w: 0.0}
+      }
+    }
+  ],
+  behavior_tree: ''
+}" --feedback
+```
+
+`behavior_tree: ''` 表示使用 `bt_navigator` 对应导航类型的默认行为树；`--feedback`
+用于在终端持续显示剩余距离、导航时间和恢复次数等反馈。
