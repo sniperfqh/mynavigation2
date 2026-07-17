@@ -34,7 +34,10 @@ def generate_launch_description():
         'planner_server',
         'controller_server',
         'smoother_server',
+        # 中文注释：不启动行为树、恢复行为和路点服务器，仅保留规划控制主链。
         'velocity_smoother',
+        # 中文注释：规控入口依赖其他服务器，因此最后激活、停机时最先停用。
+        'regulated_navigator',
     ]
 
     remappings = [('/tf', 'tf'),
@@ -56,6 +59,10 @@ def generate_launch_description():
 
     stdout_linebuf_envvar = SetEnvironmentVariable(
         'RCUTILS_LOGGING_BUFFERED_STREAM', '1')
+
+    # 中文注释：统一把自定义 spdlog 文件写到可写目录，避免目标机默认目录权限导致节点退出。
+    spdlog_log_dir_envvar = SetEnvironmentVariable(
+        'SPDLOG_WRAPPER_LOG_DIR', '/tmp/nav2_logs')
 
     declare_namespace_cmd = DeclareLaunchArgument(
         'namespace',
@@ -85,6 +92,7 @@ def generate_launch_description():
     declare_rviz_config_file_cmd = DeclareLaunchArgument(
         'rviz_config_file',
         default_value=os.path.join(bringup_dir, 'rviz', 'nav2_default_view.rviz'),
+        # default_value=os.path.join(bringup_dir, 'rviz', 'myrviz2.rviz'),
         description='Full path to the RViz config file')
 
     declare_use_rviz_cmd = DeclareLaunchArgument(
@@ -179,6 +187,7 @@ def generate_launch_description():
                 parameters=[configured_params],
                 arguments=['--ros-args', '--log-level', log_level],
                 remappings=remappings),
+            # 中文注释：规控恢复由 regulated_navigator 清图重规划，不加载 behavior_server。
             Node(
                 package='nav2_velocity_smoother',
                 executable='velocity_smoother',
@@ -240,6 +249,7 @@ def generate_launch_description():
                 name='smoother_server',
                 parameters=[configured_params],
                 remappings=remappings),
+            # 中文注释：组合模式同样不加载恢复行为和路点组件，保证两种启动方式一致。
             ComposableNode(
                 package='nav2_velocity_smoother',
                 plugin='nav2_velocity_smoother::VelocitySmoother',
@@ -278,6 +288,7 @@ def generate_launch_description():
     ld = LaunchDescription()
 
     ld.add_action(stdout_linebuf_envvar)
+    ld.add_action(spdlog_log_dir_envvar)
     ld.add_action(declare_namespace_cmd)
     ld.add_action(declare_use_namespace_cmd)
     ld.add_action(declare_map_yaml_cmd)

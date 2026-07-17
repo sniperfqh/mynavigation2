@@ -1,450 +1,472 @@
-planner_server:
-  ros__parameters:
-    expected_planner_frequency: 20.0
-    use_sim_time: false
-    selected_planner: "GridBasedAstar"
-    planner_plugins: ["GridBased", "GridBasedAstar", "Smac2D", "SmacHybrid", "SmacLattice", "ThetaStar"]
+planner_server:  # 中文参数：全局规划服务器节点，负责加载规划插件并提供路径计算 Action。
+  ros__parameters:  # 中文参数：以下内容全部属于 planner_server 的 ROS 2 参数。
+    expected_planner_frequency: 20.0  # 中文参数：期望规划循环频率为 20 Hz，实际频率过低时输出告警。
+    use_sim_time: false  # 中文参数：关闭仿真时钟，使用系统时间；仿真运行时应改为 true。
+    selected_planner: "GridBasedAstar"  # 中文参数：本包规控节点默认选择的全局规划器标识。
+    planner_plugins: ["GridBased", "GridBasedAstar", "Smac2D", "SmacHybrid", "SmacLattice", "ThetaStar"]  # 中文参数：规划服务器一次加载的全部全局规划插件标识列表。
 
-    GridBased:
-      plugin: "nav2_navfn_planner/NavfnPlanner"
-      tolerance: 0.5
-      use_astar: false
-      allow_unknown: true
+    GridBased:  # 中文参数：基于 NavFn 的 Dijkstra 栅格规划器配置组。
+      plugin: "nav2_navfn_planner/NavfnPlanner"  # 中文参数：指定 NavFn 全局规划器插件类型。
+      tolerance: 0.5  # 中文参数：目标点不可达时允许在目标周围 0.5 m 内寻找可达终点。
+      use_astar: false  # 中文参数：关闭 A*，使用 Dijkstra 势场搜索。
+      allow_unknown: true  # 中文参数：允许路径穿过未知栅格，适合地图含未探索区域的场景。
 
-    GridBasedAstar:
-      plugin: "nav2_navfn_planner/NavfnPlanner"
-      tolerance: 0.5
-      use_astar: true
-      allow_unknown: true
+    GridBasedAstar:  # 中文参数：基于 NavFn 的 A* 栅格规划器配置组，也是当前默认规划器。
+      plugin: "nav2_navfn_planner/NavfnPlanner"  # 中文参数：复用 NavFn 插件，通过 use_astar 切换搜索算法。
+      tolerance: 0.5  # 中文参数：目标不可达时允许在 0.5 m 容差范围内选择替代终点。
+      use_astar: true  # 中文参数：启用 A* 启发式搜索，通常比 Dijkstra 扩展更少栅格。
+      allow_unknown: true  # 中文参数：允许规划路径进入未知空间。
 
-    Smac2D:
-      plugin: "nav2_smac_planner/SmacPlanner2D"
-      tolerance: 0.5
-      downsample_costmap: false
-      downsampling_factor: 1
-      allow_unknown: true
-      max_iterations: 1000000
-      max_on_approach_iterations: 1000
-      max_planning_time: 2.0
-      cost_travel_multiplier: 2.0
-      use_final_approach_orientation: false
-      smoother:
-        max_iterations: 1000
-        w_smooth: 0.3
-        w_data: 0.2
-        tolerance: 1.0e-10
-        do_refinement: true
+    Smac2D:  # 中文参数：SMAC 二维栅格 A* 规划器配置组。
+      plugin: "nav2_smac_planner/SmacPlanner2D"  # 中文参数：加载 SmacPlanner2D 插件。
+      tolerance: 0.5  # 中文参数：目标附近可接受的替代终点半径为 0.5 m。
+      downsample_costmap: false  # 中文参数：不降低全局代价地图分辨率，保持原始栅格精度。
+      downsampling_factor: 1  # 中文参数：降采样倍率为 1，即不降采样；仅在开启降采样时生效。
+      allow_unknown: true  # 中文参数：允许搜索未知栅格。
+      max_iterations: 1000000  # 中文参数：单次搜索最多扩展一百万次，防止异常地图无限计算。
+      max_on_approach_iterations: 1000  # 中文参数：进入目标容差区域后最多继续搜索 1000 次。
+      max_planning_time: 2.0  # 中文参数：单次规划最大允许耗时 2 秒。
+      cost_travel_multiplier: 2.0  # 中文参数：代价地图值对路径行驶代价的放大系数。
+      use_final_approach_orientation: false  # 中文参数：不强制末段路径方向自动对齐目标姿态。
+      smoother:  # 中文参数：Smac2D 内部路径平滑器参数组。
+        max_iterations: 1000  # 中文参数：内部平滑最多迭代 1000 次。
+        w_smooth: 0.3  # 中文参数：平滑项权重，越大越倾向减少路径折线。
+        w_data: 0.2  # 中文参数：数据保持项权重，越大越贴近原始搜索路径。
+        tolerance: 1.0e-10  # 中文参数：平滑迭代收敛判定阈值。
+        do_refinement: true  # 中文参数：初次平滑后继续执行细化迭代。
 
-    SmacHybrid:
-      plugin: "nav2_smac_planner/SmacPlannerHybrid"
-      tolerance: 0.5
-      downsample_costmap: false
-      downsampling_factor: 1
-      allow_unknown: true
-      max_iterations: 1000000
-      max_on_approach_iterations: 1000
-      max_planning_time: 3.5
-      motion_model_for_search: "DUBIN"
-      angle_quantization_bins: 72
-      analytic_expansion_ratio: 3.5
-      analytic_expansion_max_length: 3.0
-      minimum_turning_radius: 0.40
-      reverse_penalty: 2.1
-      change_penalty: 0.0
-      non_straight_penalty: 1.20
-      cost_penalty: 2.0
-      retrospective_penalty: 0.025
-      lookup_table_size: 20.0
-      cache_obstacle_heuristic: true
-      smooth_path: true
-      smoother:
-        max_iterations: 1000
-        w_smooth: 0.3
-        w_data: 0.2
-        tolerance: 1.0e-10
-        do_refinement: true
+    SmacHybrid:  # 中文参数：考虑车辆航向和最小转弯半径的 Hybrid-A* 规划器配置组。
+      plugin: "nav2_smac_planner/SmacPlannerHybrid"  # 中文参数：加载 SmacPlannerHybrid 插件。
+      tolerance: 0.5  # 中文参数：允许在目标点周围 0.5 m 内结束规划。
+      downsample_costmap: false  # 中文参数：关闭代价地图降采样。
+      downsampling_factor: 1  # 中文参数：降采样倍率为 1，保持原始分辨率。
+      allow_unknown: true  # 中文参数：允许状态扩展到未知空间。
+      max_iterations: 1000000  # 中文参数：Hybrid-A* 最大状态扩展次数。
+      max_on_approach_iterations: 1000  # 中文参数：接近目标后的最大补充搜索次数。
+      max_planning_time: 3.5  # 中文参数：单次 Hybrid-A* 规划最长运行 3.5 秒。
+      motion_model_for_search: "DUBIN"  # 中文参数：使用仅前进的 Dubins 车辆运动模型。
+      angle_quantization_bins: 72  # 中文参数：将 360 度航向离散为 72 个方向，每格约 5 度。
+      analytic_expansion_ratio: 3.5  # 中文参数：控制解析连接到目标的尝试频率。
+      analytic_expansion_max_length: 3.0  # 中文参数：解析扩展允许直接连接的最大长度为 3 m。
+      minimum_turning_radius: 0.40  # 中文参数：车辆最小转弯半径为 0.40 m。
+      reverse_penalty: 2.1  # 中文参数：倒车段惩罚系数；Dubins 模型通常不产生倒车段。
+      change_penalty: 0.0  # 中文参数：前进／倒车方向切换惩罚，此处不额外惩罚。
+      non_straight_penalty: 1.20  # 中文参数：非直行运动的代价倍率，抑制不必要转弯。
+      cost_penalty: 2.0  # 中文参数：代价地图栅格值在搜索代价中的权重。
+      retrospective_penalty: 0.025  # 中文参数：轻微偏向较晚扩展节点，改善搜索顺序。
+      lookup_table_size: 20.0  # 中文参数：运动启发式查找表覆盖 20 m 范围。
+      cache_obstacle_heuristic: true  # 中文参数：缓存障碍启发式，加速相同地图上的重复规划。
+      smooth_path: true  # 中文参数：搜索完成后启用内部路径平滑。
+      smoother:  # 中文参数：Hybrid-A* 内部路径平滑参数组。
+        max_iterations: 1000  # 中文参数：平滑最多迭代 1000 次。
+        w_smooth: 0.3  # 中文参数：路径曲线平滑权重。
+        w_data: 0.2  # 中文参数：保持原始路径形状的权重。
+        tolerance: 1.0e-10  # 中文参数：平滑算法停止迭代的收敛阈值。
+        do_refinement: true  # 中文参数：启用额外细化过程。
 
-    SmacLattice:
-      plugin: "nav2_smac_planner/SmacPlannerLattice"
-      tolerance: 0.5
-      allow_unknown: true
-      max_iterations: 1000000
-      max_on_approach_iterations: 1000
-      max_planning_time: 3.5
-      analytic_expansion_ratio: 3.5
-      analytic_expansion_max_length: 3.0
-      reverse_penalty: 2.0
-      change_penalty: 0.05
-      non_straight_penalty: 1.05
-      cost_penalty: 2.0
-      rotation_penalty: 5.0
-      retrospective_penalty: 0.015
-      lattice_filepath: "$(find-pkg-share nav2_smac_planner)/sample_primitives/5cm_resolution/0.5m_turning_radius/diff/output.json"
-      lookup_table_size: 20.0
-      cache_obstacle_heuristic: false
-      allow_reverse_expansion: false
-      smooth_path: true
+    SmacLattice:  # 中文参数：基于预生成运动基元的状态格规划器配置组。
+      plugin: "nav2_smac_planner/SmacPlannerLattice"  # 中文参数：加载 SmacPlannerLattice 插件。
+      tolerance: 0.5  # 中文参数：目标点附近 0.5 m 为可接受终点范围。
+      allow_unknown: true  # 中文参数：允许运动基元进入未知区域。
+      max_iterations: 1000000  # 中文参数：搜索最大迭代次数。
+      max_on_approach_iterations: 1000  # 中文参数：进入目标附近后的最大继续搜索次数。
+      max_planning_time: 3.5  # 中文参数：单次状态格规划最大耗时 3.5 秒。
+      analytic_expansion_ratio: 3.5  # 中文参数：解析连接目标的尝试频率控制系数。
+      analytic_expansion_max_length: 3.0  # 中文参数：解析扩展最大连接长度为 3 m。
+      reverse_penalty: 2.0  # 中文参数：倒车运动的代价倍率。
+      change_penalty: 0.05  # 中文参数：运动方向切换的附加惩罚。
+      non_straight_penalty: 1.05  # 中文参数：转弯运动相对直行的代价倍率。
+      cost_penalty: 2.0  # 中文参数：代价地图对搜索路径的惩罚权重。
+      rotation_penalty: 5.0  # 中文参数：原地或大角度旋转运动基元的惩罚系数。
+      retrospective_penalty: 0.015  # 中文参数：搜索回溯偏置系数。
+      lattice_filepath: "$(find-pkg-share nav2_smac_planner)/sample_primitives/5cm_resolution/0.5m_turning_radius/diff/output.json"  # 中文参数：5 cm 分辨率、0.5 m 转弯半径、差速模型运动基元文件。
+      lookup_table_size: 20.0  # 中文参数：启发式查找表边长范围为 20 m。
+      cache_obstacle_heuristic: false  # 中文参数：不缓存障碍启发式，地图变化后每次重新计算。
+      allow_reverse_expansion: false  # 中文参数：禁止解析扩展使用倒车连接。
+      smooth_path: true  # 中文参数：规划完成后平滑输出路径。
 
-    ThetaStar:
-      plugin: "nav2_theta_star_planner/ThetaStarPlanner"
-      how_many_corners: 8
-      allow_unknown: true
-      w_euc_cost: 1.0
-      w_traversal_cost: 2.0
-      use_final_approach_orientation: false
+    ThetaStar:  # 中文参数：任意角度 Theta* 全局规划器配置组。
+      plugin: "nav2_theta_star_planner/ThetaStarPlanner"  # 中文参数：加载 ThetaStarPlanner 插件。
+      how_many_corners: 8  # 中文参数：每个栅格检查 8 邻域方向。
+      allow_unknown: true  # 中文参数：允许路径经过未知栅格。
+      w_euc_cost: 1.0  # 中文参数：欧氏距离启发项权重。
+      w_traversal_cost: 2.0  # 中文参数：栅格通行代价权重。
+      use_final_approach_orientation: false  # 中文参数：末段不自动调整路径朝向以匹配目标姿态。
 
-regulated_navigator:
-  ros__parameters:
-    use_sim_time: false
-    goal_topic: "/goal_pose"
-    navigate_to_pose_action: "navigate_to_pose"
-    compute_path_action: "compute_path_to_pose"
-    smooth_path_action: "smooth_path"
-    follow_path_action: "follow_path"
-    planner_id: "GridBasedAstar"
-    controller_id: "DWB"
-    goal_checker_id: "general_goal_checker"
-    use_smoother: true
-    smoother_id: "simple_smoother"
-    check_smoother_collisions: true
-    server_timeout: 5.0
-    max_smoothing_duration: 2.0
+regulated_navigator:  # 中文参数：无行为树的自定义规控编排节点，串联规划、平滑和控制 Action。
+  ros__parameters:  # 中文参数：以下内容属于 regulated_navigator 的 ROS 2 参数。
+    use_sim_time: false  # 中文参数：使用系统时间而不是仿真 `/clock`。
+    # 中文注释：定位由外部自研节点直接提供动态 map -> base_link。
+    global_frame: "map"  # 中文参数：全局规划、反馈和定位查询统一使用 map 坐标系。
+    robot_base_frame: "base_link"  # 中文参数：机器人本体坐标系；外部自研定位必须发布 map→base_link。
+    goal_topic: "goal_pose"  # 中文参数：兼容简单目标输入的 PoseStamped Topic 名称。
+    navigate_to_pose_action: "navigate_to_pose"  # 中文参数：对外提供标准单点导航 Action 名称。
+    navigate_through_poses_action: "navigate_through_poses"  # 中文参数：对外提供标准多点连续导航 Action 名称。
+    compute_path_to_pose_action: "compute_path_to_pose"  # 中文参数：调用 Planner Server 单点规划 Action 的名称。
+    compute_path_through_poses_action: "compute_path_through_poses"  # 中文参数：调用 Planner Server 多点规划 Action 的名称。
+    smooth_path_action: "smooth_path"  # 中文参数：调用 Smoother Server 路径平滑 Action 的名称。
+    follow_path_action: "follow_path"  # 中文参数：调用 Controller Server 路径跟踪 Action 的名称。
+    planner_id: "GridBasedAstar"  # 中文参数：规控节点下发规划请求时指定的规划器插件标识。
+    controller_id: "DWB"  # 中文参数：规控节点下发跟踪请求时指定的控制器插件标识。
+    goal_checker_id: "general_goal_checker"  # 中文参数：FollowPath 使用的目标到达检查器标识。
+    use_smoother: true  # 中文参数：规划成功后先执行路径平滑，再下发给控制器。
+    smoother_id: "simple_smoother"  # 中文参数：SmoothPath 请求使用的平滑器插件标识。
+    check_smoother_collisions: true  # 中文参数：平滑过程中检查新路径是否与代价地图障碍碰撞。
+    server_timeout: 5.0  # 中文参数：等待规划、平滑和控制 Action Server 的最长时间为 5 秒。
+    cancel_timeout: 2.0  # 中文参数：取消下游 Action 时允许的超时配置值，单位为秒。
+    max_smoothing_duration: 2.0  # 中文参数：单次路径平滑允许的最大处理时间为 2 秒。
+    feedback_frequency: 5.0  # 中文参数：向外层导航 Action 发布反馈的频率为 5 Hz。
+    replan_frequency: 1.0  # 中文参数：控制过程中后台周期重规划频率为 1 Hz。
+    max_consecutive_planning_failures: 3  # 中文参数：连续规划失败达到 3 次后进入恢复流程。
+    max_recovery_rounds: 2  # 中文参数：清图并重规划最多执行 2 轮，之后任务失败退出。
+    # 中文注释：清理代价地图后由规控定时器等待更新，不调用 nav2_behaviors 的 Wait Action。
+    costmap_update_wait_duration: 0.8  # 中文参数：清理双 Costmap 后等待 0.8 秒让传感器和静态层重新填充。
+    passed_goal_radius: 0.7  # 中文参数：多点导航中距中间目标小于 0.7 m 时认为该点已通过。
+    localization_timeout: 0.3  # 中文参数：超过 0.3 秒无法查询 map→base_link 时判定定位暂时丢失并停车。
+    localization_recovery_timeout: 10.0  # 中文参数：定位丢失后最多等待 10 秒恢复，超时则终止导航任务。
+    localization_stable_duration: 0.5  # 中文参数：定位恢复后需连续稳定 0.5 秒才重新规划和运动。
+    max_localization_translation_jump: 0.3  # 中文参数：相邻检测周期平移突变超过 0.3 m 时废弃旧路径并重规划。
+    max_localization_rotation_jump: 0.35  # 中文参数：相邻检测周期旋转突变超过 0.35 rad 时触发停车和重规划。
+    progress_timeout: 10.0  # 中文参数：控制阶段连续 10 秒无有效位移时触发清图恢复。
+    progress_min_translation: 0.1  # 中文参数：累计平移至少 0.1 m 才刷新规控层的“有进展”时间。
+    stop_cmd_vel_topic: "cmd_vel_nav"  # 中文参数：取消、失败或定位异常时发布零速度的控制链入口 Topic。
 
-controller_server:
-  ros__parameters:
-    use_sim_time: false
-    controller_frequency: 20.0
-    min_x_velocity_threshold: 0.001
-    min_y_velocity_threshold: 0.5
-    min_theta_velocity_threshold: 0.001
-    failure_tolerance: 0.3
-    progress_checker_plugin: "progress_checker"
-    goal_checker_plugins: ["general_goal_checker"]
-    controller_plugins: ["DWB", "RPP", "MPPI", "GracefulController", "RotationShimController"]
+controller_server:  # 中文参数：局部控制服务器节点，负责加载控制器、进度检查器和目标检查器。
+  ros__parameters:  # 中文参数：以下内容全部属于 controller_server 的 ROS 2 参数。
+    use_sim_time: false  # 中文参数：关闭仿真时钟，控制循环使用系统时间。
+    controller_frequency: 20.0  # 中文参数：局部控制器以 20 Hz 计算并发布速度命令。
+    min_x_velocity_threshold: 0.001  # 中文参数：X 方向速度绝对值低于 0.001 m/s 时按零速度处理。
+    min_y_velocity_threshold: 0.5  # 中文参数：Y 方向速度低于 0.5 m/s 时按零处理；差速车不使用横移速度。
+    min_theta_velocity_threshold: 0.001  # 中文参数：角速度绝对值低于 0.001 rad/s 时按零处理。
+    failure_tolerance: 0.3  # 中文参数：控制器异常后允许短暂容忍 0.3 秒，再判定 FollowPath 失败。
+    progress_checker_plugin: "progress_checker"  # 中文参数：选择名为 progress_checker 的进度检查插件。
+    goal_checker_plugins: ["general_goal_checker"]  # 中文参数：加载的目标到达检查器标识列表。
+    controller_plugins: ["DWB", "RPP", "MPPI", "GracefulController", "RotationShimController"]  # 中文参数：一次加载的全部局部控制器插件标识列表。
 
-    progress_checker:
-      plugin: "nav2_controller::SimpleProgressChecker"
-      required_movement_radius: 0.5
-      movement_time_allowance: 10.0
+    progress_checker:  # 中文参数：SimpleProgressChecker 进度检查器配置组。
+      plugin: "nav2_controller::SimpleProgressChecker"  # 中文参数：加载基于位移半径和时间窗口的简单进度检查器。
+      required_movement_radius: 0.5  # 中文参数：在允许时间内至少移动 0.5 m 才算取得控制进展。
+      movement_time_allowance: 10.0  # 中文参数：允许机器人用 10 秒完成上述最小位移。
 
-    general_goal_checker:
-      stateful: true
-      plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 0.25
+    general_goal_checker:  # 中文参数：通用位置和航向目标检查器配置组。
+      stateful: true  # 中文参数：进入位置容差后保持该阶段状态，再完成最终航向对齐。
+      plugin: "nav2_controller::SimpleGoalChecker"  # 中文参数：加载 Nav2 简单目标检查器插件。
+      xy_goal_tolerance: 0.25  # 中文参数：机器人距目标平面位置 0.25 m 内视为位置到达。
+      yaw_goal_tolerance: 0.25  # 中文参数：机器人与目标航向误差 0.25 rad 内视为姿态到达。
 
-    DWB:
-      plugin: "dwb_core::DWBLocalPlanner"
-      debug_trajectory_details: true
-      min_vel_x: 0.0
-      min_vel_y: 0.0
-      max_vel_x: 0.26
-      max_vel_y: 0.0
-      max_vel_theta: 1.0
-      min_speed_xy: 0.0
-      max_speed_xy: 0.26
-      min_speed_theta: 0.0
-      acc_lim_x: 2.5
-      acc_lim_y: 0.0
-      acc_lim_theta: 3.2
-      decel_lim_x: -2.5
-      decel_lim_y: 0.0
-      decel_lim_theta: -3.2
-      vx_samples: 20
-      vy_samples: 5
-      vtheta_samples: 20
-      sim_time: 1.7
-      linear_granularity: 0.05
-      angular_granularity: 0.025
-      transform_tolerance: 0.2
-      xy_goal_tolerance: 0.25
-      trans_stopped_velocity: 0.25
-      short_circuit_trajectory_evaluation: true
-      stateful: true
-      critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
-      BaseObstacle.scale: 0.02
-      PathAlign.scale: 32.0
-      PathAlign.forward_point_distance: 0.1
-      GoalAlign.scale: 24.0
-      GoalAlign.forward_point_distance: 0.1
-      PathDist.scale: 32.0
-      GoalDist.scale: 24.0
-      RotateToGoal.scale: 32.0
-      RotateToGoal.slowing_factor: 5.0
-      RotateToGoal.lookahead_time: -1.0
+    DWB:  # 中文参数：Dynamic Window Approach 局部轨迹采样控制器配置组。
+      plugin: "dwb_core::DWBLocalPlanner"  # 中文参数：加载 DWBLocalPlanner 插件。
+      debug_trajectory_details: true  # 中文参数：启用候选轨迹评分细节，便于调试但会增加日志和计算开销。
+      min_vel_x: 0.0  # 中文参数：X 方向最小采样速度为 0 m/s，不允许 DWB 倒车。
+      min_vel_y: 0.0  # 中文参数：Y 方向最小采样速度为 0 m/s。
+      max_vel_x: 0.26  # 中文参数：X 方向最大线速度限制为 0.26 m/s。
+      max_vel_y: 0.0  # 中文参数：禁止 Y 方向横移，符合差速底盘约束。
+      max_vel_theta: 1.0  # 中文参数：最大角速度限制为 1.0 rad/s。
+      min_speed_xy: 0.0  # 中文参数：平面合速度允许降至 0，支持停车和原地旋转。
+      max_speed_xy: 0.26  # 中文参数：平面合速度上限为 0.26 m/s。
+      min_speed_theta: 0.0  # 中文参数：角速度允许降至 0 rad/s。
+      acc_lim_x: 2.5  # 中文参数：X 方向最大加速度为 2.5 m/s²。
+      acc_lim_y: 0.0  # 中文参数：Y 方向加速度为 0，禁止横移加速。
+      acc_lim_theta: 3.2  # 中文参数：最大角加速度为 3.2 rad/s²。
+      decel_lim_x: -2.5  # 中文参数：X 方向最大减速度为 -2.5 m/s²。
+      decel_lim_y: 0.0  # 中文参数：Y 方向减速度保持为 0。
+      decel_lim_theta: -3.2  # 中文参数：最大角减速度为 -3.2 rad/s²。
+      vx_samples: 20  # 中文参数：X 方向速度窗口离散采样 20 个候选值。
+      vy_samples: 5  # 中文参数：Y 方向采样 5 个候选值，但最大横移速度为 0。
+      vtheta_samples: 20  # 中文参数：角速度窗口离散采样 20 个候选值。
+      sim_time: 1.7  # 中文参数：每条候选速度向前仿真 1.7 秒形成轨迹。
+      linear_granularity: 0.05  # 中文参数：轨迹线性积分点之间的最大距离为 0.05 m。
+      angular_granularity: 0.025  # 中文参数：轨迹角度积分点之间的最大角度为 0.025 rad。
+      transform_tolerance: 0.2  # 中文参数：坐标变换允许的时间容差为 0.2 秒。
+      xy_goal_tolerance: 0.25  # 中文参数：DWB 内部目标位置容差为 0.25 m。
+      trans_stopped_velocity: 0.25  # 中文参数：平移速度低于 0.25 m/s 时可判定接近停止状态。
+      short_circuit_trajectory_evaluation: true  # 中文参数：某项 Critic 判定轨迹非法后立即停止后续评分。
+      stateful: true  # 中文参数：保留到达目标过程状态，避免位置和航向阶段反复切换。
+      critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]  # 中文参数：DWB 候选轨迹依次使用的评分器列表。
+      BaseObstacle.scale: 0.02  # 中文参数：基础障碍代价评分权重为 0.02。
+      PathAlign.scale: 32.0  # 中文参数：轨迹朝向与全局路径对齐的评分权重。
+      PathAlign.forward_point_distance: 0.1  # 中文参数：路径朝向评分使用机器人前方 0.1 m 的参考点。
+      GoalAlign.scale: 24.0  # 中文参数：轨迹朝向目标方向的评分权重。
+      GoalAlign.forward_point_distance: 0.1  # 中文参数：目标朝向评分使用机器人前方 0.1 m 参考点。
+      PathDist.scale: 32.0  # 中文参数：轨迹偏离全局路径距离的评分权重。
+      GoalDist.scale: 24.0  # 中文参数：轨迹终点距导航目标距离的评分权重。
+      RotateToGoal.scale: 32.0  # 中文参数：接近目标时旋转对齐行为的评分权重。
+      RotateToGoal.slowing_factor: 5.0  # 中文参数：目标旋转阶段线速度减速系数。
+      RotateToGoal.lookahead_time: -1.0  # 中文参数：使用完整模拟时域评估旋转，不设置额外前视时间。
 
-    RPP:
-      plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      desired_linear_vel: 0.22
-      lookahead_dist: 0.45
-      min_lookahead_dist: 0.25
-      max_lookahead_dist: 0.75
-      lookahead_time: 1.5
-      rotate_to_heading_angular_vel: 0.8
-      transform_tolerance: 0.2
-      use_velocity_scaled_lookahead_dist: true
-      min_approach_linear_velocity: 0.03
-      approach_velocity_scaling_dist: 0.6
-      use_collision_detection: true
-      max_allowed_time_to_collision_up_to_carrot: 1.0
-      use_regulated_linear_velocity_scaling: true
-      use_cost_regulated_linear_velocity_scaling: true
-      cost_scaling_dist: 0.35
-      cost_scaling_gain: 0.8
-      inflation_cost_scaling_factor: 5.0
-      regulated_linear_scaling_min_radius: 0.7
-      regulated_linear_scaling_min_speed: 0.05
-      use_rotate_to_heading: true
-      rotate_to_heading_min_angle: 0.785
-      max_angular_accel: 3.2
-      max_robot_pose_search_dist: 3.0
-      use_interpolation: true
+    RPP:  # 中文参数：Regulated Pure Pursuit 受约束纯跟踪控制器配置组。
+      plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"  # 中文参数：加载 RPP 控制器插件。
+      desired_linear_vel: 0.22  # 中文参数：无额外约束时的期望线速度为 0.22 m/s。
+      lookahead_dist: 0.45  # 中文参数：固定模式下纯跟踪前视距离为 0.45 m。
+      min_lookahead_dist: 0.25  # 中文参数：速度缩放前视距离的最小值为 0.25 m。
+      max_lookahead_dist: 0.75  # 中文参数：速度缩放前视距离的最大值为 0.75 m。
+      lookahead_time: 1.5  # 中文参数：根据当前速度计算前视距离时采用 1.5 秒前视时间。
+      rotate_to_heading_angular_vel: 0.8  # 中文参数：原地对齐路径航向时使用 0.8 rad/s 角速度。
+      transform_tolerance: 0.2  # 中文参数：路径和机器人位姿转换允许 0.2 秒时间容差。
+      use_velocity_scaled_lookahead_dist: true  # 中文参数：根据当前线速度动态调整前视距离。
+      min_approach_linear_velocity: 0.03  # 中文参数：接近目标减速时最低保持 0.03 m/s。
+      approach_velocity_scaling_dist: 0.6  # 中文参数：距目标 0.6 m 内开始按距离缩放线速度。
+      use_collision_detection: true  # 中文参数：沿预测运动弧检查局部代价地图碰撞。
+      max_allowed_time_to_collision_up_to_carrot: 1.0  # 中文参数：向前最多检查 1 秒内的碰撞风险。
+      use_regulated_linear_velocity_scaling: true  # 中文参数：根据路径曲率限制线速度。
+      use_cost_regulated_linear_velocity_scaling: true  # 中文参数：根据局部代价地图障碍代价限制线速度。
+      cost_scaling_dist: 0.35  # 中文参数：距障碍约 0.35 m 内开始应用代价减速。
+      cost_scaling_gain: 0.8  # 中文参数：障碍代价映射为速度缩放的增益系数。
+      inflation_cost_scaling_factor: 5.0  # 中文参数：必须与 Costmap Inflation Layer 的代价衰减系数一致。
+      regulated_linear_scaling_min_radius: 0.7  # 中文参数：路径曲率半径小于 0.7 m 时开始曲率减速。
+      regulated_linear_scaling_min_speed: 0.05  # 中文参数：曲率和代价调节后的最低线速度为 0.05 m/s。
+      use_rotate_to_heading: true  # 中文参数：路径初始方向差较大时先原地旋转对齐。
+      rotate_to_heading_min_angle: 0.785  # 中文参数：航向差超过约 45 度时触发原地对齐。
+      max_angular_accel: 3.2  # 中文参数：旋转对齐阶段最大角加速度为 3.2 rad/s²。
+      max_robot_pose_search_dist: 3.0  # 中文参数：在全局路径上搜索最近机器人投影点的最大距离为 3 m。
+      use_interpolation: true  # 中文参数：在路径点间插值获取更连续的前视目标点。
 
-    MPPI:
-      plugin: "nav2_mppi_controller::MPPIController"
-      time_steps: 56
-      model_dt: 0.05
-      batch_size: 1000
-      vx_std: 0.2
-      vy_std: 0.0
-      wz_std: 0.4
-      vx_max: 0.26
-      vx_min: 0.0
-      vy_max: 0.0
-      wz_max: 1.0
-      iteration_count: 1
-      prune_distance: 1.5
-      transform_tolerance: 0.2
-      temperature: 0.3
-      gamma: 0.015
-      motion_model: "DiffDrive"
-      visualize: false
-      reset_period: 1.0
-      regenerate_noises: false
-      TrajectoryVisualizer:
-        trajectory_step: 5
-        time_step: 3
-      critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "PreferForwardCritic"]
-      ConstraintCritic:
-        enabled: true
-        cost_power: 1
-        cost_weight: 4.0
-      CostCritic:
-        enabled: true
-        cost_power: 1
-        cost_weight: 3.81
-        critical_cost: 300.0
-        consider_footprint: false
-        collision_cost: 1000000.0
-        near_goal_distance: 0.5
-      GoalCritic:
-        enabled: true
-        cost_power: 1
-        cost_weight: 5.0
-        threshold_to_consider: 1.4
-      GoalAngleCritic:
-        enabled: true
-        cost_power: 1
-        cost_weight: 3.0
-        threshold_to_consider: 0.5
-      PathAlignCritic:
-        enabled: true
-        cost_power: 1
-        cost_weight: 10.0
-        max_path_occupancy_ratio: 0.07
-        offset_from_furthest: 20
-        trajectory_point_step: 4
-        threshold_to_consider: 0.5
-        use_path_orientations: false
-      PathFollowCritic:
-        enabled: true
-        cost_power: 1
-        cost_weight: 5.0
-        offset_from_furthest: 6
-        threshold_to_consider: 1.4
-      PathAngleCritic:
-        enabled: true
-        cost_power: 1
-        cost_weight: 2.0
-        offset_from_furthest: 4
-        threshold_to_consider: 0.5
-        max_angle_to_furthest: 1.0
-        forward_preference: true
-      PreferForwardCritic:
-        enabled: true
-        cost_power: 1
-        cost_weight: 5.0
-        threshold_to_consider: 0.5
+    MPPI:  # 中文参数：Model Predictive Path Integral 采样优化控制器配置组。
+      plugin: "nav2_mppi_controller::MPPIController"  # 中文参数：加载 Nav2 MPPI 控制器插件。
+      time_steps: 56  # 中文参数：每条候选轨迹包含 56 个离散预测时间步。
+      model_dt: 0.05  # 中文参数：运动模型每个预测时间步为 0.05 秒，总预测约 2.8 秒。
+      batch_size: 1000  # 中文参数：每轮优化并行采样 1000 条控制序列。
+      vx_std: 0.2  # 中文参数：X 线速度采样噪声标准差为 0.2 m/s。
+      vy_std: 0.0  # 中文参数：Y 线速度采样噪声为 0，符合差速底盘不可横移约束。
+      wz_std: 0.4  # 中文参数：角速度采样噪声标准差为 0.4 rad/s。
+      vx_max: 0.26  # 中文参数：MPPI 允许的最大前进速度为 0.26 m/s。
+      vx_min: 0.0  # 中文参数：最小 X 速度为 0，当前配置禁止倒车采样。
+      vy_max: 0.0  # 中文参数：最大横向速度为 0，关闭横移控制。
+      wz_max: 1.0  # 中文参数：最大角速度绝对值为 1.0 rad/s。
+      iteration_count: 1  # 中文参数：每个控制周期执行一次采样优化迭代。
+      prune_distance: 1.5  # 中文参数：裁剪机器人身后超过 1.5 m 的全局路径段。
+      transform_tolerance: 0.2  # 中文参数：路径坐标转换允许 0.2 秒时间容差。
+      temperature: 0.3  # 中文参数：轨迹代价 softmax 温度，控制优良样本权重集中程度。
+      gamma: 0.015  # 中文参数：控制噪声正则项权重，影响探索与控制平滑的平衡。
+      motion_model: "DiffDrive"  # 中文参数：使用差速驱动运动学模型预测轨迹。
+      visualize: false  # 中文参数：关闭候选轨迹可视化，减少运行时发布和计算开销。
+      reset_period: 1.0  # 中文参数：优化器周期性重置间隔为 1 秒。
+      regenerate_noises: false  # 中文参数：复用已生成噪声序列，而不是每轮重新生成。
+      TrajectoryVisualizer:  # 中文参数：MPPI 候选轨迹可视化抽样参数组；仅在 visualize=true 时生效。
+        trajectory_step: 5  # 中文参数：每隔 5 条候选轨迹抽取一条用于显示。
+        time_step: 3  # 中文参数：每隔 3 个预测时间步取一个可视化点。
+      critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "PreferForwardCritic"]  # 中文参数：MPPI 对候选轨迹计算总代价时启用的 Critic 列表。
+      ConstraintCritic:  # 中文参数：运动模型速度和加速度约束评分器配置组。
+        enabled: true  # 中文参数：启用运动约束代价。
+        cost_power: 1  # 中文参数：约束代价采用一次幂，不做非线性放大。
+        cost_weight: 4.0  # 中文参数：运动约束代价权重为 4.0。
+      CostCritic:  # 中文参数：基于局部代价地图的障碍和碰撞评分器配置组。
+        enabled: true  # 中文参数：启用 Costmap 代价评分。
+        cost_power: 1  # 中文参数：Costmap 代价采用一次幂。
+        cost_weight: 3.81  # 中文参数：Costmap 代价权重为 3.81。
+        critical_cost: 300.0  # 中文参数：超过该评分阈值的轨迹被视为高风险轨迹。
+        consider_footprint: false  # 中文参数：评分时使用机器人中心代价，不逐点检查完整 Footprint。
+        collision_cost: 1000000.0  # 中文参数：检测到碰撞时施加一百万的极大惩罚。
+        near_goal_distance: 0.5  # 中文参数：距目标 0.5 m 内调整障碍代价评分策略。
+      GoalCritic:  # 中文参数：候选轨迹终点距导航目标位置的评分器。
+        enabled: true  # 中文参数：启用目标距离代价。
+        cost_power: 1  # 中文参数：目标距离代价采用一次幂。
+        cost_weight: 5.0  # 中文参数：目标距离评分权重为 5.0。
+        threshold_to_consider: 1.4  # 中文参数：距目标小于 1.4 m 时开始重点计算该项代价。
+      GoalAngleCritic:  # 中文参数：候选轨迹末端航向与目标航向的评分器。
+        enabled: true  # 中文参数：启用最终航向误差代价。
+        cost_power: 1  # 中文参数：航向误差代价采用一次幂。
+        cost_weight: 3.0  # 中文参数：目标航向评分权重为 3.0。
+        threshold_to_consider: 0.5  # 中文参数：距目标 0.5 m 内开始强调最终航向对齐。
+      PathAlignCritic:  # 中文参数：候选轨迹整体方向与全局路径对齐程度评分器。
+        enabled: true  # 中文参数：启用路径方向对齐代价。
+        cost_power: 1  # 中文参数：路径对齐代价采用一次幂。
+        cost_weight: 10.0  # 中文参数：路径对齐评分权重为 10.0。
+        max_path_occupancy_ratio: 0.07  # 中文参数：路径占用比例超过 7% 时抑制该对齐评分，避免贴障碍。
+        offset_from_furthest: 20  # 中文参数：从候选轨迹最远匹配点向后偏移 20 个路径点计算方向。
+        trajectory_point_step: 4  # 中文参数：每隔 4 个轨迹点参与路径对齐评分。
+        threshold_to_consider: 0.5  # 中文参数：距目标大于 0.5 m 时应用路径对齐评分。
+        use_path_orientations: false  # 中文参数：不使用全局路径点自带姿态，按路径几何方向计算。
+      PathFollowCritic:  # 中文参数：候选轨迹跟随全局路径进度的评分器。
+        enabled: true  # 中文参数：启用路径跟随代价。
+        cost_power: 1  # 中文参数：路径跟随代价采用一次幂。
+        cost_weight: 5.0  # 中文参数：路径跟随评分权重为 5.0。
+        offset_from_furthest: 6  # 中文参数：从最远匹配点向前取 6 个点作为跟随目标偏移。
+        threshold_to_consider: 1.4  # 中文参数：距最终目标大于 1.4 m 时重点跟随路径。
+      PathAngleCritic:  # 中文参数：候选轨迹航向与全局路径切线方向的评分器。
+        enabled: true  # 中文参数：启用路径航向代价。
+        cost_power: 1  # 中文参数：路径航向代价采用一次幂。
+        cost_weight: 2.0  # 中文参数：路径航向评分权重为 2.0。
+        offset_from_furthest: 4  # 中文参数：从最远路径匹配点偏移 4 个点计算参考方向。
+        threshold_to_consider: 0.5  # 中文参数：距目标大于 0.5 m 时计算路径航向代价。
+        max_angle_to_furthest: 1.0  # 中文参数：与参考路径方向差超过 1.0 rad 时施加明显惩罚。
+        forward_preference: true  # 中文参数：偏好车辆前进方向与路径方向一致。
+      PreferForwardCritic:  # 中文参数：抑制倒车、偏好前进轨迹的评分器。
+        enabled: true  # 中文参数：启用前进偏好代价。
+        cost_power: 1  # 中文参数：前进偏好代价采用一次幂。
+        cost_weight: 5.0  # 中文参数：倒车惩罚权重为 5.0。
+        threshold_to_consider: 0.5  # 中文参数：距目标大于 0.5 m 时应用前进偏好。
 
-    GracefulController:
-      plugin: "nav2_graceful_controller::GracefulController"
-      transform_tolerance: 0.2
-      motion_target_dist: 0.6
-      max_robot_pose_search_dist: 3.0
-      k_phi: 3.0
-      k_delta: 2.0
-      beta: 0.2
-      lambda: 2.0
-      v_linear_min: 0.03
-      v_linear_max: 0.22
-      v_angular_max: 1.0
-      slowdown_radius: 1.5
-      initial_rotation: true
-      initial_rotation_min_angle: 0.75
-      final_rotation: true
-      rotation_scaling_factor: 0.5
-      allow_backward: false
+    GracefulController:  # 中文参数：基于平滑姿态控制律的 Graceful Controller 配置组。
+      plugin: "nav2_graceful_controller::GracefulController"  # 中文参数：加载 GracefulController 插件。
+      transform_tolerance: 0.2  # 中文参数：路径和位姿坐标转换允许 0.2 秒容差。
+      motion_target_dist: 0.6  # 中文参数：沿路径选择距机器人约 0.6 m 的运动目标点。
+      max_robot_pose_search_dist: 3.0  # 中文参数：在路径上搜索机器人最近点的最大范围为 3 m。
+      k_phi: 3.0  # 中文参数：朝向目标方向误差的控制增益。
+      k_delta: 2.0  # 中文参数：机器人航向相对运动方向误差的控制增益。
+      beta: 0.2  # 中文参数：控制律曲率整形参数，影响转向平滑程度。
+      lambda: 2.0  # 中文参数：控制律收敛速度参数。
+      v_linear_min: 0.03  # 中文参数：允许的最小线速度为 0.03 m/s。
+      v_linear_max: 0.22  # 中文参数：允许的最大线速度为 0.22 m/s。
+      v_angular_max: 1.0  # 中文参数：允许的最大角速度为 1.0 rad/s。
+      slowdown_radius: 1.5  # 中文参数：距目标 1.5 m 内开始平滑减速。
+      initial_rotation: true  # 中文参数：路径初始航向差较大时先原地旋转。
+      initial_rotation_min_angle: 0.75  # 中文参数：初始航向差超过 0.75 rad 时触发原地旋转。
+      final_rotation: true  # 中文参数：到达目标位置后继续旋转到目标航向。
+      rotation_scaling_factor: 0.5  # 中文参数：旋转阶段角速度缩放系数。
+      allow_backward: false  # 中文参数：禁止控制器通过倒车方式跟踪路径。
 
-    RotationShimController:
-      plugin: "nav2_rotation_shim_controller::RotationShimController"
-      primary_controller: "dwb_core::DWBLocalPlanner"
-      angular_dist_threshold: 0.785
-      angular_disengage_threshold: 0.3925
-      forward_sampling_distance: 0.5
-      rotate_to_heading_angular_vel: 0.8
-      max_angular_accel: 3.2
-      simulate_ahead_time: 1.0
-      rotate_to_goal_heading: false
-      closed_loop: true
-      debug_trajectory_details: true
-      min_vel_x: 0.0
-      min_vel_y: 0.0
-      max_vel_x: 0.26
-      max_vel_y: 0.0
-      max_vel_theta: 1.0
-      min_speed_xy: 0.0
-      max_speed_xy: 0.26
-      min_speed_theta: 0.0
-      acc_lim_x: 2.5
-      acc_lim_y: 0.0
-      acc_lim_theta: 3.2
-      decel_lim_x: -2.5
-      decel_lim_y: 0.0
-      decel_lim_theta: -3.2
-      vx_samples: 20
-      vy_samples: 5
-      vtheta_samples: 20
-      sim_time: 1.7
-      linear_granularity: 0.05
-      angular_granularity: 0.025
-      transform_tolerance: 0.2
-      xy_goal_tolerance: 0.25
-      trans_stopped_velocity: 0.25
-      short_circuit_trajectory_evaluation: true
-      stateful: true
-      critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
-      BaseObstacle.scale: 0.02
-      PathAlign.scale: 32.0
-      PathAlign.forward_point_distance: 0.1
-      GoalAlign.scale: 24.0
-      GoalAlign.forward_point_distance: 0.1
-      PathDist.scale: 32.0
-      GoalDist.scale: 24.0
-      RotateToGoal.scale: 32.0
-      RotateToGoal.slowing_factor: 5.0
-      RotateToGoal.lookahead_time: -1.0
+    RotationShimController:  # 中文参数：先校正路径初始航向、再交由主控制器跟踪的旋转垫片控制器配置组。
+      plugin: "nav2_rotation_shim_controller::RotationShimController"  # 中文参数：加载 Rotation Shim Controller 插件。
+      primary_controller: "dwb_core::DWBLocalPlanner"  # 中文参数：完成初始旋转后使用 DWB 作为实际路径跟踪控制器。
+      angular_dist_threshold: 0.785  # 中文参数：路径初始航向与机器人航向相差超过 0.785 rad 时进入原地旋转。
+      angular_disengage_threshold: 0.3925  # 中文参数：航向误差降到 0.3925 rad 以下时退出旋转并切回 DWB。
+      forward_sampling_distance: 0.5  # 中文参数：在路径前方 0.5 m 处采样，用于确定待对齐的路径航向。
+      rotate_to_heading_angular_vel: 0.8  # 中文参数：原地对齐路径航向时的目标角速度为 0.8 rad/s。
+      max_angular_accel: 3.2  # 中文参数：旋转垫片阶段最大角加速度为 3.2 rad/s²。
+      simulate_ahead_time: 1.0  # 中文参数：旋转碰撞检测向前模拟 1.0 秒。
+      rotate_to_goal_heading: false  # 中文参数：到达目标位置后不由旋转垫片额外对齐目标航向。
+      closed_loop: true  # 中文参数：旋转阶段使用反馈闭环控制；运行时需保证插件所需速度反馈可用。
+      debug_trajectory_details: true  # 中文参数：启用主 DWB 控制器的详细轨迹调试信息。
+      min_vel_x: 0.0  # 中文参数：DWB 前向线速度下限为 0 m/s，禁止采样倒车速度。
+      min_vel_y: 0.0  # 中文参数：横向线速度下限为 0 m/s。
+      max_vel_x: 0.26  # 中文参数：DWB 前向线速度上限为 0.26 m/s。
+      max_vel_y: 0.0  # 中文参数：横向线速度上限为 0 m/s，按差速底盘配置。
+      max_vel_theta: 1.0  # 中文参数：DWB 角速度上限为 1.0 rad/s。
+      min_speed_xy: 0.0  # 中文参数：平面合速度最小值为 0 m/s，允许停车。
+      max_speed_xy: 0.26  # 中文参数：平面合速度最大值为 0.26 m/s。
+      min_speed_theta: 0.0  # 中文参数：角速度绝对值最小值为 0 rad/s。
+      acc_lim_x: 2.5  # 中文参数：前向线加速度上限为 2.5 m/s²。
+      acc_lim_y: 0.0  # 中文参数：横向线加速度上限为 0 m/s²。
+      acc_lim_theta: 3.2  # 中文参数：角加速度上限为 3.2 rad/s²。
+      decel_lim_x: -2.5  # 中文参数：前向线减速度下限为 -2.5 m/s²。
+      decel_lim_y: 0.0  # 中文参数：横向线减速度设为 0 m/s²。
+      decel_lim_theta: -3.2  # 中文参数：角减速度下限为 -3.2 rad/s²。
+      vx_samples: 20  # 中文参数：动态窗口在前向速度轴采样 20 个候选值。
+      vy_samples: 5  # 中文参数：横向速度轴采样 5 个候选值；差速底盘最终仍受横向速度上下限约束为 0。
+      vtheta_samples: 20  # 中文参数：角速度轴采样 20 个候选值。
+      sim_time: 1.7  # 中文参数：每条 DWB 候选轨迹向前模拟 1.7 秒。
+      linear_granularity: 0.05  # 中文参数：候选轨迹线位移积分与碰撞检查步长为 0.05 m。
+      angular_granularity: 0.025  # 中文参数：候选轨迹角位移积分步长为 0.025 rad。
+      transform_tolerance: 0.2  # 中文参数：DWB 坐标转换允许 0.2 秒时间容差。
+      xy_goal_tolerance: 0.25  # 中文参数：DWB 内部目标位置容差为 0.25 m。
+      trans_stopped_velocity: 0.25  # 中文参数：平移速度低于 0.25 m/s 时可判定为平移停止状态。
+      short_circuit_trajectory_evaluation: true  # 中文参数：候选轨迹被任一评价器判为非法后立即停止后续评价。
+      stateful: true  # 中文参数：DWB 保留到达目标位置等内部状态，减少目标附近状态反复切换。
+      critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]  # 中文参数：按顺序启用目标旋转、振荡、障碍物及路径／目标对齐距离评价器。
+      BaseObstacle.scale: 0.02  # 中文参数：基础障碍物代价权重为 0.02。
+      PathAlign.scale: 32.0  # 中文参数：轨迹朝向与全局路径对齐的权重为 32.0。
+      PathAlign.forward_point_distance: 0.1  # 中文参数：在机器人前方 0.1 m 处计算路径朝向对齐误差。
+      GoalAlign.scale: 24.0  # 中文参数：轨迹朝向目标方向对齐的权重为 24.0。
+      GoalAlign.forward_point_distance: 0.1  # 中文参数：在机器人前方 0.1 m 处计算目标方向对齐误差。
+      PathDist.scale: 32.0  # 中文参数：候选轨迹偏离全局路径距离的权重为 32.0。
+      GoalDist.scale: 24.0  # 中文参数：候选轨迹末端距目标距离的权重为 24.0。
+      RotateToGoal.scale: 32.0  # 中文参数：目标附近原地旋转评价权重为 32.0。
+      RotateToGoal.slowing_factor: 5.0  # 中文参数：接近目标朝向时的角速度减速系数为 5.0。
+      RotateToGoal.lookahead_time: -1.0  # 中文参数：设置为 -1.0，目标旋转评价使用插件默认的前视处理方式。
 
-smoother_server:
-  ros__parameters:
-    use_sim_time: false
-    smoother_plugins: ["simple_smoother"]
-    simple_smoother:
-      plugin: "nav2_smoother::SimpleSmoother"
-      tolerance: 1.0e-10
-      max_its: 1000
-      do_refinement: true
+smoother_server:  # 中文参数：路径平滑服务器节点命名空间。
+  ros__parameters:  # 中文参数：以下配置由 smoother_server 作为 ROS 2 参数加载。
+    use_sim_time: false  # 中文参数：使用系统时间，不订阅仿真时钟 /clock。
+    smoother_plugins: ["simple_smoother"]  # 中文参数：注册名为 simple_smoother 的单个路径平滑插件。
+    simple_smoother:  # 中文参数：simple_smoother 插件的专属参数组。
+      plugin: "nav2_smoother::SimpleSmoother"  # 中文参数：加载 Nav2 SimpleSmoother 路径平滑实现。
+      tolerance: 1.0e-10  # 中文参数：相邻迭代变化低于 1×10⁻¹⁰ 时认为平滑优化收敛。
+      max_its: 1000  # 中文参数：单次路径平滑最多执行 1000 次迭代。
+      do_refinement: true  # 中文参数：首次平滑后继续执行细化处理，以进一步改善路径质量。
 
-velocity_smoother:
-  ros__parameters:
-    use_sim_time: false
-    smoothing_frequency: 20.0
-    scale_velocities: false
-    feedback: "OPEN_LOOP"
-    max_velocity: [0.26, 0.0, 1.0]
-    min_velocity: [-0.26, 0.0, -1.0]
-    max_accel: [2.5, 0.0, 3.2]
-    max_decel: [-2.5, 0.0, -3.2]
-    odom_topic: "odom"
-    odom_duration: 0.1
-    deadband_velocity: [0.0, 0.0, 0.0]
-    velocity_timeout: 1.0
+velocity_smoother:  # 中文参数：速度指令平滑器节点命名空间。
+  ros__parameters:  # 中文参数：以下配置由 velocity_smoother 作为 ROS 2 参数加载。
+    use_sim_time: false  # 中文参数：使用系统时间，不订阅仿真时钟 /clock。
+    smoothing_frequency: 20.0  # 中文参数：以 20 Hz 频率插值并发布平滑后的速度指令。
+    scale_velocities: false  # 中文参数：某一速度分量受限时不按比例缩放其余速度分量。
+    feedback: "OPEN_LOOP"  # 中文参数：采用开环模式，以上一周期输出速度而非里程计实测速度作为平滑起点。
+    max_velocity: [0.26, 0.0, 1.0]  # 中文参数：x、y、theta 三轴最大速度依次为 0.26 m/s、0 m/s、1.0 rad/s。
+    min_velocity: [-0.26, 0.0, -1.0]  # 中文参数：x、y、theta 三轴最小速度依次为 -0.26 m/s、0 m/s、-1.0 rad/s。
+    max_accel: [2.5, 0.0, 3.2]  # 中文参数：x、y、theta 三轴最大加速度依次为 2.5 m/s²、0 m/s²、3.2 rad/s²。
+    max_decel: [-2.5, 0.0, -3.2]  # 中文参数：x、y、theta 三轴最大减速度依次为 -2.5 m/s²、0 m/s²、-3.2 rad/s²。
+    # 中文注释：OPEN_LOOP 模式不订阅里程计，速度平滑只依据上一周期输出。
+    deadband_velocity: [0.0, 0.0, 0.0]  # 中文参数：三轴速度死区均为 0，不额外抑制小速度指令。
+    velocity_timeout: 1.0  # 中文参数：超过 1.0 秒未收到新速度指令时输出停车指令。
 
-map_server:
-  ros__parameters:
-    use_sim_time: false
-    yaml_filename: ""
+map_server:  # 中文参数：静态栅格地图服务器节点命名空间。
+  ros__parameters:  # 中文参数：以下配置由 map_server 作为 ROS 2 参数加载。
+    use_sim_time: false  # 中文参数：使用系统时间，不订阅仿真时钟 /clock。
+    yaml_filename: ""  # 中文参数：地图 YAML 路径默认留空，需由启动文件或命令行在运行时注入。
 
-local_costmap:
-  local_costmap:
-    ros__parameters:
-      update_frequency: 5.0
-      publish_frequency: 2.0
-      global_frame: "map"
-      robot_base_frame: base_link
-      use_sim_time: false
-      rolling_window: true
-      width: 3
-      height: 3
-      resolution: 0.05
-      robot_radius: 0.22
-      plugins: ["voxel_layer", "inflation_layer"]
-      voxel_layer:
-        plugin: "nav2_costmap_2d::VoxelLayer"
-        enabled: true
-        publish_voxel_map: true
-        origin_z: 0.0
-        z_resolution: 0.05
-        z_voxels: 16
-        max_obstacle_height: 2.0
-        mark_threshold: 0
-        observation_sources: scan
-        scan:
-          topic: /c200_lidar_node1/scan
-          max_obstacle_height: 2.0
-          clearing: true
-          marking: true
-          data_type: "LaserScan"
-          raytrace_max_range: 3.0
-          raytrace_min_range: 0.0
-          obstacle_max_range: 2.5
-          obstacle_min_range: 0.0
-      inflation_layer:
-        plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 5.0
-        inflation_radius: 0.45
-      always_send_full_costmap: true
+# 中文注释：不配置 behavior_server 和 waypoint_follower，规控节点直接编排规划与控制。
 
-global_costmap:
-  global_costmap:
-    ros__parameters:
-      update_frequency: 1.0
-      publish_frequency: 1.0
-      global_frame: map
-      robot_base_frame: base_link
-      use_sim_time: false
-      robot_radius: 0.22
-      resolution: 0.05
-      track_unknown_space: true
-      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
-      static_layer:
-        plugin: "nav2_costmap_2d::StaticLayer"
-        map_subscribe_transient_local: true
-      obstacle_layer:
-        plugin: "nav2_costmap_2d::ObstacleLayer"
-        enabled: true
-        observation_sources: scan
-        scan:
-          topic: /c200_lidar_node1/scan
-          max_obstacle_height: 2.0
-          clearing: true
-          marking: true
-          data_type: "LaserScan"
-          raytrace_max_range: 3.0
-          raytrace_min_range: 0.0
-          obstacle_max_range: 2.5
-          obstacle_min_range: 0.0
-      inflation_layer:
-        plugin: "nav2_costmap_2d::InflationLayer"
-        cost_scaling_factor: 5.0
-        inflation_radius: 0.45
-      always_send_full_costmap: true
+local_costmap:  # 中文参数：局部代价地图组件的外层命名空间。
+  local_costmap:  # 中文参数：局部代价地图节点名，与外层命名空间共同定位节点参数。
+    ros__parameters:  # 中文参数：以下配置由 local_costmap 节点作为 ROS 2 参数加载。
+      update_frequency: 5.0  # 中文参数：局部代价地图内部数据以 5 Hz 频率更新。
+      publish_frequency: 2.0  # 中文参数：局部代价地图消息以 2 Hz 频率发布。
+      global_frame: "map"  # 中文参数：局部代价地图固定坐标系设为 map，直接使用自研 map→base_link 定位变换。
+      robot_base_frame: base_link  # 中文参数：机器人主体坐标系设为 base_link。
+      use_sim_time: false  # 中文参数：使用系统时间，不订阅仿真时钟 /clock。
+      rolling_window: true  # 中文参数：启用随机器人移动的滚动窗口，只维护机器人附近区域。
+      width: 3  # 中文参数：局部代价地图滚动窗口宽度为 3 m。
+      height: 3  # 中文参数：局部代价地图滚动窗口高度为 3 m。
+      resolution: 0.05  # 中文参数：每个栅格边长为 0.05 m。
+      robot_radius: 0.22  # 中文参数：以半径 0.22 m 的圆形模型表示机器人碰撞轮廓。
+      plugins: ["voxel_layer", "inflation_layer"]  # 中文参数：依次加载三维体素障碍层和二维膨胀层。
+      voxel_layer:  # 中文参数：局部三维体素障碍层参数组。
+        plugin: "nav2_costmap_2d::VoxelLayer"  # 中文参数：加载 VoxelLayer，将传感器障碍物投影到二维代价地图。
+        enabled: true  # 中文参数：启用体素障碍层参与局部代价地图合成。
+        publish_voxel_map: true  # 中文参数：发布体素网格调试数据，便于检查三维障碍物标记结果。
+        origin_z: 0.0  # 中文参数：体素网格垂直方向起点为 0.0 m。
+        z_resolution: 0.05  # 中文参数：每层体素的垂直分辨率为 0.05 m。
+        z_voxels: 16  # 中文参数：垂直方向划分 16 层体素，对应 0.8 m 的体素网格高度。
+        max_obstacle_height: 2.0  # 中文参数：只接收高度不超过 2.0 m 的障碍观测。
+        mark_threshold: 0  # 中文参数：体素列障碍标记阈值为 0，使有效占用观测可投影为二维障碍。
+        observation_sources: scan  # 中文参数：注册名为 scan 的单个障碍物观测源。
+        scan:  # 中文参数：二维激光雷达 scan 观测源参数组。
+          topic: /c200_lidar_node1/scan  # 中文参数：订阅 C200 激光雷达发布的 LaserScan 话题。
+          max_obstacle_height: 2.0  # 中文参数：该观测源只处理高度不超过 2.0 m 的障碍物。
+          clearing: true  # 中文参数：允许激光射线清除已不再被占用的障碍栅格。
+          marking: true  # 中文参数：允许激光命中点在代价地图中标记障碍栅格。
+          data_type: "LaserScan"  # 中文参数：声明观测消息类型为 sensor_msgs/msg/LaserScan。
+          raytrace_max_range: 3.0  # 中文参数：障碍清除射线追踪的最大距离为 3.0 m。
+          raytrace_min_range: 0.0  # 中文参数：障碍清除射线追踪从 0.0 m 开始生效。
+          obstacle_max_range: 2.5  # 中文参数：距离传感器不超过 2.5 m 的命中点可用于标记障碍。
+          obstacle_min_range: 0.0  # 中文参数：障碍标记从 0.0 m 开始生效。
+      inflation_layer:  # 中文参数：局部障碍物膨胀层参数组。
+        plugin: "nav2_costmap_2d::InflationLayer"  # 中文参数：加载 InflationLayer，在障碍物周围生成渐变碰撞代价。
+        cost_scaling_factor: 5.0  # 中文参数：膨胀代价随距离按系数 5.0 衰减，值越大衰减越快。
+        inflation_radius: 0.45  # 中文参数：在障碍物外扩 0.45 m 范围内计算膨胀代价。
+      always_send_full_costmap: true  # 中文参数：每次发布完整局部代价地图，而不是只发布增量更新区域。
+
+global_costmap:  # 中文参数：全局代价地图组件的外层命名空间。
+  global_costmap:  # 中文参数：全局代价地图节点名，与外层命名空间共同定位节点参数。
+    ros__parameters:  # 中文参数：以下配置由 global_costmap 节点作为 ROS 2 参数加载。
+      update_frequency: 1.0  # 中文参数：全局代价地图内部数据以 1 Hz 频率更新。
+      publish_frequency: 1.0  # 中文参数：全局代价地图消息以 1 Hz 频率发布。
+      global_frame: map  # 中文参数：全局代价地图固定坐标系设为 map。
+      robot_base_frame: base_link  # 中文参数：机器人主体坐标系设为 base_link，并依赖自研 map→base_link 定位变换。
+      use_sim_time: false  # 中文参数：使用系统时间，不订阅仿真时钟 /clock。
+      robot_radius: 0.22  # 中文参数：以半径 0.22 m 的圆形模型表示机器人碰撞轮廓。
+      resolution: 0.05  # 中文参数：每个全局代价地图栅格边长为 0.05 m。
+      track_unknown_space: true  # 中文参数：保留未知区域状态，使规划器能够区分未知空间与已知自由空间。
+      plugins: ["static_layer", "obstacle_layer", "inflation_layer"]  # 中文参数：依次加载静态地图层、动态障碍层和膨胀层。
+      static_layer:  # 中文参数：静态栅格地图层参数组。
+        plugin: "nav2_costmap_2d::StaticLayer"  # 中文参数：加载 StaticLayer，将 map_server 地图写入全局代价地图。
+        map_subscribe_transient_local: true  # 中文参数：以 Transient Local QoS 订阅地图，新订阅者可立即收到 map_server 缓存的最新地图。
+      obstacle_layer:  # 中文参数：全局二维动态障碍层参数组。
+        plugin: "nav2_costmap_2d::ObstacleLayer"  # 中文参数：加载 ObstacleLayer，使用实时传感器更新全局障碍物。
+        enabled: true  # 中文参数：启用动态障碍层参与全局代价地图合成。
+        observation_sources: scan  # 中文参数：注册名为 scan 的单个障碍物观测源。
+        scan:  # 中文参数：二维激光雷达 scan 观测源参数组。
+          topic: /c200_lidar_node1/scan  # 中文参数：订阅 C200 激光雷达发布的 LaserScan 话题。
+          max_obstacle_height: 2.0  # 中文参数：该观测源只处理高度不超过 2.0 m 的障碍物。
+          clearing: true  # 中文参数：允许激光射线清除已不再被占用的障碍栅格。
+          marking: true  # 中文参数：允许激光命中点在代价地图中标记障碍栅格。
+          data_type: "LaserScan"  # 中文参数：声明观测消息类型为 sensor_msgs/msg/LaserScan。
+          raytrace_max_range: 3.0  # 中文参数：障碍清除射线追踪的最大距离为 3.0 m。
+          raytrace_min_range: 0.0  # 中文参数：障碍清除射线追踪从 0.0 m 开始生效。
+          obstacle_max_range: 2.5  # 中文参数：距离传感器不超过 2.5 m 的命中点可用于标记障碍。
+          obstacle_min_range: 0.0  # 中文参数：障碍标记从 0.0 m 开始生效。
+      inflation_layer:  # 中文参数：全局障碍物膨胀层参数组。
+        plugin: "nav2_costmap_2d::InflationLayer"  # 中文参数：加载 InflationLayer，在障碍物周围生成渐变碰撞代价。
+        cost_scaling_factor: 5.0  # 中文参数：膨胀代价随距离按系数 5.0 衰减，值越大衰减越快。
+        inflation_radius: 0.45  # 中文参数：在障碍物外扩 0.45 m 范围内计算膨胀代价。
+      always_send_full_costmap: true  # 中文参数：每次发布完整全局代价地图，而不是只发布增量更新区域。

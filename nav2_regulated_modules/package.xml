@@ -14,6 +14,11 @@
   <depend>nav_msgs</depend>
   <depend>rclcpp</depend>
   <depend>rclcpp_action</depend>
+  <depend>rclcpp_lifecycle</depend>
+  <depend>nav2_util</depend>
+  <depend>tf2</depend>
+  <depend>tf2_ros</depend>
+  <depend>tf2_geometry_msgs</depend>
 
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
@@ -22,6 +27,7 @@
   <exec_depend>nav2_planner</exec_depend>
   <exec_depend>nav2_smoother</exec_depend>
   <exec_depend>nav2_velocity_smoother</exec_depend>
+  <!-- 中文注释：恢复由规控节点直接清理代价地图，不依赖 nav2_behaviors 或路点服务器。 -->
   <exec_depend>nav2_lifecycle_manager</exec_depend>
   <exec_depend>nav2_map_server</exec_depend>
   <exec_depend>nav2_costmap_2d</exec_depend>

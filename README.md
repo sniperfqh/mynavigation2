@@ -34,8 +34,10 @@ sudo apt install ros-humble-libg2o
 ```bash
 cd /home/byd/Documents/zpy_ws/project/nav2_demo/nav2_ws
 source /opt/ros/humble/setup.bash
-colcon build --symlink-install \
-  --cmake-args -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
+export MAKEFLAGS="-j4"
+colcon build --symlink-install --parallel-workers 1 --cmake-args -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
+colcon build --symlink-install --parallel-workers 1 --packages-select myagv_test_bringup --cmake-args -DBUILD_TESTING=OFF
+限制核编译的数量
 ```
 
 编译 `myagv_test_bringup` 及工作空间内它依赖的包：
@@ -369,13 +371,14 @@ ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose "{
   pose: {
     header: {frame_id: 'map'},
     pose: {
-      position: {x: 0.570, y: -0.50, z: 0.0},
+      position: {x: 63.481, y: -12.4484, z: 0.0},
       orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
     }
   },
   behavior_tree: ''
 }" --feedback
 ```
+63.481, -12.4484, 0
 
 ### 8.2 多点 Action 导航
 
@@ -412,3 +415,203 @@ ros2 action send_goal /navigate_through_poses nav2_msgs/action/NavigateThroughPo
 
 `behavior_tree: ''` 表示使用 `bt_navigator` 对应导航类型的默认行为树；`--feedback`
 用于在终端持续显示剩余距离、导航时间和恢复次数等反馈。
+
+## 9. nav2_regulated_modules 启动说明
+
+`nav2_regulated_modules` 是不使用行为树的自研规控导航入口。它保留 Map Server、Global／Local
+Costmap、Planner Server、Smoother Server、Controller Server、Velocity Smoother 和 Lifecycle
+管理，但不启动以下节点：
+
+- `bt_navigator`
+- `behavior_server`
+- `waypoint_follower`
+- AMCL
+
+自研 `regulated_navigator` 直接编排：
+
+```text
+NavigateToPose／NavigateThroughPoses／goal_pose
+  → ComputePathToPose／ComputePathThroughPoses
+  → SmoothPath
+  → FollowPath
+  → /cmd_vel_nav
+  → velocity_smoother
+  → /cmd_vel
+  → controlpub
+  → /control_to_uart
+```
+
+### 9.1 启动前提
+
+启动前必须确保：
+
+- 已在 `nav2_ws/` 完成所需包的构建。
+- 外部定位持续发布动态 `map -> base_link`。
+- 激光雷达发布 `/c200_lidar_node1/scan`，消息类型为 `sensor_msgs/msg/LaserScan`。
+- 激光消息的 `frame_id` 能接入 `base_link`；当前 `laserpub` 自测节点直接使用 `base_link`。
+- 真实底盘控制节点能够接收 `/control_to_uart`。
+
+每个终端先加载环境：
+
+```bash
+cd /home/byd/Documents/zpy_ws/project/nav2_demo/nav2_ws
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+export ROS_LOG_DIR=/tmp/nav2_logs
+export SPDLOG_WRAPPER_LOG_DIR=/tmp/nav2_logs
+```
+
+`ROS_LOG_DIR` 和 `SPDLOG_WRAPPER_LOG_DIR` 指向可写目录，避免默认日志目录权限不足导致节点退出。
+
+### 9.2 生产环境启动
+
+生产环境先启动自研定位、雷达驱动和底盘通信，再启动规控导航：
+
+```bash
+ros2 launch nav2_regulated_modules regulated_modules.launch.py
+```
+
+启动文件默认使用：
+
+- 地图：`nav2_regulated_modules/maps/out.yaml`。
+- 参数：`nav2_regulated_modules/params/regulated_modules.yaml`。
+- RViz：默认启动。
+- 时间源：系统时间，`use_sim_time:=false`。
+- 进程模式：非组合模式，`use_composition:=False`。
+- Lifecycle：自动激活，`autostart:=true`。
+
+使用外部地图和参数文件：
+
+```bash
+ros2 launch nav2_regulated_modules regulated_modules.launch.py \
+  map:=/absolute/path/to/map.yaml \
+  params_file:=/absolute/path/to/regulated_modules.yaml \
+  use_rviz:=True \
+  use_sim_time:=false
+```
+
+无界面启动：
+
+```bash
+ros2 launch nav2_regulated_modules regulated_modules.launch.py use_rviz:=False
+```
+
+### 9.3 map2baseTF 与 laserpub 自测启动
+
+没有接入真实定位和雷达时，可以用项目内自测节点检查接口链路。
+
+终端 1 启动固定 TF：
+
+```bash
+ros2 run map2base_tf map2baseTF
+```
+
+该节点默认持续发布：
+
+```text
+map -> base_link
+x = 0.569 m
+y = 0.541 m
+yaw = 0 rad
+```
+
+终端 2 启动测试激光：
+
+```bash
+ros2 run laserpub laserpub
+```
+
+测试激光发布：
+
+```text
+Topic: /c200_lidar_node1/scan
+frame_id: base_link
+```
+
+终端 3 启动规控导航：
+
+```bash
+ros2 launch nav2_regulated_modules regulated_modules.launch.py use_rviz:=False
+```
+
+固定 `map -> base_link` 不模拟车辆运动，只适合验证 TF、Costmap、Action 和状态机链路。发送远离
+固定位置的目标后，规控层会因为位姿长期无进展而进入清图重规划，最终可能返回 `ABORTED`；这不
+代表真实底盘导航效果。
+
+### 9.4 启动后检查
+
+检查核心 Lifecycle 节点：
+
+```bash
+ros2 lifecycle get /map_server
+ros2 lifecycle get /planner_server
+ros2 lifecycle get /controller_server
+ros2 lifecycle get /smoother_server
+ros2 lifecycle get /velocity_smoother
+ros2 lifecycle get /regulated_navigator
+```
+
+正常情况下均应返回：
+
+```text
+active [3]
+```
+
+检查定位、激光、地图和动作接口：
+
+```bash
+ros2 run tf2_ros tf2_echo map base_link
+ros2 topic echo /c200_lidar_node1/scan --once
+ros2 topic echo /map --once
+ros2 action list -t
+```
+
+动作列表至少应包含：
+
+```text
+/compute_path_to_pose
+/compute_path_through_poses
+/smooth_path
+/follow_path
+/navigate_to_pose
+/navigate_through_poses
+```
+
+ROS 图中不应存在 `/bt_navigator`、`/behavior_server` 和 `/waypoint_follower`。
+
+### 9.5 发送自测目标
+
+向固定 TF 当前位姿发送目标，可以验证单点 Action 的完整成功链路：
+
+```bash
+ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose "{
+  pose: {
+    header: {frame_id: 'map'},
+    pose: {
+      position: {x: 0.569, y: 0.541, z: 0.0},
+      orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}
+    }
+  },
+  behavior_tree: ''
+}" --feedback
+```
+
+这里的 `behavior_tree: ''` 表示不请求行为树。`regulated_navigator` 为兼容标准 Nav2 Action 消息
+保留该字段，但会拒绝任何非空行为树 XML。
+
+也可以使用 RViz 的 `2D Goal Pose`，它通过 `/goal_pose` 发送
+`geometry_msgs/msg/PoseStamped`。Topic 入口没有外层 Action 结果，但规划、平滑和控制链与单点
+Action 相同。
+
+### 9.6 停止顺序
+
+测试完成后，在各终端按 `Ctrl+C`，建议按以下顺序停止：
+
+```text
+regulated_modules.launch.py
+laserpub 或真实雷达驱动
+map2baseTF 或自研定位
+底盘通信节点
+```
+
+停止规控 Launch 时，Lifecycle 会先停用 `regulated_navigator`，取消下游 Action 并发布零速度。

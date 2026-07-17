@@ -16,7 +16,7 @@ public:
   : Node("laserpub")
   {
     frame_id_ = declare_parameter<std::string>("frame_id", "base_link");
-    topic_ = declare_parameter<std::string>("topic", "scan");
+    topic_ = declare_parameter<std::string>("topic", "/c200_lidar_node1/scan");
     angle_min_ = declare_parameter<double>("angle_min", -M_PI);
     angle_max_ = declare_parameter<double>("angle_max", M_PI);
     range_min_ = declare_parameter<double>("range_min", 0.12);
@@ -63,7 +63,7 @@ public:
 
     RCLCPP_INFO(
       get_logger(),
-      "Publishing LaserScan topic='/%s' frame_id='%s' samples=%d range=[%.2f, %.2f] rate=%.2fHz test_obstacles=%s",
+      "Publishing LaserScan topic='%s' frame_id='%s' samples=%d range=[%.2f, %.2f] rate=%.2fHz test_obstacles=%s",
       topic_.c_str(), frame_id_.c_str(), sample_count_, range_min_, range_max_, publish_rate,
       publish_test_obstacles_ ? "true" : "false");
   }
