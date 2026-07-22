@@ -1,0 +1,7 @@
+myagv_keyboard_control:
+  ros__parameters:
+    output_topic: /control_to_uart
+    publish_rate: 50.0
+    linear_speed: 0.2
+    angular_speed: 0.5
+    command_timeout: 0.5

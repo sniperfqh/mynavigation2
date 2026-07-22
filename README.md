@@ -56,8 +56,7 @@ colcon build --symlink-install \
 cd /home/byd/Documents/zpy_ws/project/nav2_demo/nav2_ws
 source /opt/ros/humble/setup.bash
 source install/setup.bash
-colcon build --symlink-install \
-  --packages-select myagv_test_bringup \
+colcon build --symlink-install --packages-select myagv_test_bringup \
   --cmake-args -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
 ```
 
@@ -615,3 +614,357 @@ map2baseTF 或自研定位
 ```
 
 停止规控 Launch 时，Lifecycle 会先停用 `regulated_navigator`，取消下游 Action 并发布零速度。
+
+## 10. 普通用户与 root 会话的 ROS 2 Topic 发现差异测试
+
+本节用于诊断以下现象：设备上的普通用户能够发现后台启动的自定义 ROS 2 Topic，但某个 root
+会话中的 Nav2 和 `ros2 topic list` 无法发现这些 Topic；同一套软件通过 `ssh root@<ARM_IP>`
+登录 ARM 设备后，又能正常接收和发布相关 Topic。
+
+这种现象发生在 DDS 发现层，暂时不应通过修改 Nav2 的雷达参数、TF、QoS 或 namespace 处理。
+同一 ARM 设备、同一 UID、同一软件包在不同 root 会话中表现不同，优先检查会话环境、ROS 2
+daemon、DDS 配置、工作空间加载顺序和网络命名空间。
+
+### 10.1 测试原则
+
+分别在以下两个 root 会话中执行完全相同的检查：
+
+- 失败会话：无法发现普通用户后台 Topic 的本地 root、`sudo`、`su` 或后台服务环境。
+- 成功会话：通过 `ssh root@<ARM_IP>` 登录后能够正常发现 Topic 的 root 环境。
+
+所有 Topic 列表测试都使用 `--no-daemon`，避免已有 ROS 2 daemon 保留旧的
+`ROS_DOMAIN_ID` 或 RMW 配置而干扰结果。
+
+### 10.2 对比用户、工作空间和 ROS／DDS 环境
+
+在失败会话和成功会话中分别执行：
+
+```bash
+id
+
+printf 'HOME=%s\nSHELL=%s\n' "$HOME" "$SHELL"
+
+command -v ros2
+ros2 pkg prefix myagv_test_bringup
+
+printenv | sort | rg \
+'^(ROS_|RMW_|CYCLONEDDS|FASTRTPS|FASTDDS|AMENT_PREFIX_PATH|COLCON_PREFIX_PATH)'
+```
+
+重点比较：
+
+```text
+ROS_DOMAIN_ID
+ROS_LOCALHOST_ONLY
+ROS_DISCOVERY_SERVER
+RMW_IMPLEMENTATION
+CYCLONEDDS_URI
+FASTRTPS_DEFAULT_PROFILES_FILE
+FASTDDS_DEFAULT_PROFILES_FILE
+AMENT_PREFIX_PATH
+COLCON_PREFIX_PATH
+```
+
+如果 `ROS_DOMAIN_ID` 不同，两种会话位于不同 DDS Domain，彼此不会发现。若
+`RMW_IMPLEMENTATION` 或 DDS XML 路径不同，则需要继续检查两个会话是否使用了不同的网卡、
+multicast、Discovery Server、静态 Peer 或共享内存配置。
+
+`ros2 pkg prefix myagv_test_bringup` 应指向本次 ARM 编译后的工作空间。若失败会话解析到
+`/opt/ros/humble` 或另一个旧工作空间，说明该会话没有加载正确的 `install/setup.bash`。
+
+### 10.3 排除 ROS 2 daemon 残留
+
+在两个 root 会话中分别检查 daemon 的启动参数：
+
+```bash
+ps -eo user,pid,args | rg '[_]ros2_daemon'
+```
+
+然后停止当前用户的 daemon，并直接创建临时 DDS Participant 查询 ROS 图：
+
+```bash
+ros2 daemon stop
+
+ros2 topic list \
+  --no-daemon \
+  --spin-time 5 \
+  -t
+```
+
+结果判定：
+
+- 普通 `ros2 topic list` 失败，但带 `--no-daemon` 后正常：daemon 使用了旧 Domain 或旧 RMW。
+- 带 `--no-daemon` 后仍然失败：继续检查 DDS 环境或网络命名空间。
+- 成功和失败会话中的 daemon 参数不同：以成功 SSH root 会话的 Domain 和 RMW 为核对基准。
+
+### 10.4 检查网络命名空间
+
+在普通用户 Publisher、失败 root 会话和成功 SSH root 会话中分别执行：
+
+```bash
+readlink /proc/$$/ns/net
+```
+
+查找自定义 Topic Publisher 的 PID：
+
+```bash
+ps -eo pid,user,args | rg '自定义话题节点名'
+```
+
+再检查 Publisher 所在的网络命名空间：
+
+```bash
+readlink /proc/1234/ns/net
+```
+
+上例中的 `1234` 需要替换为实际 Publisher PID。
+
+正常情况下，各进程应返回相同的 namespace 编号，例如：
+
+```text
+net:[4026531840]
+```
+
+如果编号不同，说明进程可能运行在 Docker、Podman、设置了 `PrivateNetwork=true` 的 systemd
+服务或其他隔离环境中。即使进程都是 root，DDS multicast、UDP、localhost 和共享内存也可能无法
+跨越该隔离边界。
+
+### 10.5 最小跨会话复现实验
+
+普通用户终端启动 ROS 2 官方示例 Publisher：
+
+```bash
+source /opt/ros/humble/setup.bash
+ros2 run demo_nodes_cpp talker
+```
+
+失败 root 会话停止 daemon 并查询 Topic：
+
+```bash
+source /opt/ros/humble/setup.bash
+source /path/to/nav2_ws/install/setup.bash
+
+ros2 daemon stop
+ros2 topic list --no-daemon --spin-time 5 -t
+```
+
+`/path/to/nav2_ws` 需要替换为 ARM 设备上的实际工作空间路径。
+
+再由失败 root 会话启动一个仅供 root 图发现测试的 Topic：
+
+```bash
+ros2 run demo_nodes_cpp talker \
+  --ros-args \
+  -r chatter:=/root_chatter
+```
+
+另开同环境 root 会话再次查询：
+
+```bash
+ros2 topic list --no-daemon --spin-time 5 -t
+```
+
+如果 root 能看到 `/root_chatter`，但看不到普通用户的 `/chatter`，则可以排除 Nav2 源码，重点检查
+跨用户 DDS 环境、Fast DDS 共享内存和网络隔离。如果成功 SSH root 会话同时能看到二者，则继续对比
+成功和失败 root 会话的 RMW 与 DDS XML。
+
+### 10.6 检查 Fast DDS 共享内存错误
+
+ROS 2 Humble 通常使用 `rmw_fastrtps_cpp`。Fast DDS 在同一主机上可以使用共享内存，普通用户和
+root 混合运行时可能因为共享内存段或端口权限不同而出现通信问题。
+
+只读检查共享内存对象和 ROS 日志：
+
+```bash
+ls -la /dev/shm | rg 'fastrtps|fastdds|dds'
+
+rg -n \
+'RTPS_TRANSPORT_SHM|open_and_lock_file|Permission denied|Failed init_port' \
+/root/.ros/log \
+/home/<普通用户名>/.ros/log
+```
+
+检查期间不要直接删除 `/dev/shm` 中的 Fast DDS 文件；正在运行的 ROS 2 进程可能仍在使用这些
+对象。由于成功 SSH root 会话已经能够与普通用户 Topic 通信，共享内存权限应排在 Domain、daemon、
+DDS XML 和网络命名空间之后检查。
+
+### 10.7 结果判定表
+
+| 测试结果 | 原因判断 |
+| --- | --- |
+| 两个会话的 `ROS_DOMAIN_ID` 不同 | DDS Domain 隔离 |
+| RMW 或 DDS XML 路径不同 | DDS 发现和传输配置不一致 |
+| 网络 namespace 编号不同 | 容器、systemd 或其他网络隔离 |
+| `--no-daemon` 正常，普通查询失败 | ROS 2 daemon 保留了旧环境 |
+| `ros2 pkg prefix` 结果不同 | ROS 工作空间或安装副本加载错误 |
+| root 只能看到 root 自己发布的 Topic | 跨用户 DDS 或 Fast DDS SHM 问题 |
+| SSH root 正常，`sudo ros2 launch` 异常 | `sudo` 环境重置、`HOME` 或 setup 加载差异 |
+| 所有环境和 namespace 均一致但结果仍不同 | 检查 Fast DDS 日志、启动顺序和实际进程环境 |
+
+### 10.8 修复方向
+
+定位差异后，优先让所有 ROS 2 节点使用相同普通用户、相同 `ROS_DOMAIN_ID`、相同 RMW 和相同 DDS
+配置运行。不要仅为访问串口而把整个 Nav2 栈提升为 root；应给普通用户授予目标设备的最小访问
+权限，或只隔离运行确实需要硬件权限的驱动节点。
+
+`controlpub` 只负责把 `/cmd_vel` 转发到 `/control_to_uart`，本身不直接访问串口设备，通常不需要
+root 权限。修改设备组或 udev 规则属于系统配置变更，执行前必须先确认具体设备路径、当前属主和
+权限范围。
+
+### 10.9 给forlinx日志权限
+sudo chown -R forlinx:forlinx /home/byd/logs
+chmod -R 755 /home/byd/logs
+
+## 11. 外部贡献：Fork＋Pull Request
+
+本仓库公开地址：
+
+```text
+https://github.com/zpy560/mynavigation2
+```
+
+普通外部贡献者不需要本仓库的写权限。推荐使用“Fork 到个人账号、在个人 Fork 开发、向本仓库
+`main` 分支提交 Pull Request”的方式贡献代码。
+
+### 11.1 Fork仓库
+
+贡献者登录 GitHub 后打开：
+
+```text
+https://github.com/zpy560/mynavigation2/fork
+```
+
+选择自己的个人账号并创建 Fork。完成后，贡献者会得到：
+
+```text
+https://github.com/CONTRIBUTOR_ACCOUNT/mynavigation2
+```
+
+其中 `CONTRIBUTOR_ACCOUNT` 需要替换为贡献者自己的 GitHub 用户名。
+
+### 11.2 克隆个人Fork并添加上游仓库
+
+```bash
+git clone https://github.com/CONTRIBUTOR_ACCOUNT/mynavigation2.git
+cd mynavigation2
+
+git remote add upstream https://github.com/zpy560/mynavigation2.git
+git remote -v
+```
+
+远端职责：
+
+| 远端 | 仓库 | 用途 |
+| --- | --- | --- |
+| `origin` | 贡献者自己的 Fork | 推送贡献者的开发分支 |
+| `upstream` | `zpy560/mynavigation2` | 获取本仓库最新代码 |
+
+### 11.3 创建开发分支
+
+不要直接在个人 Fork 的 `main` 分支开发。先创建能够表达改动目的的分支：
+
+```bash
+git switch -c fix/map-server-lifecycle
+```
+
+其他分支名示例：
+
+```text
+feat/keyboard-dev-tty
+docs/update-bringup-guide
+fix/dual-lidar-tf
+```
+
+### 11.4 修改、验证并提交
+
+完成修改后，先检查变更范围和验证结果：
+
+```bash
+git status
+git diff --check
+git diff
+```
+
+只暂存本次贡献相关的文件：
+
+```bash
+git add PATH_TO_CHANGED_FILE
+git commit -m "fix: 修复具体问题并说明影响范围"
+```
+
+推荐的提交前缀：
+
+| 前缀 | 用途 |
+| --- | --- |
+| `feat:` | 新增功能 |
+| `fix:` | 修复问题 |
+| `docs:` | 更新文档 |
+| `refactor:` | 不改变功能的结构调整 |
+| `chore:` | 构建、依赖或工程维护 |
+
+### 11.5 推送个人分支
+
+```bash
+git push -u origin fix/map-server-lifecycle
+```
+
+贡献者只向自己的 `origin` 推送，不需要也不应直接向 `zpy560/mynavigation2` 的 `main` 分支推送。
+
+### 11.6 创建Pull Request
+
+推送后，在 GitHub 页面点击 `Compare & pull request`，并确认目标关系：
+
+```text
+base repository: zpy560/mynavigation2
+base branch:     main
+
+head repository: CONTRIBUTOR_ACCOUNT/mynavigation2
+compare branch:  fix/map-server-lifecycle
+```
+
+PR 描述至少应包含：
+
+- 修改了什么。
+- 为什么需要修改。
+- 影响哪些包、节点、Topic、Action、Service 或参数。
+- 使用了哪些验证命令。
+- 哪些运行环境尚未验证。
+
+提交后的 PR 会显示在：
+
+```text
+https://github.com/zpy560/mynavigation2/pulls
+```
+
+### 11.7 根据审查意见更新PR
+
+如果维护者提出修改意见，贡献者继续在同一个开发分支修改并推送即可：
+
+```bash
+git add PATH_TO_CHANGED_FILE
+git commit -m "fix: 根据审查意见修正具体问题"
+git push
+```
+
+新的提交会自动追加到现有 PR，不需要重新创建 PR。
+
+### 11.8 同步上游main分支
+
+当 PR 开发期间上游 `main` 有新提交时，可以把上游更新合并到当前开发分支：
+
+```bash
+git fetch upstream
+git switch fix/map-server-lifecycle
+git merge upstream/main
+git push
+```
+
+如果出现冲突，应在本地解决冲突、重新验证后再推送，不要在不了解影响时覆盖上游文件。
+
+### 11.9 权限边界
+
+- 外部贡献者可以 Fork 公开仓库并提交 PR。
+- 外部贡献者默认不能直接推送本仓库，也不能自行合并 PR。
+- 仓库维护者负责审查、要求修改、批准、关闭或合并 PR。
+- 长期可信任的协作者可以单独授予仓库写权限，但普通外部贡献优先使用 Fork＋PR。
+- PR 被合并前，变更不会进入本仓库的 `main` 分支。
