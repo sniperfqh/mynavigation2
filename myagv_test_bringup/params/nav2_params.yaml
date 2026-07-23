@@ -1,6 +1,6 @@
 amcl:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: false
     alpha1: 0.2
     alpha2: 0.2
     alpha3: 0.2
@@ -43,14 +43,14 @@ amcl:
     z_max: 0.05
     z_rand: 0.5
     z_short: 0.05
-    scan_topic: /c200_lidar_node1
+    scan_topic: /c200_lidar_node/scan
 
 bt_navigator:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: false
     global_frame: map
     robot_base_frame: base_link
-    odom_topic: /odom
+    odom_topic: /odometry
     bt_loop_duration: 10
     default_server_timeout: 20
     wait_for_service_timeout: 1000
@@ -112,15 +112,15 @@ bt_navigator:
 
 bt_navigator_navigate_through_poses_rclcpp_node:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: false
 
 bt_navigator_navigate_to_pose_rclcpp_node:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: false
 
 controller_server:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: false
     controller_frequency: 20.0
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.5
@@ -376,7 +376,7 @@ local_costmap:
       publish_frequency: 2.0
       global_frame: "map"
       robot_base_frame: base_link
-      use_sim_time: True
+      use_sim_time: false
       rolling_window: true
       width: 3
       height: 3
@@ -397,18 +397,30 @@ local_costmap:
         z_voxels: 16
         max_obstacle_height: 2.0
         mark_threshold: 0
-        observation_sources: "lidar_1 lidar_2"
-        lidar_1:
-          topic: /c200_lidar_node1/scan
-          max_obstacle_height: 2.0
-          clearing: True
-          marking: True
-          data_type: "LaserScan"
-          raytrace_max_range: 3.0
-          raytrace_min_range: 0.0
-          obstacle_max_range: 2.5
-          obstacle_min_range: 0.0
-        lidar_2:
+        # 双雷达备用配置，当前停用；需要恢复时取消本段注释并注释下方单雷达配置。
+        # observation_sources: "lidar_1 lidar_2"
+        # lidar_1:
+        #   topic: /c200_lidar_node1/scan
+        #   max_obstacle_height: 2.0
+        #   clearing: True
+        #   marking: True
+        #   data_type: "LaserScan"
+        #   raytrace_max_range: 3.0
+        #   raytrace_min_range: 0.0
+        #   obstacle_max_range: 2.5
+        #   obstacle_min_range: 0.0
+        # lidar_2:
+        #   topic: /c200_lidar_node/scan
+        #   max_obstacle_height: 2.0
+        #   clearing: True
+        #   marking: True
+        #   data_type: "LaserScan"
+        #   raytrace_max_range: 3.0
+        #   raytrace_min_range: 0.0
+        #   obstacle_max_range: 2.5
+        #   obstacle_min_range: 0.0
+        observation_sources: scan
+        scan:
           topic: /c200_lidar_node/scan
           max_obstacle_height: 2.0
           clearing: True
@@ -430,7 +442,7 @@ global_costmap:
       publish_frequency: 1.0
       global_frame: map
       robot_base_frame: base_link
-      use_sim_time: True
+      use_sim_time: false
       footprint: "[[0.6, 0.4], [0.6, -0.4], [-0.6, -0.4], [-0.6, 0.4]]"
       resolution: 0.05
       track_unknown_space: true
@@ -439,18 +451,30 @@ global_costmap:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
         footprint_clearing_enabled: True
-        observation_sources: "lidar_1 lidar_2"
-        lidar_1:
-          topic: /c200_lidar_node1/scan
-          max_obstacle_height: 2.0
-          clearing: True
-          marking: True
-          data_type: "LaserScan"
-          raytrace_max_range: 3.0
-          raytrace_min_range: 0.0
-          obstacle_max_range: 2.5
-          obstacle_min_range: 0.0
-        lidar_2:
+        # 双雷达备用配置，当前停用；需要恢复时取消本段注释并注释下方单雷达配置。
+        # observation_sources: "lidar_1 lidar_2"
+        # lidar_1:
+        #   topic: /c200_lidar_node1/scan
+        #   max_obstacle_height: 2.0
+        #   clearing: True
+        #   marking: True
+        #   data_type: "LaserScan"
+        #   raytrace_max_range: 3.0
+        #   raytrace_min_range: 0.0
+        #   obstacle_max_range: 2.5
+        #   obstacle_min_range: 0.0
+        # lidar_2:
+        #   topic: /c200_lidar_node/scan
+        #   max_obstacle_height: 2.0
+        #   clearing: True
+        #   marking: True
+        #   data_type: "LaserScan"
+        #   raytrace_max_range: 3.0
+        #   raytrace_min_range: 0.0
+        #   obstacle_max_range: 2.5
+        #   obstacle_min_range: 0.0
+        observation_sources: scan
+        scan:
           topic: /c200_lidar_node/scan
           max_obstacle_height: 2.0
           clearing: True
@@ -471,14 +495,14 @@ global_costmap:
 
 map_server:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: false
     # Overridden in launch by the "map" launch configuration or provided default value.
     # To use in yaml, remove the default "map" value in the tb3_simulation_launch.py file & provide full path to map below.
     yaml_filename: ""
 
 map_saver:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: false
     save_map_timeout: 5.0
     free_thresh_default: 0.25
     occupied_thresh_default: 0.65
@@ -487,7 +511,7 @@ map_saver:
 planner_server:
   ros__parameters:
     expected_planner_frequency: 20.0
-    use_sim_time: True
+    use_sim_time: false
     # Change only selected_planner to switch the planner used by BT/action requests.
     # Available values: GridBased, GridBasedAstar, Smac2D, SmacHybrid, SmacLattice, ThetaStar.
     selected_planner: "GridBasedAstar"
@@ -584,7 +608,7 @@ planner_server:
 
 smoother_server:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: false
     smoother_plugins: ["simple_smoother"]
     simple_smoother:
       plugin: "nav2_smoother::SimpleSmoother"
@@ -611,7 +635,7 @@ behavior_server:
     global_frame: "map"
     robot_base_frame: base_link
     transform_tolerance: 0.1
-    use_sim_time: true
+    use_sim_time: false
     simulate_ahead_time: 2.0
     max_rotational_vel: 1.0
     min_rotational_vel: 0.4
@@ -619,11 +643,11 @@ behavior_server:
 
 robot_state_publisher:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: false
 
 waypoint_follower:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: false
     loop_rate: 20
     stop_on_failure: false
     waypoint_task_executor_plugin: "wait_at_waypoint"
@@ -634,7 +658,7 @@ waypoint_follower:
 
 velocity_smoother:
   ros__parameters:
-    use_sim_time: True
+    use_sim_time: false
     smoothing_frequency: 20.0
     scale_velocities: False
     feedback: "OPEN_LOOP"
@@ -642,7 +666,7 @@ velocity_smoother:
     min_velocity: [-0.26, 0.0, -1.0]
     max_accel: [2.5, 0.0, 3.2]
     max_decel: [-2.5, 0.0, -3.2]
-    odom_topic: "odom"
+    odom_topic: "/odometry"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
     velocity_timeout: 1.0

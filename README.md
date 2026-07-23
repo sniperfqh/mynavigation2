@@ -134,62 +134,8 @@ robot_state_publisher
 
 RViz 中 `RobotModel` 已关闭，主要通过 TF 坐标系、地图、路径、代价地图和激光数据显示导航状态。
 
-## 3. 外部系统必须提供的数据
 
-### 3.1 自研定位
-
-当前 launch 不启动 AMCL。外部自研定位系统必须提供：
-
-```text
-TF: map -> odom
-```
-
-当前 launch 内部静态发布：
-
-```text
-TF: odom -> base_link
-```
-
-Nav2 需要最终能查询：
-
-```text
-map -> odom -> base_link
-```
-
-如果底盘、里程计或融合定位系统已经发布真实动态 `odom -> base_link`，必须停用 `entry.launch.py` 中的 `static_robot_to_base_link_cmd`，否则同一段 TF 会冲突。
-
-### 3.2 激光雷达
-
-当前 launch 不启动 `laserpub`。真实雷达驱动必须发布：
-
-```text
-/c200_lidar_node1/scan
-```
-
-消息要求：
-
-```text
-类型: sensor_msgs/msg/LaserScan
-frame_id: 必须能通过 TF 接到 base_link
-```
-
-推荐 TF：
-
-```text
-map -> odom -> base_link -> lidar_frame
-```
-
-### 3.3 底盘
-
-Nav2 最终输出：
-
-```text
-/cmd_vel
-```
-
-底盘驱动需要订阅 `/cmd_vel` 并执行速度命令。
-
-## 4. Nav2 数据流
+## 3. Nav2 数据流
 
 完整运行链路：
 
@@ -240,7 +186,7 @@ Nav2 最终输出：
       -> robot motion
 ```
 
-## 5. Nav2 节点链路
+## 4. Nav2 节点链路
 
 `entry.launch.py` 通过 `navigation_launch.py` 启动导航节点：
 
@@ -266,7 +212,7 @@ lifecycle_manager_navigation
 - `waypoint_follower`：执行多路点任务。
 - `lifecycle_manager_navigation`：管理导航节点生命周期。
 
-## 6. 控制器配置
+## 5. 控制器配置
 
 当前 `myagv_test_bringup/params/nav2_params.yaml` 加载多个控制器：
 
@@ -307,7 +253,7 @@ controller_server:
 - `RotationShimController`：适合先对齐路径方向再跟踪。
 - `GracefulController`：适合验证平滑几何控制。
 
-## 7. 启动后检查
+## 6. 启动后检查
 
 检查 TF：
 
@@ -348,7 +294,7 @@ ros2 lifecycle nodes
 - 导航目标发送后 `/cmd_vel` 有输出。
 - Nav2 lifecycle 节点进入 active 状态。
 
-## 8. 终端发送导航目标
+## 7. 终端发送导航目标
 
 发送目标前，先确认 `bt_navigator` 已进入 active 状态，且两个 Action Server 可用：
 
@@ -361,7 +307,7 @@ ros2 action info /navigate_through_poses
 以下坐标取自项目根目录 `test.md` 中的导航测试案例。它们用于说明 Action 命令格式；
 在实车地图 `myagv_test_bringup/maps/out.yaml` 上运行前，必须先确认目标点位于可通行区域。
 
-### 8.1 单点 Action 导航
+### 7.1 单点 Action 导航
 
 向 `/navigate_to_pose` 发送一个 `PoseStamped` 目标：
 
@@ -379,7 +325,7 @@ ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose "{
 ```
 63.481, -12.4484, 0
 
-### 8.2 多点 Action 导航
+### 7.2 多点 Action 导航
 
 向 `/navigate_through_poses` 一次发送一组 `PoseStamped` 目标，机器人按数组顺序导航：
 
@@ -415,7 +361,7 @@ ros2 action send_goal /navigate_through_poses nav2_msgs/action/NavigateThroughPo
 `behavior_tree: ''` 表示使用 `bt_navigator` 对应导航类型的默认行为树；`--feedback`
 用于在终端持续显示剩余距离、导航时间和恢复次数等反馈。
 
-## 9. nav2_regulated_modules 启动说明
+## 8. nav2_regulated_modules 启动说明
 
 `nav2_regulated_modules` 是不使用行为树的自研规控导航入口。它保留 Map Server、Global／Local
 Costmap、Planner Server、Smoother Server、Controller Server、Velocity Smoother 和 Lifecycle
@@ -440,7 +386,7 @@ NavigateToPose／NavigateThroughPoses／goal_pose
   → /control_to_uart
 ```
 
-### 9.1 启动前提
+### 8.1 启动前提
 
 启动前必须确保：
 
@@ -462,7 +408,7 @@ export SPDLOG_WRAPPER_LOG_DIR=/tmp/nav2_logs
 
 `ROS_LOG_DIR` 和 `SPDLOG_WRAPPER_LOG_DIR` 指向可写目录，避免默认日志目录权限不足导致节点退出。
 
-### 9.2 生产环境启动
+### 8.2 生产环境启动
 
 生产环境先启动自研定位、雷达驱动和底盘通信，再启动规控导航：
 
@@ -495,49 +441,8 @@ ros2 launch nav2_regulated_modules regulated_modules.launch.py \
 ros2 launch nav2_regulated_modules regulated_modules.launch.py use_rviz:=False
 ```
 
-### 9.3 map2baseTF 与 laserpub 自测启动
 
-没有接入真实定位和雷达时，可以用项目内自测节点检查接口链路。
-
-终端 1 启动固定 TF：
-
-```bash
-ros2 run map2base_tf map2baseTF
-```
-
-该节点默认持续发布：
-
-```text
-map -> base_link
-x = 0.569 m
-y = 0.541 m
-yaw = 0 rad
-```
-
-终端 2 启动测试激光：
-
-```bash
-ros2 run laserpub laserpub
-```
-
-测试激光发布：
-
-```text
-Topic: /c200_lidar_node1/scan
-frame_id: base_link
-```
-
-终端 3 启动规控导航：
-
-```bash
-ros2 launch nav2_regulated_modules regulated_modules.launch.py use_rviz:=False
-```
-
-固定 `map -> base_link` 不模拟车辆运动，只适合验证 TF、Costmap、Action 和状态机链路。发送远离
-固定位置的目标后，规控层会因为位姿长期无进展而进入清图重规划，最终可能返回 `ABORTED`；这不
-代表真实底盘导航效果。
-
-### 9.4 启动后检查
+### 8.3 启动后检查
 
 检查核心 Lifecycle 节点：
 
@@ -578,7 +483,7 @@ ros2 action list -t
 
 ROS 图中不应存在 `/bt_navigator`、`/behavior_server` 和 `/waypoint_follower`。
 
-### 9.5 发送自测目标
+### 8.4 发送自测目标
 
 向固定 TF 当前位姿发送目标，可以验证单点 Action 的完整成功链路：
 
@@ -602,7 +507,7 @@ ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose "{
 `geometry_msgs/msg/PoseStamped`。Topic 入口没有外层 Action 结果，但规划、平滑和控制链与单点
 Action 相同。
 
-### 9.6 停止顺序
+### 8.5 停止顺序
 
 测试完成后，在各终端按 `Ctrl+C`，建议按以下顺序停止：
 
@@ -615,207 +520,8 @@ map2baseTF 或自研定位
 
 停止规控 Launch 时，Lifecycle 会先停用 `regulated_navigator`，取消下游 Action 并发布零速度。
 
-## 10. 普通用户与 root 会话的 ROS 2 Topic 发现差异测试
 
-本节用于诊断以下现象：设备上的普通用户能够发现后台启动的自定义 ROS 2 Topic，但某个 root
-会话中的 Nav2 和 `ros2 topic list` 无法发现这些 Topic；同一套软件通过 `ssh root@<ARM_IP>`
-登录 ARM 设备后，又能正常接收和发布相关 Topic。
-
-这种现象发生在 DDS 发现层，暂时不应通过修改 Nav2 的雷达参数、TF、QoS 或 namespace 处理。
-同一 ARM 设备、同一 UID、同一软件包在不同 root 会话中表现不同，优先检查会话环境、ROS 2
-daemon、DDS 配置、工作空间加载顺序和网络命名空间。
-
-### 10.1 测试原则
-
-分别在以下两个 root 会话中执行完全相同的检查：
-
-- 失败会话：无法发现普通用户后台 Topic 的本地 root、`sudo`、`su` 或后台服务环境。
-- 成功会话：通过 `ssh root@<ARM_IP>` 登录后能够正常发现 Topic 的 root 环境。
-
-所有 Topic 列表测试都使用 `--no-daemon`，避免已有 ROS 2 daemon 保留旧的
-`ROS_DOMAIN_ID` 或 RMW 配置而干扰结果。
-
-### 10.2 对比用户、工作空间和 ROS／DDS 环境
-
-在失败会话和成功会话中分别执行：
-
-```bash
-id
-
-printf 'HOME=%s\nSHELL=%s\n' "$HOME" "$SHELL"
-
-command -v ros2
-ros2 pkg prefix myagv_test_bringup
-
-printenv | sort | rg \
-'^(ROS_|RMW_|CYCLONEDDS|FASTRTPS|FASTDDS|AMENT_PREFIX_PATH|COLCON_PREFIX_PATH)'
-```
-
-重点比较：
-
-```text
-ROS_DOMAIN_ID
-ROS_LOCALHOST_ONLY
-ROS_DISCOVERY_SERVER
-RMW_IMPLEMENTATION
-CYCLONEDDS_URI
-FASTRTPS_DEFAULT_PROFILES_FILE
-FASTDDS_DEFAULT_PROFILES_FILE
-AMENT_PREFIX_PATH
-COLCON_PREFIX_PATH
-```
-
-如果 `ROS_DOMAIN_ID` 不同，两种会话位于不同 DDS Domain，彼此不会发现。若
-`RMW_IMPLEMENTATION` 或 DDS XML 路径不同，则需要继续检查两个会话是否使用了不同的网卡、
-multicast、Discovery Server、静态 Peer 或共享内存配置。
-
-`ros2 pkg prefix myagv_test_bringup` 应指向本次 ARM 编译后的工作空间。若失败会话解析到
-`/opt/ros/humble` 或另一个旧工作空间，说明该会话没有加载正确的 `install/setup.bash`。
-
-### 10.3 排除 ROS 2 daemon 残留
-
-在两个 root 会话中分别检查 daemon 的启动参数：
-
-```bash
-ps -eo user,pid,args | rg '[_]ros2_daemon'
-```
-
-然后停止当前用户的 daemon，并直接创建临时 DDS Participant 查询 ROS 图：
-
-```bash
-ros2 daemon stop
-
-ros2 topic list \
-  --no-daemon \
-  --spin-time 5 \
-  -t
-```
-
-结果判定：
-
-- 普通 `ros2 topic list` 失败，但带 `--no-daemon` 后正常：daemon 使用了旧 Domain 或旧 RMW。
-- 带 `--no-daemon` 后仍然失败：继续检查 DDS 环境或网络命名空间。
-- 成功和失败会话中的 daemon 参数不同：以成功 SSH root 会话的 Domain 和 RMW 为核对基准。
-
-### 10.4 检查网络命名空间
-
-在普通用户 Publisher、失败 root 会话和成功 SSH root 会话中分别执行：
-
-```bash
-readlink /proc/$$/ns/net
-```
-
-查找自定义 Topic Publisher 的 PID：
-
-```bash
-ps -eo pid,user,args | rg '自定义话题节点名'
-```
-
-再检查 Publisher 所在的网络命名空间：
-
-```bash
-readlink /proc/1234/ns/net
-```
-
-上例中的 `1234` 需要替换为实际 Publisher PID。
-
-正常情况下，各进程应返回相同的 namespace 编号，例如：
-
-```text
-net:[4026531840]
-```
-
-如果编号不同，说明进程可能运行在 Docker、Podman、设置了 `PrivateNetwork=true` 的 systemd
-服务或其他隔离环境中。即使进程都是 root，DDS multicast、UDP、localhost 和共享内存也可能无法
-跨越该隔离边界。
-
-### 10.5 最小跨会话复现实验
-
-普通用户终端启动 ROS 2 官方示例 Publisher：
-
-```bash
-source /opt/ros/humble/setup.bash
-ros2 run demo_nodes_cpp talker
-```
-
-失败 root 会话停止 daemon 并查询 Topic：
-
-```bash
-source /opt/ros/humble/setup.bash
-source /path/to/nav2_ws/install/setup.bash
-
-ros2 daemon stop
-ros2 topic list --no-daemon --spin-time 5 -t
-```
-
-`/path/to/nav2_ws` 需要替换为 ARM 设备上的实际工作空间路径。
-
-再由失败 root 会话启动一个仅供 root 图发现测试的 Topic：
-
-```bash
-ros2 run demo_nodes_cpp talker \
-  --ros-args \
-  -r chatter:=/root_chatter
-```
-
-另开同环境 root 会话再次查询：
-
-```bash
-ros2 topic list --no-daemon --spin-time 5 -t
-```
-
-如果 root 能看到 `/root_chatter`，但看不到普通用户的 `/chatter`，则可以排除 Nav2 源码，重点检查
-跨用户 DDS 环境、Fast DDS 共享内存和网络隔离。如果成功 SSH root 会话同时能看到二者，则继续对比
-成功和失败 root 会话的 RMW 与 DDS XML。
-
-### 10.6 检查 Fast DDS 共享内存错误
-
-ROS 2 Humble 通常使用 `rmw_fastrtps_cpp`。Fast DDS 在同一主机上可以使用共享内存，普通用户和
-root 混合运行时可能因为共享内存段或端口权限不同而出现通信问题。
-
-只读检查共享内存对象和 ROS 日志：
-
-```bash
-ls -la /dev/shm | rg 'fastrtps|fastdds|dds'
-
-rg -n \
-'RTPS_TRANSPORT_SHM|open_and_lock_file|Permission denied|Failed init_port' \
-/root/.ros/log \
-/home/<普通用户名>/.ros/log
-```
-
-检查期间不要直接删除 `/dev/shm` 中的 Fast DDS 文件；正在运行的 ROS 2 进程可能仍在使用这些
-对象。由于成功 SSH root 会话已经能够与普通用户 Topic 通信，共享内存权限应排在 Domain、daemon、
-DDS XML 和网络命名空间之后检查。
-
-### 10.7 结果判定表
-
-| 测试结果 | 原因判断 |
-| --- | --- |
-| 两个会话的 `ROS_DOMAIN_ID` 不同 | DDS Domain 隔离 |
-| RMW 或 DDS XML 路径不同 | DDS 发现和传输配置不一致 |
-| 网络 namespace 编号不同 | 容器、systemd 或其他网络隔离 |
-| `--no-daemon` 正常，普通查询失败 | ROS 2 daemon 保留了旧环境 |
-| `ros2 pkg prefix` 结果不同 | ROS 工作空间或安装副本加载错误 |
-| root 只能看到 root 自己发布的 Topic | 跨用户 DDS 或 Fast DDS SHM 问题 |
-| SSH root 正常，`sudo ros2 launch` 异常 | `sudo` 环境重置、`HOME` 或 setup 加载差异 |
-| 所有环境和 namespace 均一致但结果仍不同 | 检查 Fast DDS 日志、启动顺序和实际进程环境 |
-
-### 10.8 修复方向
-
-定位差异后，优先让所有 ROS 2 节点使用相同普通用户、相同 `ROS_DOMAIN_ID`、相同 RMW 和相同 DDS
-配置运行。不要仅为访问串口而把整个 Nav2 栈提升为 root；应给普通用户授予目标设备的最小访问
-权限，或只隔离运行确实需要硬件权限的驱动节点。
-
-`controlpub` 只负责把 `/cmd_vel` 转发到 `/control_to_uart`，本身不直接访问串口设备，通常不需要
-root 权限。修改设备组或 udev 规则属于系统配置变更，执行前必须先确认具体设备路径、当前属主和
-权限范围。
-
-### 10.9 给forlinx日志权限
-sudo chown -R forlinx:forlinx /home/byd/logs
-chmod -R 755 /home/byd/logs
-
-## 11. 外部贡献：Fork＋Pull Request
+## 9. 外部贡献：Fork＋Pull Request
 
 本仓库公开地址：
 
@@ -826,7 +532,7 @@ https://github.com/zpy560/mynavigation2
 普通外部贡献者不需要本仓库的写权限。推荐使用“Fork 到个人账号、在个人 Fork 开发、向本仓库
 `main` 分支提交 Pull Request”的方式贡献代码。
 
-### 11.1 Fork仓库
+### 9.1 Fork仓库
 
 贡献者登录 GitHub 后打开：
 
@@ -842,7 +548,7 @@ https://github.com/CONTRIBUTOR_ACCOUNT/mynavigation2
 
 其中 `CONTRIBUTOR_ACCOUNT` 需要替换为贡献者自己的 GitHub 用户名。
 
-### 11.2 克隆个人Fork并添加上游仓库
+### 9.2 克隆个人Fork并添加上游仓库
 
 ```bash
 git clone https://github.com/CONTRIBUTOR_ACCOUNT/mynavigation2.git
@@ -859,7 +565,7 @@ git remote -v
 | `origin` | 贡献者自己的 Fork | 推送贡献者的开发分支 |
 | `upstream` | `zpy560/mynavigation2` | 获取本仓库最新代码 |
 
-### 11.3 创建开发分支
+### 9.3 创建开发分支
 
 不要直接在个人 Fork 的 `main` 分支开发。先创建能够表达改动目的的分支：
 
@@ -875,7 +581,7 @@ docs/update-bringup-guide
 fix/dual-lidar-tf
 ```
 
-### 11.4 修改、验证并提交
+### 9.4 修改、验证并提交
 
 完成修改后，先检查变更范围和验证结果：
 
@@ -902,7 +608,7 @@ git commit -m "fix: 修复具体问题并说明影响范围"
 | `refactor:` | 不改变功能的结构调整 |
 | `chore:` | 构建、依赖或工程维护 |
 
-### 11.5 推送个人分支
+### 9.5 推送个人分支
 
 ```bash
 git push -u origin fix/map-server-lifecycle
@@ -910,7 +616,7 @@ git push -u origin fix/map-server-lifecycle
 
 贡献者只向自己的 `origin` 推送，不需要也不应直接向 `zpy560/mynavigation2` 的 `main` 分支推送。
 
-### 11.6 创建Pull Request
+### 9.6 创建Pull Request
 
 推送后，在 GitHub 页面点击 `Compare & pull request`，并确认目标关系：
 
@@ -936,7 +642,7 @@ PR 描述至少应包含：
 https://github.com/zpy560/mynavigation2/pulls
 ```
 
-### 11.7 根据审查意见更新PR
+### 9.7 根据审查意见更新PR
 
 如果维护者提出修改意见，贡献者继续在同一个开发分支修改并推送即可：
 
@@ -948,7 +654,7 @@ git push
 
 新的提交会自动追加到现有 PR，不需要重新创建 PR。
 
-### 11.8 同步上游main分支
+### 9.8 同步上游main分支
 
 当 PR 开发期间上游 `main` 有新提交时，可以把上游更新合并到当前开发分支：
 
@@ -961,10 +667,119 @@ git push
 
 如果出现冲突，应在本地解决冲突、重新验证后再推送，不要在不了解影响时覆盖上游文件。
 
-### 11.9 权限边界
+### 9.9 权限边界
 
 - 外部贡献者可以 Fork 公开仓库并提交 PR。
 - 外部贡献者默认不能直接推送本仓库，也不能自行合并 PR。
 - 仓库维护者负责审查、要求修改、批准、关闭或合并 PR。
 - 长期可信任的协作者可以单独授予仓库写权限，但普通外部贡献优先使用 Fork＋PR。
 - PR 被合并前，变更不会进入本仓库的 `main` 分支。
+
+## 10. myagv_keyboard_control 键盘控制
+
+`myagv_keyboard_control` 通过交互式终端读取方向键或 `WASD`，以固定周期直接发布
+`byd_custom_msgs/msg/ControlRes` 到 `/control_to_uart`。该节点绕过 `/cmd_vel` 和
+`controlpub`，适合底盘方向、速度符号和串口控制链的独立联调。
+
+### 10.1 运行前提
+
+运行前必须停止 `controlpub` 或其他 `/control_to_uart` 发布者，避免多个节点同时向底盘发送冲突
+指令：
+
+```bash
+ros2 topic info /control_to_uart --verbose
+```
+
+节点需要直接读取交互式终端，必须在能够接收键盘输入的 Shell 中运行。
+
+### 10.2 推荐启动方式
+
+从工作空间加载 ROS 2 和本项目环境：
+
+```bash
+cd /home/byd/Documents/zpy_ws/project/nav2_demo/nav2_ws
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 run myagv_keyboard_control myagv_keyboard_control_node
+```
+
+默认以 `50 Hz` 发布控制指令，线速度绝对值为 `0.2 m/s`，角速度绝对值为 `0.5 rad/s`，失键
+`0.5 s` 后自动恢复为停车指令。
+
+### 10.3 按键映射
+
+| 按键 | 功能 | `v` | `w` |
+| --- | --- | ---: | ---: |
+| `W` 或 `↑` | 前进 | `+linear_speed` | `0.0` |
+| `S` 或 `↓` | 后退 | `-linear_speed` | `0.0` |
+| `A` 或 `←` | 原地左转 | `0.0` | `+angular_speed` |
+| `D` 或 `→` | 原地右转 | `0.0` | `-angular_speed` |
+| `Space` 或 `X` | 停车 | `0.0` | `0.0` |
+| `Q` | 发布停车指令并退出 | `0.0` | `0.0` |
+
+`v_lift` 和 `w_rotation` 始终发布为 `0.0`。
+
+### 10.4 覆盖控制参数
+
+可以在启动时覆盖默认速度、发布频率和失键停车时间：
+
+```bash
+ros2 run myagv_keyboard_control myagv_keyboard_control_node --ros-args \
+  -p publish_rate:=50.0 \
+  -p linear_speed:=0.1 \
+  -p angular_speed:=0.3 \
+  -p command_timeout:=0.8
+```
+
+可用参数：
+
+| 参数 | 默认值 | 说明 |
+| --- | ---: | --- |
+| `output_topic` | `/control_to_uart` | 最终底盘控制 Topic |
+| `publish_rate` | `50.0` | 周期发布频率，单位 Hz |
+| `linear_speed` | `0.2` | 前进和后退速度绝对值，单位 m/s |
+| `angular_speed` | `0.5` | 左右转角速度绝对值，单位 rad/s |
+| `command_timeout` | `0.5` | 最后一次方向输入后的停车超时，`0.0` 表示关闭超时 |
+
+### 10.5 检查输出
+
+另开一个已经加载工作空间环境的终端：
+
+```bash
+ros2 topic echo /control_to_uart
+ros2 topic hz /control_to_uart
+ros2 topic info /control_to_uart --verbose
+```
+
+默认输出接口：
+
+```text
+Topic: /control_to_uart
+Type:  byd_custom_msgs/msg/ControlRes
+Rate:  50 Hz
+```
+
+### 10.6 实车安全要求
+
+首次测试应架空驱动轮或断开动力执行机构，先检查前进、后退和左右转的速度符号，再连接真实底盘。
+终端失去焦点、SSH 中断或节点异常退出后，不能只依赖软件自动停车；底盘控制器还应具备独立的通信
+超时停车保护。
+
+结束控制时按 `Q`，节点会先发布停车指令再退出。不要直接关闭终端代替正常停车流程。
+
+### 10.7 ros2 launch 当前限制
+
+当前不推荐使用：
+
+```bash
+ros2 launch myagv_keyboard_control keyboard_control.launch.py
+```
+
+`launch_ros` 启动的子进程没有继承交互式标准输入，`emulate_tty=True` 只处理标准输出和标准错误，
+不会把键盘输入连接给节点，因此当前实现会报：
+
+```text
+stdin is not a terminal
+```
+
+在节点完成 `/dev/tty` 兼容修复前，必须使用 `ros2 run` 从当前交互式 Shell 启动。

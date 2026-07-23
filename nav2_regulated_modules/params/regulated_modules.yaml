@@ -377,7 +377,7 @@ smoother_server:  # 中文参数：路径平滑服务器节点命名空间。
 
 velocity_smoother:  # 中文参数：速度指令平滑器节点命名空间。
   ros__parameters:  # 中文参数：以下配置由 velocity_smoother 作为 ROS 2 参数加载。
-    use_sim_time: false  # 中文参数：使用系统时间，不订阅仿真时钟 /clock。
+    use_sim_time: false  # 中文参数：与 myagv_test_bringup 保持一致，使用系统时间，不订阅 /clock。
     smoothing_frequency: 20.0  # 中文参数：以 20 Hz 频率插值并发布平滑后的速度指令。
     scale_velocities: false  # 中文参数：某一速度分量受限时不按比例缩放其余速度分量。
     feedback: "OPEN_LOOP"  # 中文参数：采用开环模式，以上一周期输出速度而非里程计实测速度作为平滑起点。
@@ -385,6 +385,8 @@ velocity_smoother:  # 中文参数：速度指令平滑器节点命名空间。
     min_velocity: [-0.26, 0.0, -1.0]  # 中文参数：x、y、theta 三轴最小速度依次为 -0.26 m/s、0 m/s、-1.0 rad/s。
     max_accel: [2.5, 0.0, 3.2]  # 中文参数：x、y、theta 三轴最大加速度依次为 2.5 m/s²、0 m/s²、3.2 rad/s²。
     max_decel: [-2.5, 0.0, -3.2]  # 中文参数：x、y、theta 三轴最大减速度依次为 -2.5 m/s²、0 m/s²、-3.2 rad/s²。
+    odom_topic: "/odometry"  # 中文参数：闭环反馈模式使用的里程计 Topic；当前 OPEN_LOOP 模式下不订阅。
+    odom_duration: 0.1  # 中文参数：闭环反馈模式的里程计速度平滑时间窗为 0.1 s。
     # 中文注释：OPEN_LOOP 模式不订阅里程计，速度平滑只依据上一周期输出。
     deadband_velocity: [0.0, 0.0, 0.0]  # 中文参数：三轴速度死区均为 0，不额外抑制小速度指令。
     velocity_timeout: 1.0  # 中文参数：超过 1.0 秒未收到新速度指令时输出停车指令。
@@ -408,20 +410,43 @@ local_costmap:  # 中文参数：局部代价地图组件的外层命名空间�
       width: 3  # 中文参数：局部代价地图滚动窗口宽度为 3 m。
       height: 3  # 中文参数：局部代价地图滚动窗口高度为 3 m。
       resolution: 0.05  # 中文参数：每个栅格边长为 0.05 m。
-      robot_radius: 0.22  # 中文参数：以半径 0.22 m 的圆形模型表示机器人碰撞轮廓。
+      footprint: "[[0.6, 0.4], [0.6, -0.4], [-0.6, -0.4], [-0.6, 0.4]]"  # 中文参数：使用前后半长 0.6 m、左右半宽 0.4 m 的长方形机器人轮廓。
       plugins: ["voxel_layer", "inflation_layer"]  # 中文参数：依次加载三维体素障碍层和二维膨胀层。
       voxel_layer:  # 中文参数：局部三维体素障碍层参数组。
         plugin: "nav2_costmap_2d::VoxelLayer"  # 中文参数：加载 VoxelLayer，将传感器障碍物投影到二维代价地图。
         enabled: true  # 中文参数：启用体素障碍层参与局部代价地图合成。
+        footprint_clearing_enabled: true  # 中文参数：清除机器人 Footprint 内部的障碍占用，避免车体点云被标记为障碍。
         publish_voxel_map: true  # 中文参数：发布体素网格调试数据，便于检查三维障碍物标记结果。
         origin_z: 0.0  # 中文参数：体素网格垂直方向起点为 0.0 m。
         z_resolution: 0.05  # 中文参数：每层体素的垂直分辨率为 0.05 m。
         z_voxels: 16  # 中文参数：垂直方向划分 16 层体素，对应 0.8 m 的体素网格高度。
         max_obstacle_height: 2.0  # 中文参数：只接收高度不超过 2.0 m 的障碍观测。
         mark_threshold: 0  # 中文参数：体素列障碍标记阈值为 0，使有效占用观测可投影为二维障碍。
+        # 双雷达备用配置，当前停用；需要恢复时取消本段注释并注释下方单雷达配置。
+        # observation_sources: "scan scan2"
+        # scan:
+        #   topic: /c200_lidar_node1/scan
+        #   max_obstacle_height: 2.0
+        #   clearing: true
+        #   marking: true
+        #   data_type: "LaserScan"
+        #   raytrace_max_range: 3.0
+        #   raytrace_min_range: 0.0
+        #   obstacle_max_range: 2.5
+        #   obstacle_min_range: 0.0
+        # scan2:
+        #   topic: /c200_lidar_node/scan
+        #   max_obstacle_height: 2.0
+        #   clearing: true
+        #   marking: true
+        #   data_type: "LaserScan"
+        #   raytrace_max_range: 3.0
+        #   raytrace_min_range: 0.0
+        #   obstacle_max_range: 2.5
+        #   obstacle_min_range: 0.0
         observation_sources: scan  # 中文参数：注册名为 scan 的单个障碍物观测源。
         scan:  # 中文参数：二维激光雷达 scan 观测源参数组。
-          topic: /c200_lidar_node1/scan  # 中文参数：订阅 C200 激光雷达发布的 LaserScan 话题。
+          topic: /c200_lidar_node/scan  # 中文参数：订阅当前启用的 C200 激光雷达 LaserScan 话题。
           max_obstacle_height: 2.0  # 中文参数：该观测源只处理高度不超过 2.0 m 的障碍物。
           clearing: true  # 中文参数：允许激光射线清除已不再被占用的障碍栅格。
           marking: true  # 中文参数：允许激光命中点在代价地图中标记障碍栅格。
@@ -444,7 +469,7 @@ global_costmap:  # 中文参数：全局代价地图组件的外层命名空间�
       global_frame: map  # 中文参数：全局代价地图固定坐标系设为 map。
       robot_base_frame: base_link  # 中文参数：机器人主体坐标系设为 base_link，并依赖自研 map→base_link 定位变换。
       use_sim_time: false  # 中文参数：使用系统时间，不订阅仿真时钟 /clock。
-      robot_radius: 0.22  # 中文参数：以半径 0.22 m 的圆形模型表示机器人碰撞轮廓。
+      footprint: "[[0.6, 0.4], [0.6, -0.4], [-0.6, -0.4], [-0.6, 0.4]]"  # 中文参数：使用前后半长 0.6 m、左右半宽 0.4 m 的长方形机器人轮廓。
       resolution: 0.05  # 中文参数：每个全局代价地图栅格边长为 0.05 m。
       track_unknown_space: true  # 中文参数：保留未知区域状态，使规划器能够区分未知空间与已知自由空间。
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]  # 中文参数：依次加载静态地图层、动态障碍层和膨胀层。
@@ -454,9 +479,32 @@ global_costmap:  # 中文参数：全局代价地图组件的外层命名空间�
       obstacle_layer:  # 中文参数：全局二维动态障碍层参数组。
         plugin: "nav2_costmap_2d::ObstacleLayer"  # 中文参数：加载 ObstacleLayer，使用实时传感器更新全局障碍物。
         enabled: true  # 中文参数：启用动态障碍层参与全局代价地图合成。
+        footprint_clearing_enabled: true  # 中文参数：清除机器人 Footprint 内部的障碍占用，避免车体点云被标记为障碍。
+        # 双雷达备用配置，当前停用；需要恢复时取消本段注释并注释下方单雷达配置。
+        # observation_sources: "scan scan2"
+        # scan:
+        #   topic: /c200_lidar_node1/scan
+        #   max_obstacle_height: 2.0
+        #   clearing: true
+        #   marking: true
+        #   data_type: "LaserScan"
+        #   raytrace_max_range: 3.0
+        #   raytrace_min_range: 0.0
+        #   obstacle_max_range: 2.5
+        #   obstacle_min_range: 0.0
+        # scan2:
+        #   topic: /c200_lidar_node/scan
+        #   max_obstacle_height: 2.0
+        #   clearing: true
+        #   marking: true
+        #   data_type: "LaserScan"
+        #   raytrace_max_range: 3.0
+        #   raytrace_min_range: 0.0
+        #   obstacle_max_range: 2.5
+        #   obstacle_min_range: 0.0
         observation_sources: scan  # 中文参数：注册名为 scan 的单个障碍物观测源。
         scan:  # 中文参数：二维激光雷达 scan 观测源参数组。
-          topic: /c200_lidar_node1/scan  # 中文参数：订阅 C200 激光雷达发布的 LaserScan 话题。
+          topic: /c200_lidar_node/scan  # 中文参数：订阅当前启用的 C200 激光雷达 LaserScan 话题。
           max_obstacle_height: 2.0  # 中文参数：该观测源只处理高度不超过 2.0 m 的障碍物。
           clearing: true  # 中文参数：允许激光射线清除已不再被占用的障碍栅格。
           marking: true  # 中文参数：允许激光命中点在代价地图中标记障碍栅格。
