@@ -407,8 +407,8 @@ local_costmap:  # 中文参数：局部代价地图组件的外层命名空间�
       robot_base_frame: base_link  # 中文参数：机器人主体坐标系设为 base_link。
       use_sim_time: false  # 中文参数：使用系统时间，不订阅仿真时钟 /clock。
       rolling_window: true  # 中文参数：启用随机器人移动的滚动窗口，只维护机器人附近区域。
-      width: 3  # 中文参数：局部代价地图滚动窗口宽度为 3 m。
-      height: 3  # 中文参数：局部代价地图滚动窗口高度为 3 m。
+      width: 7  # 中文参数：局部代价地图滚动窗口宽度为 7 m。
+      height: 5  # 中文参数：局部代价地图滚动窗口高度为 5 m。
       resolution: 0.05  # 中文参数：每个栅格边长为 0.05 m。
       footprint: "[[0.6, 0.4], [0.6, -0.4], [-0.6, -0.4], [-0.6, 0.4]]"  # 中文参数：使用前后半长 0.6 m、左右半宽 0.4 m 的长方形机器人轮廓。
       plugins: ["voxel_layer", "inflation_layer"]  # 中文参数：依次加载三维体素障碍层和二维膨胀层。

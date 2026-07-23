@@ -10,6 +10,7 @@ install(DIRECTORY models DESTINATION share/${PROJECT_NAME})
 install(DIRECTORY urdf DESTINATION share/${PROJECT_NAME})
 
 install(PROGRAMS
+  scripts/cpu_lidar.py
   scripts/robot_description_publisher.py
   DESTINATION lib/${PROJECT_NAME}
 )
