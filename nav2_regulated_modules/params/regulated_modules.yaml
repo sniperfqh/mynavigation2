@@ -380,14 +380,14 @@ velocity_smoother:  # 中文参数：速度指令平滑器节点命名空间。
     use_sim_time: false  # 中文参数：与 myagv_test_bringup 保持一致，使用系统时间，不订阅 /clock。
     smoothing_frequency: 20.0  # 中文参数：以 20 Hz 频率插值并发布平滑后的速度指令。
     scale_velocities: false  # 中文参数：某一速度分量受限时不按比例缩放其余速度分量。
-    feedback: "OPEN_LOOP"  # 中文参数：采用开环模式，以上一周期输出速度而非里程计实测速度作为平滑起点。
+    feedback: "CLOSED_LOOP"  # 中文参数：采用闭环模式，以里程计实测速度作为每个平滑周期的起点。
     max_velocity: [0.26, 0.0, 1.0]  # 中文参数：x、y、theta 三轴最大速度依次为 0.26 m/s、0 m/s、1.0 rad/s。
     min_velocity: [-0.26, 0.0, -1.0]  # 中文参数：x、y、theta 三轴最小速度依次为 -0.26 m/s、0 m/s、-1.0 rad/s。
     max_accel: [2.5, 0.0, 3.2]  # 中文参数：x、y、theta 三轴最大加速度依次为 2.5 m/s²、0 m/s²、3.2 rad/s²。
     max_decel: [-2.5, 0.0, -3.2]  # 中文参数：x、y、theta 三轴最大减速度依次为 -2.5 m/s²、0 m/s²、-3.2 rad/s²。
-    odom_topic: "/odometry"  # 中文参数：闭环反馈模式使用的里程计 Topic；当前 OPEN_LOOP 模式下不订阅。
+    odom_topic: "/odometry"  # 中文参数：闭环反馈订阅的里程计 Topic，提供机器人实测线速度与角速度。
     odom_duration: 0.1  # 中文参数：闭环反馈模式的里程计速度平滑时间窗为 0.1 s。
-    # 中文注释：OPEN_LOOP 模式不订阅里程计，速度平滑只依据上一周期输出。
+    # 中文注释：CLOSED_LOOP 模式通过 0.1 秒里程计时间窗平滑实测速度，再执行速度与加减速度约束。
     deadband_velocity: [0.0, 0.0, 0.0]  # 中文参数：三轴速度死区均为 0，不额外抑制小速度指令。
     velocity_timeout: 1.0  # 中文参数：超过 1.0 秒未收到新速度指令时输出停车指令。
 
