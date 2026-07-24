@@ -85,8 +85,7 @@ public:
    * void fn(T& pixel) or void fn(const T& pixel)
    * @param fn a function that will be applied to each pixel in the image. Can modify image data
    */
-  template<class Functor>
-  void forEach(Functor && fn);
+  template<class Functor> void forEach(Functor && fn);
 
   /**
    * @brief Read each pixel sequentially
@@ -95,8 +94,7 @@ public:
    * void fn(const T& pixel)
    * @param fn a function that will be applied to each pixel in the image
    */
-  template<class Functor>
-  void forEach(Functor && fn) const;
+  template<class Functor> void forEach(Functor && fn) const;
   /**
    * @brief Convert each pixel to corresponding pixel of target using a custom function
    *
@@ -114,8 +112,7 @@ public:
    * first (const) from source and second (mutable) from target
    * @throw std::logic_error if the source and target of different sizes
    */
-  template<class TargetElement, class Converter>
-  void convert(Image<TargetElement> & target, Converter && converter) const;
+  template<class TargetElement, class Converter> void convert(Image<TargetElement> & target, Converter && converter) const;
 
 private:
   T * data_start_{};
@@ -124,49 +121,27 @@ private:
   size_t step_{};
 };
 
-template<class T>
-Image<T>::Image(size_t rows, size_t columns, T * data, size_t step)
-: rows_{rows}, columns_{columns}, step_{step}
-{
+template<class T> Image<T>::Image(size_t rows, size_t columns, T * data, size_t step) : rows_{rows}, columns_{columns}, step_{step} {
   data_start_ = data;
 }
 
-template<class T>
-Image<T>::Image(const Image & other)
-: data_start_{other.data_start_},
-  rows_{other.rows_}, columns_{other.columns_}, step_{other.step_} {}
+template<class T> Image<T>::Image(const Image & other) : data_start_{other.data_start_}, rows_{other.rows_}, columns_{other.columns_}, step_{other.step_} {}
 
-template<class T>
-Image<T>::Image(Image && other) noexcept
-: data_start_{other.data_start_},
-  rows_{other.rows_}, columns_{other.columns_}, step_{other.step_} {}
+template<class T> Image<T>::Image(Image && other) noexcept : data_start_{other.data_start_}, rows_{other.rows_}, columns_{other.columns_}, step_{other.step_} {}
 
-template<class T>
-T * Image<T>::row(size_t row)
-{
+template<class T> T * Image<T>::row(size_t row) {
   return const_cast<T *>( static_cast<const Image<T> &>(*this).row(row) );
 }
 
-template<class T>
-const T * Image<T>::row(size_t row) const
-{
+template<class T> const T * Image<T>::row(size_t row) const {
   return data_start_ + row * step_;
 }
 
-template<class T>
-template<class Functor>
-void Image<T>::forEach(Functor && fn)
-{
-  static_cast<const Image<T> &>(*this).forEach(
-    [&](const T & pixel) {
-      fn(const_cast<T &>(pixel));
-    });
+template<class T> template<class Functor> void Image<T>::forEach(Functor && fn) {
+  static_cast<const Image<T> &>(*this).forEach( [&](const T & pixel) { fn(const_cast<T &>(pixel)); });
 }
 
-template<class T>
-template<class Functor>
-void Image<T>::forEach(Functor && fn) const
-{
+template<class T> template<class Functor> void Image<T>::forEach(Functor && fn) const {
   const T * rowPtr = row(0);
 
   for (size_t row = 0; row < rows(); ++row) {
@@ -179,10 +154,7 @@ void Image<T>::forEach(Functor && fn) const
   }
 }
 
-template<class T>
-template<class TargetElement, class Converter>
-void Image<T>::convert(Image<TargetElement> & target, Converter && converter) const
-{
+template<class T> template<class TargetElement, class Converter> void Image<T>::convert(Image<TargetElement> & target, Converter && converter) const {
   if (rows() != target.rows() || columns() != target.columns()) {
     throw std::logic_error("Image::convert. The source and target images size are different");
   }

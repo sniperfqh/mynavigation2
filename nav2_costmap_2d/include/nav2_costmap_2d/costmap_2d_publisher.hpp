@@ -68,12 +68,7 @@ public:
   /**
    * @brief  Constructor for the Costmap2DPublisher
    */
-  Costmap2DPublisher(
-    const nav2_util::LifecycleNode::WeakPtr & parent,
-    Costmap2D * costmap,
-    std::string global_frame,
-    std::string topic_name,
-    bool always_send_full_costmap = false);
+  Costmap2DPublisher( const nav2_util::LifecycleNode::WeakPtr & parent, Costmap2D * costmap, std::string global_frame, std::string topic_name, bool always_send_full_costmap = false);
 
   /**
    * @brief  Destructor
@@ -88,8 +83,7 @@ public:
   /**
    * @brief Activate node
    */
-  void on_activate()
-  {
+  void on_activate() {
     costmap_pub_->on_activate();
     costmap_update_pub_->on_activate();
     costmap_raw_pub_->on_activate();
@@ -98,8 +92,7 @@ public:
   /**
    * @brief deactivate node
    */
-  void on_deactivate()
-  {
+  void on_deactivate() {
     costmap_pub_->on_deactivate();
     costmap_update_pub_->on_deactivate();
     costmap_raw_pub_->on_deactivate();
@@ -111,8 +104,7 @@ public:
   void on_cleanup() {}
 
   /** @brief Include the given bounds in the changed-rectangle. */
-  void updateBounds(unsigned int x0, unsigned int xn, unsigned int y0, unsigned int yn)
-  {
+  void updateBounds(unsigned int x0, unsigned int xn, unsigned int y0, unsigned int yn) {
     // 中文：累积本轮 LayeredCostmap 更新窗口，发布时决定发全图还是局部更新。
     x0_ = std::min(x0, x0_);
     xn_ = std::max(xn, xn_);
@@ -129,8 +121,7 @@ public:
    * @brief Check if the publisher is active
    * @return True if the frequency for the publisher is non-zero, false otherwise
    */
-  bool active()
-  {
+  bool active() {
     return active_;
   }
 
@@ -143,10 +134,7 @@ private:
   // void onNewSubscription(const ros::SingleSubscriberPublisher& pub);
 
   /** @brief GetCostmap callback service */
-  void costmap_service_callback(
-    const std::shared_ptr<rmw_request_id_t> request_header,
-    const std::shared_ptr<nav2_msgs::srv::GetCostmap::Request> request,
-    const std::shared_ptr<nav2_msgs::srv::GetCostmap::Response> response);
+  void costmap_service_callback( const std::shared_ptr<rmw_request_id_t> request_header, const std::shared_ptr<nav2_msgs::srv::GetCostmap::Request> request, const std::shared_ptr<nav2_msgs::srv::GetCostmap::Response> response);
 
   rclcpp::Clock::SharedPtr clock_;
   rclcpp::Logger logger_{rclcpp::get_logger("nav2_costmap_2d")};
@@ -162,8 +150,7 @@ private:
 
   // Publisher for translated costmap values as msg::OccupancyGrid used in visualization
   rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::OccupancyGrid>::SharedPtr costmap_pub_;
-  rclcpp_lifecycle::LifecyclePublisher<map_msgs::msg::OccupancyGridUpdate>::SharedPtr
-    costmap_update_pub_;
+  rclcpp_lifecycle::LifecyclePublisher<map_msgs::msg::OccupancyGridUpdate>::SharedPtr costmap_update_pub_;
 
   // Publisher for raw costmap values as msg::Costmap from layered costmap
   rclcpp_lifecycle::LifecyclePublisher<nav2_msgs::msg::Costmap>::SharedPtr costmap_raw_pub_;

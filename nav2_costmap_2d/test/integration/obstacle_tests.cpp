@@ -63,38 +63,30 @@ RclCppFixture g_rclcppfixture;
 class TestLifecycleNode : public nav2_util::LifecycleNode
 {
 public:
-  explicit TestLifecycleNode(const string & name)
-  : nav2_util::LifecycleNode(name)
-  {
+  explicit TestLifecycleNode(const string & name) : nav2_util::LifecycleNode(name) {
   }
 
-  nav2_util::CallbackReturn on_configure(const rclcpp_lifecycle::State &)
-  {
+  nav2_util::CallbackReturn on_configure(const rclcpp_lifecycle::State &) {
     return nav2_util::CallbackReturn::SUCCESS;
   }
 
-  nav2_util::CallbackReturn on_activate(const rclcpp_lifecycle::State &)
-  {
+  nav2_util::CallbackReturn on_activate(const rclcpp_lifecycle::State &) {
     return nav2_util::CallbackReturn::SUCCESS;
   }
 
-  nav2_util::CallbackReturn on_deactivate(const rclcpp_lifecycle::State &)
-  {
+  nav2_util::CallbackReturn on_deactivate(const rclcpp_lifecycle::State &) {
     return nav2_util::CallbackReturn::SUCCESS;
   }
 
-  nav2_util::CallbackReturn on_cleanup(const rclcpp_lifecycle::State &)
-  {
+  nav2_util::CallbackReturn on_cleanup(const rclcpp_lifecycle::State &) {
     return nav2_util::CallbackReturn::SUCCESS;
   }
 
-  nav2_util::CallbackReturn onShutdown(const rclcpp_lifecycle::State &)
-  {
+  nav2_util::CallbackReturn onShutdown(const rclcpp_lifecycle::State &) {
     return nav2_util::CallbackReturn::SUCCESS;
   }
 
-  nav2_util::CallbackReturn onError(const rclcpp_lifecycle::State &)
-  {
+  nav2_util::CallbackReturn onError(const rclcpp_lifecycle::State &) {
     return nav2_util::CallbackReturn::SUCCESS;
   }
 };
@@ -102,16 +94,13 @@ public:
 class TestNode : public ::testing::Test
 {
 public:
-  TestNode()
-  {
+  TestNode() {
     node_ = std::make_shared<TestLifecycleNode>("obstacle_test_node");
     node_->declare_parameter("map_topic", rclcpp::ParameterValue(std::string("map")));
     node_->declare_parameter("track_unknown_space", rclcpp::ParameterValue(false));
     node_->declare_parameter("use_maximum", rclcpp::ParameterValue(false));
     node_->declare_parameter("lethal_cost_threshold", rclcpp::ParameterValue(100));
-    node_->declare_parameter(
-      "unknown_cost_value",
-      rclcpp::ParameterValue(static_cast<unsigned char>(0xff)));
+    node_->declare_parameter( "unknown_cost_value", rclcpp::ParameterValue(static_cast<unsigned char>(0xff)));
     node_->declare_parameter("trinary_costmap", rclcpp::ParameterValue(true));
     node_->declare_parameter("transform_tolerance", rclcpp::ParameterValue(0.3));
     node_->declare_parameter("observation_sources", rclcpp::ParameterValue(std::string("")));
@@ -343,32 +332,18 @@ TEST_F(TestNode, testRepeatedResets) {
 
   // Set parameters
   auto plugins = layers.getPlugins();
-  for_each(
-    begin(*plugins), end(*plugins), [&layer_dummy](const auto & plugin) {
-      string layer_param = layer_dummy.first + "_" + plugin->getName();
-
-      // Notice we are using Layer::declareParameter
-      plugin->declareParameter(layer_param, rclcpp::ParameterValue(layer_dummy.second));
-    });
+  // Notice we are using Layer::declareParameter
+  for_each( begin(*plugins), end(*plugins), [&layer_dummy](const auto & plugin) { string layer_param = layer_dummy.first + "_" + plugin->getName(); plugin->declareParameter(layer_param, rclcpp::ParameterValue(layer_dummy.second)); });
 
   // Check that all parameters have been set
   // node-level param
   ASSERT_TRUE(node_->has_parameter(node_dummy.first));
 
   // layer-level param
-  ASSERT_TRUE(
-    all_of(
-      begin(*plugins), end(*plugins), [&layer_dummy](const auto & plugin) {
-        string layer_param = layer_dummy.first + "_" + plugin->getName();
-        return plugin->hasParameter(layer_param);
-      }));
+  ASSERT_TRUE( all_of( begin(*plugins), end(*plugins), [&layer_dummy](const auto & plugin) { string layer_param = layer_dummy.first + "_" + plugin->getName(); return plugin->hasParameter(layer_param); }));
 
   // Reset all layers. Parameters should be declared if not declared, otherwise skipped.
-  ASSERT_NO_THROW(
-    for_each(
-      begin(*plugins), end(*plugins), [](const auto & plugin) {
-        plugin->reset();
-      }));
+  ASSERT_NO_THROW( for_each( begin(*plugins), end(*plugins), [](const auto & plugin) { plugin->reset(); }));
 }
 
 
@@ -411,39 +386,25 @@ TEST_F(TestNode, testRaytracing) {
 /**
  * Test dynamic parameter setting of obstacle layer
  */
-TEST_F(TestNode, testDynParamsSetObstacle)
-{
+TEST_F(TestNode, testDynParamsSetObstacle) {
   auto costmap = std::make_shared<nav2_costmap_2d::Costmap2DROS>("test_costmap");
 
   // Add obstacle layer
   std::vector<std::string> plugins_str;
   plugins_str.push_back("obstacle_layer");
   costmap->set_parameter(rclcpp::Parameter("plugins", plugins_str));
-  costmap->declare_parameter(
-    "obstacle_layer.plugin",
-    rclcpp::ParameterValue(std::string("nav2_costmap_2d::ObstacleLayer")));
+  costmap->declare_parameter( "obstacle_layer.plugin", rclcpp::ParameterValue(std::string("nav2_costmap_2d::ObstacleLayer")));
 
   costmap->set_parameter(rclcpp::Parameter("global_frame", std::string("base_link")));
   costmap->on_configure(rclcpp_lifecycle::State());
 
   costmap->on_activate(rclcpp_lifecycle::State());
 
-  auto parameter_client = std::make_shared<rclcpp::AsyncParametersClient>(
-    costmap->get_node_base_interface(), costmap->get_node_topics_interface(),
-    costmap->get_node_graph_interface(),
-    costmap->get_node_services_interface());
+  auto parameter_client = std::make_shared<rclcpp::AsyncParametersClient>( costmap->get_node_base_interface(), costmap->get_node_topics_interface(), costmap->get_node_graph_interface(), costmap->get_node_services_interface());
 
-  auto results = parameter_client->set_parameters_atomically(
-  {
-    rclcpp::Parameter("obstacle_layer.combination_method", 5),
-    rclcpp::Parameter("obstacle_layer.max_obstacle_height", 4.0),
-    rclcpp::Parameter("obstacle_layer.enabled", false),
-    rclcpp::Parameter("obstacle_layer.footprint_clearing_enabled", false)
-  });
+  auto results = parameter_client->set_parameters_atomically( { rclcpp::Parameter("obstacle_layer.combination_method", 5), rclcpp::Parameter("obstacle_layer.max_obstacle_height", 4.0), rclcpp::Parameter("obstacle_layer.enabled", false), rclcpp::Parameter("obstacle_layer.footprint_clearing_enabled", false) });
 
-  rclcpp::spin_until_future_complete(
-    costmap->get_node_base_interface(),
-    results);
+  rclcpp::spin_until_future_complete( costmap->get_node_base_interface(), results);
 
   EXPECT_EQ(costmap->get_parameter("obstacle_layer.combination_method").as_int(), 5);
   EXPECT_EQ(costmap->get_parameter("obstacle_layer.max_obstacle_height").as_double(), 4.0);
@@ -458,45 +419,25 @@ TEST_F(TestNode, testDynParamsSetObstacle)
 /**
  * Test dynamic parameter setting of voxel layer
  */
-TEST_F(TestNode, testDynParamsSetVoxel)
-{
+TEST_F(TestNode, testDynParamsSetVoxel) {
   auto costmap = std::make_shared<nav2_costmap_2d::Costmap2DROS>("test_costmap");
 
   // Add voxel layer
   std::vector<std::string> plugins_str;
   plugins_str.push_back("voxel_layer");
   costmap->set_parameter(rclcpp::Parameter("plugins", plugins_str));
-  costmap->declare_parameter(
-    "voxel_layer.plugin",
-    rclcpp::ParameterValue(std::string("nav2_costmap_2d::VoxelLayer")));
+  costmap->declare_parameter( "voxel_layer.plugin", rclcpp::ParameterValue(std::string("nav2_costmap_2d::VoxelLayer")));
 
   costmap->set_parameter(rclcpp::Parameter("global_frame", std::string("base_link")));
   costmap->on_configure(rclcpp_lifecycle::State());
 
   costmap->on_activate(rclcpp_lifecycle::State());
 
-  auto parameter_client = std::make_shared<rclcpp::AsyncParametersClient>(
-    costmap->get_node_base_interface(), costmap->get_node_topics_interface(),
-    costmap->get_node_graph_interface(),
-    costmap->get_node_services_interface());
+  auto parameter_client = std::make_shared<rclcpp::AsyncParametersClient>( costmap->get_node_base_interface(), costmap->get_node_topics_interface(), costmap->get_node_graph_interface(), costmap->get_node_services_interface());
 
-  auto results = parameter_client->set_parameters_atomically(
-  {
-    rclcpp::Parameter("voxel_layer.combination_method", 0),
-    rclcpp::Parameter("voxel_layer.mark_threshold", 1),
-    rclcpp::Parameter("voxel_layer.unknown_threshold", 10),
-    rclcpp::Parameter("voxel_layer.z_resolution", 0.4),
-    rclcpp::Parameter("voxel_layer.origin_z", 1.0),
-    rclcpp::Parameter("voxel_layer.z_voxels", 14),
-    rclcpp::Parameter("voxel_layer.max_obstacle_height", 4.0),
-    rclcpp::Parameter("voxel_layer.footprint_clearing_enabled", false),
-    rclcpp::Parameter("voxel_layer.enabled", false),
-    rclcpp::Parameter("voxel_layer.publish_voxel_map", true)
-  });
+  auto results = parameter_client->set_parameters_atomically( { rclcpp::Parameter("voxel_layer.combination_method", 0), rclcpp::Parameter("voxel_layer.mark_threshold", 1), rclcpp::Parameter("voxel_layer.unknown_threshold", 10), rclcpp::Parameter("voxel_layer.z_resolution", 0.4), rclcpp::Parameter("voxel_layer.origin_z", 1.0), rclcpp::Parameter("voxel_layer.z_voxels", 14), rclcpp::Parameter("voxel_layer.max_obstacle_height", 4.0), rclcpp::Parameter("voxel_layer.footprint_clearing_enabled", false), rclcpp::Parameter("voxel_layer.enabled", false), rclcpp::Parameter("voxel_layer.publish_voxel_map", true) });
 
-  rclcpp::spin_until_future_complete(
-    costmap->get_node_base_interface(),
-    results);
+  rclcpp::spin_until_future_complete( costmap->get_node_base_interface(), results);
 
   EXPECT_EQ(costmap->get_parameter("voxel_layer.combination_method").as_int(), 0);
   EXPECT_EQ(costmap->get_parameter("voxel_layer.mark_threshold").as_int(), 1);
@@ -517,8 +458,7 @@ TEST_F(TestNode, testDynParamsSetVoxel)
 /**
  * Test dynamic parameter setting of static layer
  */
-TEST_F(TestNode, testDynParamsSetStatic)
-{
+TEST_F(TestNode, testDynParamsSetStatic) {
   auto costmap = std::make_shared<nav2_costmap_2d::Costmap2DROS>("test_costmap");
 
   costmap->set_parameter(rclcpp::Parameter("global_frame", std::string("base_link")));
@@ -526,23 +466,11 @@ TEST_F(TestNode, testDynParamsSetStatic)
 
   costmap->on_activate(rclcpp_lifecycle::State());
 
-  auto parameter_client = std::make_shared<rclcpp::AsyncParametersClient>(
-    costmap->get_node_base_interface(), costmap->get_node_topics_interface(),
-    costmap->get_node_graph_interface(),
-    costmap->get_node_services_interface());
+  auto parameter_client = std::make_shared<rclcpp::AsyncParametersClient>( costmap->get_node_base_interface(), costmap->get_node_topics_interface(), costmap->get_node_graph_interface(), costmap->get_node_services_interface());
 
-  auto results = parameter_client->set_parameters_atomically(
-  {
-    rclcpp::Parameter("static_layer.transform_tolerance", 1.0),
-    rclcpp::Parameter("static_layer.enabled", false),
-    rclcpp::Parameter("static_layer.map_subscribe_transient_local", false),
-    rclcpp::Parameter("static_layer.map_topic", "dynamic_topic"),
-    rclcpp::Parameter("static_layer.subscribe_to_updates", true)
-  });
+  auto results = parameter_client->set_parameters_atomically( { rclcpp::Parameter("static_layer.transform_tolerance", 1.0), rclcpp::Parameter("static_layer.enabled", false), rclcpp::Parameter("static_layer.map_subscribe_transient_local", false), rclcpp::Parameter("static_layer.map_topic", "dynamic_topic"), rclcpp::Parameter("static_layer.subscribe_to_updates", true) });
 
-  rclcpp::spin_until_future_complete(
-    costmap->get_node_base_interface(),
-    results);
+  rclcpp::spin_until_future_complete( costmap->get_node_base_interface(), results);
 
   EXPECT_EQ(costmap->get_parameter("static_layer.transform_tolerance").as_double(), 1.0);
   EXPECT_EQ(costmap->get_parameter("static_layer.enabled").as_bool(), false);

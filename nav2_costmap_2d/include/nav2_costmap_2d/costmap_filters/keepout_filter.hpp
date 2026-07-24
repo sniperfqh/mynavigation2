@@ -65,8 +65,7 @@ public:
   /**
    * @brief Initialize the filter and subscribe to the info topic
    */
-  void initializeFilter(
-    const std::string & filter_info_topic);
+  void initializeFilter( const std::string & filter_info_topic);
 
   /**
    * @brief Update the bounds of the master costmap by this layer's update dimensions
@@ -78,17 +77,12 @@ public:
    * @param max_x X max map coord of the window to update
    * @param max_y Y max map coord of the window to update
    */
-  void updateBounds(
-    double robot_x, double robot_y, double robot_yaw,
-    double * min_x, double * min_y, double * max_x, double * max_y) override;
+  void updateBounds( double robot_x, double robot_y, double robot_yaw, double * min_x, double * min_y, double * max_x, double * max_y) override;
 
   /**
    * @brief Process the keepout layer at the current pose / bounds / grid
    */
-  void process(
-    nav2_costmap_2d::Costmap2D & master_grid,
-    int min_i, int min_j, int max_i, int max_j,
-    const geometry_msgs::msg::Pose2D & pose);
+  void process( nav2_costmap_2d::Costmap2D & master_grid, int min_i, int min_j, int max_i, int max_j, const geometry_msgs::msg::Pose2D & pose);
 
   /**
    * @brief Reset the costmap filter / topic / info

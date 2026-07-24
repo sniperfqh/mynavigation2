@@ -67,9 +67,7 @@ public:
   /**
    * @brief Voxel Layer constructor
    */
-  VoxelLayer()
-  : voxel_grid_(0, 0, 0)
-  {
+  VoxelLayer() : voxel_grid_(0, 0, 0) {
     costmap_ = NULL;  // this is the unsigned char* member of parent class's parent class Costmap2D
   }
 
@@ -93,11 +91,7 @@ public:
    * @param max_x X max map coord of the window to update
    * @param max_y Y max map coord of the window to update
    */
-  virtual void updateBounds(
-    double robot_x, double robot_y, double robot_yaw, double * min_x,
-    double * min_y,
-    double * max_x,
-    double * max_y);
+  virtual void updateBounds( double robot_x, double robot_y, double robot_yaw, double * min_x, double * min_y, double * max_x, double * max_y);
 
   /**
    * @brief Update the layer's origin to a new pose, often when in a rolling costmap
@@ -107,8 +101,7 @@ public:
   /**
    * @brief If layer is discretely populated
    */
-  bool isDiscretized()
-  {
+  bool isDiscretized() {
     return true;
   }
 
@@ -136,27 +129,19 @@ protected:
   /**
    * @brief Use raycasting between 2 points to clear freespace
    */
-  virtual void raytraceFreespace(
-    const nav2_costmap_2d::Observation & clearing_observation,
-    double * min_x, double * min_y,
-    double * max_x,
-    double * max_y);
+  virtual void raytraceFreespace( const nav2_costmap_2d::Observation & clearing_observation, double * min_x, double * min_y, double * max_x, double * max_y);
 
   bool publish_voxel_;
   rclcpp_lifecycle::LifecyclePublisher<nav2_msgs::msg::VoxelGrid>::SharedPtr voxel_pub_;
   nav2_voxel_grid::VoxelGrid voxel_grid_;
   double z_resolution_, origin_z_;
   int unknown_threshold_, mark_threshold_, size_z_;
-  rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::PointCloud2>::SharedPtr
-    clearing_endpoints_pub_;
+  rclcpp_lifecycle::LifecyclePublisher<sensor_msgs::msg::PointCloud2>::SharedPtr clearing_endpoints_pub_;
 
   /**
    * @brief Covert world coordinates into map coordinates
    */
-  inline bool worldToMap3DFloat(
-    double wx, double wy, double wz, double & mx, double & my,
-    double & mz)
-  {
+  inline bool worldToMap3DFloat( double wx, double wy, double wz, double & mx, double & my, double & mz) {
     if (wx < origin_x_ || wy < origin_y_ || wz < origin_z_) {
       return false;
     }
@@ -173,10 +158,7 @@ protected:
   /**
    * @brief Covert world coordinates into map coordinates
    */
-  inline bool worldToMap3D(
-    double wx, double wy, double wz, unsigned int & mx, unsigned int & my,
-    unsigned int & mz)
-  {
+  inline bool worldToMap3D( double wx, double wy, double wz, unsigned int & mx, unsigned int & my, unsigned int & mz) {
     if (wx < origin_x_ || wy < origin_y_ || wz < origin_z_) {
       return false;
     }
@@ -195,11 +177,7 @@ protected:
   /**
    * @brief Covert map coordinates into world coordinates
    */
-  inline void mapToWorld3D(
-    unsigned int mx, unsigned int my, unsigned int mz, double & wx,
-    double & wy,
-    double & wz)
-  {
+  inline void mapToWorld3D( unsigned int mx, unsigned int my, unsigned int mz, double & wx, double & wy, double & wz) {
     // returns the center point of the cell
     wx = origin_x_ + (mx + 0.5) * resolution_;
     wy = origin_y_ + (my + 0.5) * resolution_;
@@ -209,16 +187,14 @@ protected:
   /**
    * @brief Find L2 norm distance in 3D
    */
-  inline double dist(double x0, double y0, double z0, double x1, double y1, double z1)
-  {
+  inline double dist(double x0, double y0, double z0, double x1, double y1, double z1) {
     return sqrt((x1 - x0) * (x1 - x0) + (y1 - y0) * (y1 - y0) + (z1 - z0) * (z1 - z0));
   }
 
   /**
    * @brief Get the height of the voxel sizes in meters
    */
-  double getSizeInMetersZ() const
-  {
+  double getSizeInMetersZ() const {
     return (size_z_ - 1 + 0.5) * z_resolution_;
   }
 
@@ -226,8 +202,7 @@ protected:
    * @brief Callback executed when a parameter change is detected
    * @param event ParameterEvent message
    */
-  rcl_interfaces::msg::SetParametersResult
-  dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters);
+  rcl_interfaces::msg::SetParametersResult dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters);
 
   // Dynamic parameters handler
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr dyn_params_handler_;

@@ -48,8 +48,7 @@ namespace nav2_costmap_2d
 class CollisionCheckerException : public std::runtime_error
 {
 public:
-  explicit CollisionCheckerException(const std::string description)
-  : std::runtime_error(description) {}
+  explicit CollisionCheckerException(const std::string description) : std::runtime_error(description) {}
 };
 
 /**
@@ -59,8 +58,7 @@ public:
 class IllegalPoseException : public CollisionCheckerException
 {
 public:
-  IllegalPoseException(const std::string name, const std::string description)
-  : CollisionCheckerException(description), name_(name) {}
+  IllegalPoseException(const std::string name, const std::string description) : CollisionCheckerException(description), name_(name) {}
   std::string getCriticName() const {return name_;}
 
 protected:

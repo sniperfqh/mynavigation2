@@ -75,8 +75,7 @@ public:
   /**
   * @brief Get the current costmap object
   */
-  CostmapT getCostmap()
-  {
+  CostmapT getCostmap() {
     return costmap_;
   }
 

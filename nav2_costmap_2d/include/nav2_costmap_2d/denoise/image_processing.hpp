@@ -54,8 +54,7 @@ public:
    * @param count number of elements
    * @throw std::bad_alloc or any other exception thrown by allocator
    */
-  template<class T>
-  T * get(std::size_t count);
+  template<class T> T * get(std::size_t count);
 
 private:
   inline void reset();
@@ -69,13 +68,9 @@ private:
 // forward declarations
 namespace imgproc_impl
 {
-template<class Label>
-class EquivalenceLabelTrees;
+template<class Label> class EquivalenceLabelTrees;
 
-template<class AggregateFn>
-void morphologyOperation(
-  const Image<uint8_t> & input, Image<uint8_t> & output,
-  const Image<uint8_t> & shape, AggregateFn aggregate);
+template<class AggregateFn> void morphologyOperation( const Image<uint8_t> & input, Image<uint8_t> & output, const Image<uint8_t> & shape, AggregateFn aggregate);
 
 using ShapeBuffer3x3 = std::array<uint8_t, 9>;
 inline Image<uint8_t> createShape(ShapeBuffer3x3 & buffer, ConnectivityType connectivity);
@@ -90,11 +85,7 @@ inline Image<uint8_t> createShape(ShapeBuffer3x3 & buffer, ConnectivityType conn
  * @param max_function takes as input std::initializer_list<uint8_t> with three elements.
  * Returns the greatest value in list
  */
-template<class Max>
-inline void dilate(
-  const Image<uint8_t> & input, Image<uint8_t> & output,
-  ConnectivityType connectivity, Max && max_function)
-{
+template<class Max> inline void dilate( const Image<uint8_t> & input, Image<uint8_t> & output, ConnectivityType connectivity, Max && max_function) {
   using namespace imgproc_impl;
   ShapeBuffer3x3 shape_buffer;
   Image<uint8_t> shape = createShape(shape_buffer, connectivity);
@@ -125,21 +116,13 @@ inline void dilate(
 * For example, for an image of one background pixel, the total number of labels == 2.
 * Two labels (0, 1) have been counted, although label 0 is not used)
 */
-template<ConnectivityType connectivity, class Label, class IsBg>
-std::pair<Image<Label>, Label> connectedComponents(
-  const Image<uint8_t> & image, MemoryBuffer & buffer,
-  imgproc_impl::EquivalenceLabelTrees<Label> & label_trees,
-  IsBg && is_background);
+template<ConnectivityType connectivity, class Label, class IsBg> std::pair<Image<Label>, Label> connectedComponents( const Image<uint8_t> & image, MemoryBuffer & buffer, imgproc_impl::EquivalenceLabelTrees<Label> & label_trees, IsBg && is_background);
 
 // Implementation
 
-template<class T>
-T * MemoryBuffer::get(std::size_t count)
-{
+template<class T> T * MemoryBuffer::get(std::size_t count) {
   // Check the memory allocated by ::operator new can be used to store the type T
-  static_assert(
-    alignof(std::max_align_t) >= alignof(T),
-    "T alignment is more than the fundamental alignment of the platform");
+  static_assert( alignof(std::max_align_t) >= alignof(T), "T alignment is more than the fundamental alignment of the platform");
 
   const size_t required_bytes = sizeof(T) * count;
 
@@ -149,14 +132,12 @@ T * MemoryBuffer::get(std::size_t count)
   return static_cast<T *>(data_);
 }
 
-void MemoryBuffer::reset()
-{
+void MemoryBuffer::reset() {
   ::operator delete(data_);
   size_ = 0;
 }
 
-void MemoryBuffer::allocate(size_t bytes)
-{
+void MemoryBuffer::allocate(size_t bytes) {
   reset();
   data_ = ::operator new(bytes);
   size_ = bytes;
@@ -183,20 +164,14 @@ namespace imgproc_impl
  * @warning If source contains a pixel with a value, large then image_max,
  * the behavior is undefined
 */
-template<class T, class Bin>
-std::vector<Bin>
-histogram(const Image<T> & image, T image_max, Bin bin_max)
-{
+template<class T, class Bin> std::vector<Bin> histogram(const Image<T> & image, T image_max, Bin bin_max) {
   if (image.empty()) {
     return {};
   }
   std::vector<Bin> histogram(size_t(image_max) + 1);
 
   // Increases the bin value corresponding to the pixel by one
-  auto add_pixel_value = [&histogram, bin_max](T pixel) {
-      auto & h = histogram[pixel];
-      h = std::min(Bin(h + 1), bin_max);
-    };
+  auto add_pixel_value = [&histogram, bin_max](T pixel) { auto & h = histogram[pixel]; h = std::min(Bin(h + 1), bin_max); };
 
   image.forEach(add_pixel_value);
   return histogram;
@@ -234,16 +209,13 @@ public:
    * @param down_row_start pointer to the first pixel of down row
    * @param columns number of pixels in both rows
    */
-  ReplaceToZero(const T * up_row_start, const T * down_row_start, size_t columns)
-  : up_row_start_{up_row_start}, up_row_end_{up_row_start + columns},
-    down_row_start_{down_row_start}, down_row_end_{down_row_start + columns} {}
+  ReplaceToZero(const T * up_row_start, const T * down_row_start, size_t columns) : up_row_start_{up_row_start}, up_row_end_{up_row_start + columns}, down_row_start_{down_row_start}, down_row_end_{down_row_start + columns} {}
 
   /**
    * @brief Return ref to pixel or to zero value if up_row_start_ is nullptr or the pointer is out of bounds
    * @param v pointer to pixel
    */
-  T & up(T * v)
-  {
+  T & up(T * v) {
     if (up_row_start_ == nullptr) {
       return zero_;
     }
@@ -254,8 +226,7 @@ public:
    * @brief Return ref to pixel or to zero value if the pointer is out of bounds
    * @param v pointer to pixel
    */
-  T & down(T * v)
-  {
+  T & down(T * v) {
     return replaceOutOfBounds(v, down_row_start_, down_row_end_);
   }
 
@@ -264,8 +235,7 @@ private:
    * @brief Replaces an out-of-bounds pointer with a pointer to 0
    * @return a dereferenced pointer or a reference to 0 if the pointer is out of range
    */
-  T & replaceOutOfBounds(T * v, const T * begin, const T * end)
-  {
+  T & replaceOutOfBounds(T * v, const T * begin, const T * end) {
     if (v < begin || v >= end) {
       return zero_;
     }
@@ -302,8 +272,7 @@ public:
    * @param down_row pointer to the current pixel (e)
    * @param border boundary case object
    */
-  inline Window(T * up_row, T * down_row, Border<T> border = {})
-  : up_row_{up_row}, down_row_{down_row}, border_{border} {}
+  inline Window(T * up_row, T * down_row, Border<T> border = {}) : up_row_{up_row}, down_row_{down_row}, border_{border} {}
 
   inline T & a() {return border_.up(up_row_ - 1);}
   inline T & b() {return border_.up(up_row_);}
@@ -313,8 +282,7 @@ public:
   inline const T * anchor() const {return down_row_;}
 
   /// @brief Shifts the window to the right
-  inline void next()
-  {
+  inline void next() {
     ++up_row_;
     ++down_row_;
   }
@@ -326,9 +294,7 @@ private:
 };
 
 /// @brief Discards const
-template<class T>
-T * dropConst(const T * ptr)
-{
+template<class T> T * dropConst(const T * ptr) {
   return const_cast<T *>(ptr);
 }
 
@@ -345,14 +311,8 @@ T * dropConst(const T * ptr)
  * This could have been avoided by creating a ConstWindow similar to Window.
  * But probably code bloat is the bigger evil
  */
-template<class T>
-Window<T, out_of_bounds_policy::ReplaceToZero> makeSafeWindow(
-  const T * up_row, const T * down_row, size_t columns, size_t offset = 0)
-{
-  return {
-    dropConst(up_row) + offset, dropConst(down_row) + offset,
-    out_of_bounds_policy::ReplaceToZero<T>{up_row, down_row, columns}
-  };
+template<class T> Window<T, out_of_bounds_policy::ReplaceToZero> makeSafeWindow( const T * up_row, const T * down_row, size_t columns, size_t offset = 0) {
+  return { dropConst(up_row) + offset, dropConst(down_row) + offset, out_of_bounds_policy::ReplaceToZero<T>{up_row, down_row, columns} };
 }
 
 /**
@@ -363,9 +323,7 @@ Window<T, out_of_bounds_policy::ReplaceToZero> makeSafeWindow(
  * @return forward scan mask sliding window
  * @warning Breaks the constant guarantees. See warning in makeSafeWindow
  */
-template<class T>
-Window<T, out_of_bounds_policy::DoNothing> makeUnsafeWindow(const T * up_row, const T * down_row)
-{
+template<class T> Window<T, out_of_bounds_policy::DoNothing> makeUnsafeWindow(const T * up_row, const T * down_row) {
   return {dropConst(up_row), dropConst(down_row)};
 }
 
@@ -376,8 +334,7 @@ struct EquivalenceLabelTreesBase
 
 struct LabelOverflow : public std::runtime_error
 {
-  LabelOverflow(const std::string & message)
-  : std::runtime_error(message) {}
+  LabelOverflow(const std::string & message) : std::runtime_error(message) {}
 };
 
 /**
@@ -397,14 +354,11 @@ public:
    * @param columns number of image columns
    * @param connectivity pixels connectivity type
    */
-  void reset(const size_t rows, const size_t columns, ConnectivityType connectivity)
-  {
+  void reset(const size_t rows, const size_t columns, ConnectivityType connectivity) {
     // Trying to reserve memory with a margin
     const size_t max_labels_count = maxLabels(rows, columns, connectivity);
     // Number of labels cannot exceed std::numeric_limits<Label>::max()
-    labels_size_ = static_cast<Label>(
-      std::min(max_labels_count, size_t(std::numeric_limits<Label>::max()))
-    );
+    labels_size_ = static_cast<Label>( std::min(max_labels_count, size_t(std::numeric_limits<Label>::max())) );
 
     try {
       labels_.reserve(labels_size_);
@@ -423,8 +377,7 @@ public:
    * @throw LabelOverflow if all possible labels already used
    * @return label
    */
-  Label makeLabel()
-  {
+  Label makeLabel() {
     // Check the next_free_ counter does not overflow.
     if (next_free_ == labels_size_) {
       throw LabelOverflow("EquivalenceLabelTrees: Can't create new label");
@@ -440,8 +393,7 @@ public:
    * @param j tree node
    * @return root of joined tree
    */
-  Label unionTrees(Label i, Label j)
-  {
+  Label unionTrees(Label i, Label j) {
     Label root = findRoot(i);
 
     if (i != j) {
@@ -460,8 +412,7 @@ public:
    * @warning Returns an internal buffer that will be invalidated
    * on subsequent calls to the methods of EquivalenceLabelTrees
    */
-  const std::vector<Label> & getLabels()
-  {
+  const std::vector<Label> & getLabels() {
     Label k = 1;
     for (Label i = 1; i < next_free_; ++i) {
 
@@ -484,8 +435,7 @@ private:
    * @param connectivity pixels connectivity type
    * @return max labels count
    */
-  static size_t maxLabels(const size_t rows, const size_t columns, ConnectivityType connectivity)
-  {
+  static size_t maxLabels(const size_t rows, const size_t columns, ConnectivityType connectivity) {
     size_t max_labels{};
 
     if (connectivity == ConnectivityType::Way4) {
@@ -510,16 +460,14 @@ private:
   }
 
   /// @brief Find the root of the tree of node i
-  Label findRoot(Label i)
-  {
+  Label findRoot(Label i) {
     Label root = i;
     for (; labels_[root] < root; root = labels_[root]) { /*do nothing*/}
     return root;
   }
 
   /// @brief Set the root of the tree of node i
-  void setRoot(Label i, Label root)
-  {
+  void setRoot(Label i, Label root) {
     while (labels_[i] < i) {
       auto j = labels_[i];
       labels_[i] = root;
@@ -544,8 +492,7 @@ private:
 };
 
 /// @brief The specializations of this class provide the definition of the pixel label
-template<ConnectivityType connectivity>
-struct ProcessPixel;
+template<ConnectivityType connectivity> struct ProcessPixel;
 
 /// @brief Define the label of a pixel in an 8-linked image
 template<>
@@ -561,11 +508,7 @@ struct ProcessPixel<ConnectivityType::Way8>
    * @param eq_trees union-find structure
    * @throw LabelOverflow if all possible labels already used
    */
-  template<class ImageWindow, class LabelsWindow, class Label, class IsBg>
-  static void pass(
-    ImageWindow & image, LabelsWindow & label, EquivalenceLabelTrees<Label> & eq_trees,
-    IsBg && is_bg)
-  {
+  template<class ImageWindow, class LabelsWindow, class Label, class IsBg> static void pass( ImageWindow & image, LabelsWindow & label, EquivalenceLabelTrees<Label> & eq_trees, IsBg && is_bg) {
     Label & current = label.e();
 
     //The decision tree traversal. See reference article for details
@@ -615,11 +558,7 @@ struct ProcessPixel<ConnectivityType::Way4>
    * @param eq_trees union-find structure
    * @throw LabelOverflow if all possible labels already used
    */
-  template<class ImageWindow, class LabelsWindow, class Label, class IsBg>
-  static void pass(
-    ImageWindow & image, LabelsWindow & label, EquivalenceLabelTrees<Label> & eq_trees,
-    IsBg && is_bg)
-  {
+  template<class ImageWindow, class LabelsWindow, class Label, class IsBg> static void pass( ImageWindow & image, LabelsWindow & label, EquivalenceLabelTrees<Label> & eq_trees, IsBg && is_bg) {
     Label & current = label.e();
 
     // Simplified decision tree traversal. See reference article for details
@@ -659,25 +598,14 @@ struct ProcessPixel<ConnectivityType::Way4>
  * Should only contain values 0 (ignore neighborhood pixel) or 255 (use pixel).
  * @param touch_fn binary operation that updates a pixel in the output image with an overlay
  */
-template<class Apply>
-void probeRows(
-  const Image<uint8_t> & input, size_t first_input_row,
-  Image<uint8_t> & output, size_t first_output_row,
-  const uint8_t * shape, Apply touch_fn)
-{
+template<class Apply> void probeRows( const Image<uint8_t> & input, size_t first_input_row, Image<uint8_t> & output, size_t first_output_row, const uint8_t * shape, Apply touch_fn) {
   const size_t rows = input.rows() - std::max(first_input_row, first_output_row);
   const size_t columns = input.columns();
 
-  auto apply_shape = [&shape](uint8_t value, uint8_t index) -> uint8_t {
-      return value & shape[index];
-    };
+  auto apply_shape = [&shape](uint8_t value, uint8_t index) -> uint8_t { return value & shape[index]; };
 
-  auto get_input_row = [&input, first_input_row](size_t row) {
-      return input.row(row + first_input_row);
-    };
-  auto get_output_row = [&output, first_output_row](size_t row) {
-      return output.row(row + first_output_row);
-    };
+  auto get_input_row = [&input, first_input_row](size_t row) { return input.row(row + first_input_row); };
+  auto get_output_row = [&output, first_output_row](size_t row) { return output.row(row + first_output_row); };
 
   if (columns == 1) {
     for (size_t i = 0; i < rows; ++i) {
@@ -701,11 +629,7 @@ void probeRows(
 
       // process next columns up to last
       for (; in != last_column_pixel; ++in, ++out) {
-        auto overlay = {
-          apply_shape(*(in - 1), 0),
-          apply_shape(*(in), 1),
-          apply_shape(*(in + 1), 2)
-        };
+        auto overlay = { apply_shape(*(in - 1), 0), apply_shape(*(in), 1), apply_shape(*(in + 1), 2) };
         touch_fn(*out, overlay);
       }
 
@@ -734,14 +658,9 @@ void probeRows(
  * @throw std::logic_error if the sizes of the input and output images are different or
  * shape size is not equal to 3x3
  */
-template<class AggregateFn>
-void morphologyOperation(
-  const Image<uint8_t> & input, Image<uint8_t> & output,
-  const Image<uint8_t> & shape, AggregateFn aggregate)
-{
+template<class AggregateFn> void morphologyOperation( const Image<uint8_t> & input, Image<uint8_t> & output, const Image<uint8_t> & shape, AggregateFn aggregate) {
   if (input.rows() != output.rows() || input.columns() != output.columns()) {
-    throw std::logic_error(
-            "morphologyOperation: the sizes of the input and output images are different");
+    throw std::logic_error( "morphologyOperation: the sizes of the input and output images are different");
   }
 
   if (shape.rows() != 3 || shape.columns() != 3) {
@@ -755,9 +674,7 @@ void morphologyOperation(
   // Simple write the pixel of the output image (first pass only)
   auto set = [&](uint8_t & res, std::initializer_list<uint8_t> lst) {res = aggregate(lst);};
   // Update the pixel of the output image
-  auto update = [&](uint8_t & res, std::initializer_list<uint8_t> lst) {
-      res = aggregate({res, aggregate(lst), 0});
-    };
+  auto update = [&](uint8_t & res, std::initializer_list<uint8_t> lst) { res = aggregate({res, aggregate(lst), 0}); };
 
   // Apply the central shape row.
   // This operation is applicable to all rows of the image, because at any position of the sliding window,
@@ -779,8 +696,7 @@ void morphologyOperation(
  * @brief Return structuring element 3x3 image by predefined figure type
  * @details Used in morphologyOperation
  */
-Image<uint8_t> createShape(ShapeBuffer3x3 & buffer, ConnectivityType connectivity)
-{
+Image<uint8_t> createShape(ShapeBuffer3x3 & buffer, ConnectivityType connectivity) {
   /**
    * Shape - a binary matrix that is used as a mask. Each element of which is one of two values:
    * code u - the corresponding pixel of the image will be used
@@ -790,15 +706,9 @@ Image<uint8_t> createShape(ShapeBuffer3x3 & buffer, ConnectivityType connectivit
   static constexpr uint8_t i = 0;
 
   if (connectivity == ConnectivityType::Way8) {
-    buffer = {
-      u, u, u,
-      u, i, u,
-      u, u, u};
+    buffer = { u, u, u, u, i, u, u, u, u};
   } else {
-    buffer = {
-      i, u, i,
-      u, i, u,
-      i, u, i};
+    buffer = { i, u, i, u, i, u, i, u, i};
   }
   return Image<uint8_t>(3, 3, buffer.data(), 3);
 }
@@ -807,11 +717,7 @@ Image<uint8_t> createShape(ShapeBuffer3x3 & buffer, ConnectivityType connectivit
  * @brief Implementation details for connectedComponents
  * @sa connectedComponents
  */
-template<ConnectivityType connectivity, class Label, class IsBg>
-Label connectedComponentsImpl(
-  const Image<uint8_t> & image, Image<Label> & labels,
-  imgproc_impl::EquivalenceLabelTrees<Label> & label_trees, const IsBg & is_background)
-{
+template<ConnectivityType connectivity, class Label, class IsBg> Label connectedComponentsImpl( const Image<uint8_t> & image, Image<Label> & labels, imgproc_impl::EquivalenceLabelTrees<Label> & label_trees, const IsBg & is_background) {
   using namespace imgproc_impl;
   using PixelPass = ProcessPixel<connectivity>;
 
@@ -855,9 +761,7 @@ Label connectedComponentsImpl(
     // scan last column
     if (image.columns() > 1) {
       auto last_img = makeSafeWindow(up, current, image.columns(), image.columns() - 1);
-      auto last_label = makeSafeWindow(
-        labels.row(row), labels.row(row + 1),
-        image.columns(), image.columns() - 1);
+      auto last_label = makeSafeWindow( labels.row(row), labels.row(row + 1), image.columns(), image.columns() - 1);
       PixelPass::pass(last_img, last_label, label_trees, is_background);
     }
   }
@@ -866,10 +770,7 @@ Label connectedComponentsImpl(
   const std::vector<Label> & labels_map = label_trees.getLabels();
 
   // labeling phase
-  labels.forEach(
-    [&](Label & l) {
-      l = labels_map[l];
-    });
+  labels.forEach( [&](Label & l) { l = labels_map[l]; });
   return labels_map.size();
 }
 
@@ -882,8 +783,7 @@ class GroupsRemover
 {
 public:
   /// @brief Constructs the object and initializes the label tree
-  GroupsRemover()
-  {
+  GroupsRemover() {
     label_trees_ = std::make_unique<imgproc_impl::EquivalenceLabelTrees<uint16_t>>();
   }
 
@@ -898,20 +798,11 @@ public:
    * size will be kept
    * @param is_background returns true if the passed pixel value is background
    */
-  template<class IsBg>
-  void removeGroups(
-    Image<uint8_t> & image, MemoryBuffer & buffer,
-    ConnectivityType group_connectivity_type, size_t minimal_group_size,
-    const IsBg & is_background) const
-  {
+  template<class IsBg> void removeGroups( Image<uint8_t> & image, MemoryBuffer & buffer, ConnectivityType group_connectivity_type, size_t minimal_group_size, const IsBg & is_background) const {
     if (group_connectivity_type == ConnectivityType::Way4) {
-      removeGroupsPickLabelType<ConnectivityType::Way4>(
-        image, buffer, minimal_group_size,
-        is_background);
+      removeGroupsPickLabelType<ConnectivityType::Way4>( image, buffer, minimal_group_size, is_background);
     } else {
-      removeGroupsPickLabelType<ConnectivityType::Way8>(
-        image, buffer, minimal_group_size,
-        is_background);
+      removeGroupsPickLabelType<ConnectivityType::Way8>( image, buffer, minimal_group_size, is_background);
     }
   }
 
@@ -923,33 +814,22 @@ private:
    * @throw imgproc_impl::LabelOverflow if 32 bit label tree is not enough
    * to complete the operation
    */
-  template<ConnectivityType connectivity, class IsBg>
-  void removeGroupsPickLabelType(
-    Image<uint8_t> & image, MemoryBuffer & buffer,
-    size_t minimal_group_size, const IsBg & is_background) const
-  {
+  template<ConnectivityType connectivity, class IsBg> void removeGroupsPickLabelType( Image<uint8_t> & image, MemoryBuffer & buffer, size_t minimal_group_size, const IsBg & is_background) const {
     bool success{};
-    auto label_trees16 =
-      dynamic_cast<imgproc_impl::EquivalenceLabelTrees<uint16_t> *>(label_trees_.get());
+    auto label_trees16 = dynamic_cast<imgproc_impl::EquivalenceLabelTrees<uint16_t> *>(label_trees_.get());
 
     if (label_trees16) {
-      success = tryRemoveGroupsWithLabelType<connectivity>(
-        image, buffer, minimal_group_size,
-        *label_trees16, is_background, false);
+      success = tryRemoveGroupsWithLabelType<connectivity>( image, buffer, minimal_group_size, *label_trees16, is_background, false);
     }
 
     if (!success) {
-      auto label_trees32 =
-        dynamic_cast<imgproc_impl::EquivalenceLabelTrees<uint32_t> *>(label_trees_.get());
+      auto label_trees32 = dynamic_cast<imgproc_impl::EquivalenceLabelTrees<uint32_t> *>(label_trees_.get());
 
       if (!label_trees32) {
         label_trees_ = std::make_unique<imgproc_impl::EquivalenceLabelTrees<uint32_t>>();
-        label_trees32 =
-          dynamic_cast<imgproc_impl::EquivalenceLabelTrees<uint32_t> *>(label_trees_.get());
+        label_trees32 = dynamic_cast<imgproc_impl::EquivalenceLabelTrees<uint32_t> *>(label_trees_.get());
       }
-      tryRemoveGroupsWithLabelType<connectivity>(
-        image, buffer, minimal_group_size, *label_trees32,
-        is_background, true);
+      tryRemoveGroupsWithLabelType<connectivity>( image, buffer, minimal_group_size, *label_trees32, is_background, true);
     }
   }
   /**
@@ -960,13 +840,7 @@ private:
    * @return true if removeGroupsImpl throw and throw_on_label_overflow false.
    * False in other case
    */
-  template<ConnectivityType connectivity, class Label, class IsBg>
-  bool tryRemoveGroupsWithLabelType(
-    Image<uint8_t> & image, MemoryBuffer & buffer, size_t minimal_group_size,
-    imgproc_impl::EquivalenceLabelTrees<Label> & label_trees,
-    const IsBg & is_background,
-    bool throw_on_label_overflow) const
-  {
+  template<ConnectivityType connectivity, class Label, class IsBg> bool tryRemoveGroupsWithLabelType( Image<uint8_t> & image, MemoryBuffer & buffer, size_t minimal_group_size, imgproc_impl::EquivalenceLabelTrees<Label> & label_trees, const IsBg & is_background, bool throw_on_label_overflow) const {
     bool success{};
     try {
       removeGroupsImpl<connectivity>(image, buffer, label_trees, minimal_group_size, is_background);
@@ -979,23 +853,15 @@ private:
     return success;
   }
   /// @brief Eliminate group noise in the image
-  template<ConnectivityType connectivity, class Label, class IsBg>
-  void removeGroupsImpl(
-    Image<uint8_t> & image, MemoryBuffer & buffer,
-    imgproc_impl::EquivalenceLabelTrees<Label> & label_trees, size_t minimal_group_size,
-    const IsBg & is_background) const
-  {
+  template<ConnectivityType connectivity, class Label, class IsBg> void removeGroupsImpl( Image<uint8_t> & image, MemoryBuffer & buffer, imgproc_impl::EquivalenceLabelTrees<Label> & label_trees, size_t minimal_group_size, const IsBg & is_background) const {
     // Creates an image labels in which each obstacles group is labeled with a unique code
     Label groups_count;
-    auto labels = connectedComponents<connectivity>(
-      image, buffer, label_trees,
-      is_background, groups_count);
+    auto labels = connectedComponents<connectivity>( image, buffer, label_trees, is_background, groups_count);
 
     // Calculates the size of each group.
     // Group size is equal to the number of pixels with the same label
     const Label max_label_value = groups_count - 1;  // It's safe. groups_count always non-zero
-    std::vector<size_t> groups_sizes = histogram(
-      labels, max_label_value, size_t(minimal_group_size + 1));
+    std::vector<size_t> groups_sizes = histogram( labels, max_label_value, size_t(minimal_group_size + 1));
 
     // The group of pixels labeled 0 corresponds to empty map cells.
     // Zero bin of the histogram is equal to the number of pixels in this group.
@@ -1004,20 +870,11 @@ private:
 
     // noise_labels_table[i] = true if group with label i is noise
     std::vector<bool> noise_labels_table(groups_sizes.size());
-    auto transform_fn = [&minimal_group_size](size_t bin_value) {
-        return bin_value < minimal_group_size;
-      };
-    std::transform(
-      groups_sizes.begin(), groups_sizes.end(), noise_labels_table.begin(),
-      transform_fn);
+    auto transform_fn = [&minimal_group_size](size_t bin_value) { return bin_value < minimal_group_size; };
+    std::transform( groups_sizes.begin(), groups_sizes.end(), noise_labels_table.begin(), transform_fn);
 
     // Replace the pixel values from the small groups to background code
-    labels.convert(
-      image, [&](Label src, uint8_t & trg) {
-        if (!is_background(trg) && noise_labels_table[src]) {
-          trg = 0;
-        }
-      });
+    labels.convert( image, [&](Label src, uint8_t & trg) { if (!is_background(trg) && noise_labels_table[src]) { trg = 0; } });
   }
 
 private:
@@ -1026,13 +883,7 @@ private:
 
 }  // namespace imgproc_impl
 
-template<ConnectivityType connectivity, class Label, class IsBg>
-Image<Label> connectedComponents(
-  const Image<uint8_t> & image, MemoryBuffer & buffer,
-  imgproc_impl::EquivalenceLabelTrees<Label> & label_trees,
-  const IsBg & is_background,
-  Label & total_labels)
-{
+template<ConnectivityType connectivity, class Label, class IsBg> Image<Label> connectedComponents( const Image<uint8_t> & image, MemoryBuffer & buffer, imgproc_impl::EquivalenceLabelTrees<Label> & label_trees, const IsBg & is_background, Label & total_labels) {
   using namespace imgproc_impl;
   const size_t pixels = image.rows() * image.columns();
 
@@ -1044,9 +895,7 @@ Image<Label> connectedComponents(
   Label * image_buffer = buffer.get<Label>(pixels);
   Image<Label> labels(image.rows(), image.columns(), image_buffer, image.columns());
   label_trees.reset(image.rows(), image.columns(), connectivity);
-  total_labels = connectedComponentsImpl<connectivity>(
-    image, labels, label_trees,
-    is_background);
+  total_labels = connectedComponentsImpl<connectivity>( image, labels, label_trees, is_background);
   return labels;
 }
 

@@ -31,11 +31,9 @@ public:
   virtual void reset() {}
   virtual bool isClearable() {return false;}
 
-  virtual void updateBounds(
-    double, double, double, double *, double *, double *, double *);
+  virtual void updateBounds( double, double, double, double *, double *, double *, double *);
 
-  virtual void updateCosts(
-    nav2_costmap_2d::Costmap2D &, int, int, int, int);
+  virtual void updateCosts( nav2_costmap_2d::Costmap2D &, int, int, int, int);
 
 private:
   bool activated_;

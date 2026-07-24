@@ -78,35 +78,24 @@ private:
   /**
    * @brief Callback to clear costmap except in a given region
    */
-  void clearExceptRegionCallback(
-    const std::shared_ptr<rmw_request_id_t> request_header,
-    const std::shared_ptr<nav2_msgs::srv::ClearCostmapExceptRegion::Request> request,
-    const std::shared_ptr<nav2_msgs::srv::ClearCostmapExceptRegion::Response> response);
+  void clearExceptRegionCallback( const std::shared_ptr<rmw_request_id_t> request_header, const std::shared_ptr<nav2_msgs::srv::ClearCostmapExceptRegion::Request> request, const std::shared_ptr<nav2_msgs::srv::ClearCostmapExceptRegion::Response> response);
 
   rclcpp::Service<nav2_msgs::srv::ClearCostmapAroundRobot>::SharedPtr clear_around_service_;
   /**
    * @brief Callback to clear costmap in a given region
    */
-  void clearAroundRobotCallback(
-    const std::shared_ptr<rmw_request_id_t> request_header,
-    const std::shared_ptr<nav2_msgs::srv::ClearCostmapAroundRobot::Request> request,
-    const std::shared_ptr<nav2_msgs::srv::ClearCostmapAroundRobot::Response> response);
+  void clearAroundRobotCallback( const std::shared_ptr<rmw_request_id_t> request_header, const std::shared_ptr<nav2_msgs::srv::ClearCostmapAroundRobot::Request> request, const std::shared_ptr<nav2_msgs::srv::ClearCostmapAroundRobot::Response> response);
 
   rclcpp::Service<nav2_msgs::srv::ClearEntireCostmap>::SharedPtr clear_entire_service_;
   /**
    * @brief Callback to clear costmap
    */
-  void clearEntireCallback(
-    const std::shared_ptr<rmw_request_id_t> request_header,
-    const std::shared_ptr<nav2_msgs::srv::ClearEntireCostmap::Request> request,
-    const std::shared_ptr<nav2_msgs::srv::ClearEntireCostmap::Response> response);
+  void clearEntireCallback( const std::shared_ptr<rmw_request_id_t> request_header, const std::shared_ptr<nav2_msgs::srv::ClearEntireCostmap::Request> request, const std::shared_ptr<nav2_msgs::srv::ClearEntireCostmap::Response> response);
 
   /**
    * @brief  Function used to clear a given costmap layer
    */
-  void clearLayerRegion(
-    std::shared_ptr<CostmapLayer> & costmap, double pose_x, double pose_y, double reset_distance,
-    bool invert);
+  void clearLayerRegion( std::shared_ptr<CostmapLayer> & costmap, double pose_x, double pose_y, double reset_distance, bool invert);
 
   /**
    * @brief Get the robot's position in the costmap using the master costmap

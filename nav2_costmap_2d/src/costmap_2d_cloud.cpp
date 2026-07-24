@@ -37,14 +37,7 @@
 #include "nav2_msgs/msg/voxel_grid.hpp"
 #include "nav2_util/execution_timer.hpp"
 
-static inline void mapToWorld3D(
-  const unsigned int mx,
-  const unsigned int my, const unsigned int mz,
-  const double origin_x, const double origin_y, const double origin_z,
-  const double x_resolution, const double y_resolution,
-  const double z_resolution,
-  double & wx, double & wy, double & wz)
-{
+static inline void mapToWorld3D(const unsigned int mx, const unsigned int my, const unsigned int mz, const double origin_x, const double origin_y, const double origin_z, const double x_resolution, const double y_resolution, const double z_resolution, double & wx, double & wy, double & wz) {
   // returns the center point of the cell
   wx = origin_x + (mx + 0.5) * x_resolution;
   wy = origin_y + (my + 0.5) * y_resolution;
@@ -80,12 +73,7 @@ rclcpp::Publisher<sensor_msgs::msg::PointCloud2>::SharedPtr pub_unknown;
  * @param header Carries the header information that needs to be assigned to PointCloud2 header
  * @param g_cells contains the x, y, z values that needs to be added to the PointCloud2
  */
-void pointCloud2Helper(
-  std::unique_ptr<sensor_msgs::msg::PointCloud2> & cloud,
-  uint32_t num_channels,
-  std_msgs::msg::Header header,
-  V_Cell & g_cells)
-{
+void pointCloud2Helper(std::unique_ptr<sensor_msgs::msg::PointCloud2> & cloud, uint32_t num_channels, std_msgs::msg::Header header, V_Cell & g_cells) {
   cloud->header = header;
   cloud->width = num_channels;
   cloud->height = 1;
@@ -93,13 +81,7 @@ void pointCloud2Helper(
   cloud->is_bigendian = false;
   sensor_msgs::PointCloud2Modifier modifier(*cloud);
 
-  modifier.setPointCloud2Fields(
-    6, "x", 1, sensor_msgs::msg::PointField::FLOAT32,
-    "y", 1, sensor_msgs::msg::PointField::FLOAT32,
-    "z", 1, sensor_msgs::msg::PointField::FLOAT32,
-    "r", 1, sensor_msgs::msg::PointField::UINT8,
-    "g", 1, sensor_msgs::msg::PointField::UINT8,
-    "b", 1, sensor_msgs::msg::PointField::UINT8);
+  modifier.setPointCloud2Fields(6, "x", 1, sensor_msgs::msg::PointField::FLOAT32, "y", 1, sensor_msgs::msg::PointField::FLOAT32, "z", 1, sensor_msgs::msg::PointField::FLOAT32, "r", 1, sensor_msgs::msg::PointField::UINT8, "g", 1, sensor_msgs::msg::PointField::UINT8, "b", 1, sensor_msgs::msg::PointField::UINT8);
 
   sensor_msgs::PointCloud2Iterator<float> iter_x(*cloud, "x");
   sensor_msgs::PointCloud2Iterator<float> iter_y(*cloud, "y");
@@ -128,8 +110,7 @@ void pointCloud2Helper(
   }
 }
 
-void voxelCallback(const nav2_msgs::msg::VoxelGrid::ConstSharedPtr grid)
-{
+void voxelCallback(const nav2_msgs::msg::VoxelGrid::ConstSharedPtr grid) {
   if (grid->data.empty()) {
     RCLCPP_ERROR(g_node->get_logger(), "Received empty voxel grid");
     return;
@@ -159,16 +140,11 @@ void voxelCallback(const nav2_msgs::msg::VoxelGrid::ConstSharedPtr grid)
   for (uint32_t y_grid = 0; y_grid < y_size; ++y_grid) {
     for (uint32_t x_grid = 0; x_grid < x_size; ++x_grid) {
       for (uint32_t z_grid = 0; z_grid < z_size; ++z_grid) {
-        nav2_voxel_grid::VoxelStatus status =
-          nav2_voxel_grid::VoxelGrid::getVoxel(
-          x_grid, y_grid,
-          z_grid, x_size, y_size, z_size, data);
+        nav2_voxel_grid::VoxelStatus status = nav2_voxel_grid::VoxelGrid::getVoxel(x_grid, y_grid, z_grid, x_size, y_size, z_size, data);
         if (status == nav2_voxel_grid::UNKNOWN) {
           Cell c;
           c.status = status;
-          mapToWorld3D(
-            x_grid, y_grid, z_grid, x_origin, y_origin,
-            z_origin, x_res, y_res, z_res, c.x, c.y, c.z);
+          mapToWorld3D(x_grid, y_grid, z_grid, x_origin, y_origin, z_origin, x_res, y_res, z_res, c.x, c.y, c.z);
 
           g_unknown.push_back(c);
 
@@ -176,9 +152,7 @@ void voxelCallback(const nav2_msgs::msg::VoxelGrid::ConstSharedPtr grid)
         } else if (status == nav2_voxel_grid::MARKED) {
           Cell c;
           c.status = status;
-          mapToWorld3D(
-            x_grid, y_grid, z_grid, x_origin, y_origin,
-            z_origin, x_res, y_res, z_res, c.x, c.y, c.z);
+          mapToWorld3D(x_grid, y_grid, z_grid, x_origin, y_origin, z_origin, x_res, y_res, z_res, c.x, c.y, c.z);
 
           g_marked.push_back(c);
 
@@ -205,24 +179,18 @@ void voxelCallback(const nav2_msgs::msg::VoxelGrid::ConstSharedPtr grid)
   }
 
   timer.end();
-  RCLCPP_DEBUG(
-    g_node->get_logger(), "Published %d points in %f seconds",
-    num_marked + num_unknown, timer.elapsed_time_in_seconds());
+  RCLCPP_DEBUG(g_node->get_logger(), "Published %d points in %f seconds", num_marked + num_unknown, timer.elapsed_time_in_seconds());
 }
 
-int main(int argc, char ** argv)
-{
+int main(int argc, char ** argv) {
   rclcpp::init(argc, argv);
   g_node = rclcpp::Node::make_shared("costmap_2d_cloud");
 
   RCLCPP_DEBUG(g_node->get_logger(), "Starting up costmap_2d_cloud");
 
-  pub_marked = g_node->create_publisher<sensor_msgs::msg::PointCloud2>(
-    "voxel_marked_cloud", 1);
-  pub_unknown = g_node->create_publisher<sensor_msgs::msg::PointCloud2>(
-    "voxel_unknown_cloud", 1);
-  auto sub = g_node->create_subscription<nav2_msgs::msg::VoxelGrid>(
-    "voxel_grid", rclcpp::SystemDefaultsQoS(), voxelCallback);
+  pub_marked = g_node->create_publisher<sensor_msgs::msg::PointCloud2>("voxel_marked_cloud", 1);
+  pub_unknown = g_node->create_publisher<sensor_msgs::msg::PointCloud2>("voxel_unknown_cloud", 1);
+  auto sub = g_node->create_subscription<nav2_msgs::msg::VoxelGrid>("voxel_grid", rclcpp::SystemDefaultsQoS(), voxelCallback);
 
   rclcpp::spin(g_node->get_node_base_interface());
   rclcpp::shutdown();

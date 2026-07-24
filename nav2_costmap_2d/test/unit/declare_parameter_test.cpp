@@ -36,11 +36,9 @@ class LayerWrapper : public nav2_costmap_2d::Layer
   bool isClearable() {return false;}
 };
 
-TEST(DeclareParameter, useValidParameter)
-{
+TEST(DeclareParameter, useValidParameter) {
   LayerWrapper layer;
-  nav2_util::LifecycleNode::SharedPtr node =
-    std::make_shared<nav2_util::LifecycleNode>("test_node");
+  nav2_util::LifecycleNode::SharedPtr node = std::make_shared<nav2_util::LifecycleNode>("test_node");
   tf2_ros::Buffer tf(node->get_clock());
   nav2_costmap_2d::LayeredCostmap layers("frame", false, false);
 
@@ -55,11 +53,9 @@ TEST(DeclareParameter, useValidParameter)
   }
 }
 
-TEST(DeclareParameter, useInvalidParameter)
-{
+TEST(DeclareParameter, useInvalidParameter) {
   LayerWrapper layer;
-  nav2_util::LifecycleNode::SharedPtr node =
-    std::make_shared<nav2_util::LifecycleNode>("test_node");
+  nav2_util::LifecycleNode::SharedPtr node = std::make_shared<nav2_util::LifecycleNode>("test_node");
   tf2_ros::Buffer tf(node->get_clock());
   nav2_costmap_2d::LayeredCostmap layers("frame", false, false);
 

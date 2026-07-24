@@ -54,14 +54,10 @@ static constexpr double EPSILON = 1e-5;
 class InfoPublisher : public rclcpp::Node
 {
 public:
-  InfoPublisher(uint8_t type, double base, double multiplier)
-  : Node("costmap_filter_info_pub")
-  {
-    publisher_ = this->create_publisher<nav2_msgs::msg::CostmapFilterInfo>(
-      INFO_TOPIC, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
+  InfoPublisher(uint8_t type, double base, double multiplier) : Node("costmap_filter_info_pub") {
+    publisher_ = this->create_publisher<nav2_msgs::msg::CostmapFilterInfo>( INFO_TOPIC, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
 
-    std::unique_ptr<nav2_msgs::msg::CostmapFilterInfo> msg =
-      std::make_unique<nav2_msgs::msg::CostmapFilterInfo>();
+    std::unique_ptr<nav2_msgs::msg::CostmapFilterInfo> msg = std::make_unique<nav2_msgs::msg::CostmapFilterInfo>();
     msg->type = type;
     msg->filter_mask_topic = MASK_TOPIC;
     msg->base = static_cast<float>(base);
@@ -70,8 +66,7 @@ public:
     publisher_->publish(std::move(msg));
   }
 
-  ~InfoPublisher()
-  {
+  ~InfoPublisher() {
     publisher_.reset();
   }
 
@@ -82,18 +77,13 @@ private:
 class MaskPublisher : public rclcpp::Node
 {
 public:
-  explicit MaskPublisher(const nav_msgs::msg::OccupancyGrid & mask)
-  : Node("mask_pub")
-  {
-    publisher_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>(
-      MASK_TOPIC,
-      rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
+  explicit MaskPublisher(const nav_msgs::msg::OccupancyGrid & mask) : Node("mask_pub") {
+    publisher_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>( MASK_TOPIC, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
 
     publisher_->publish(mask);
   }
 
-  ~MaskPublisher()
-  {
+  ~MaskPublisher() {
     publisher_.reset();
   }
 
@@ -104,33 +94,24 @@ private:
 class SpeedLimitSubscriber : public rclcpp::Node
 {
 public:
-  explicit SpeedLimitSubscriber(const std::string & speed_limit_topic)
-  : Node("speed_limit_sub"), speed_limit_updated_(false)
-  {
-    subscriber_ = this->create_subscription<nav2_msgs::msg::SpeedLimit>(
-      speed_limit_topic, rclcpp::QoS(10),
-      std::bind(&SpeedLimitSubscriber::speedLimitCallback, this, std::placeholders::_1));
+  explicit SpeedLimitSubscriber(const std::string & speed_limit_topic) : Node("speed_limit_sub"), speed_limit_updated_(false) {
+    subscriber_ = this->create_subscription<nav2_msgs::msg::SpeedLimit>( speed_limit_topic, rclcpp::QoS(10), std::bind(&SpeedLimitSubscriber::speedLimitCallback, this, std::placeholders::_1));
   }
 
-  void speedLimitCallback(
-    const nav2_msgs::msg::SpeedLimit::SharedPtr msg)
-  {
+  void speedLimitCallback( const nav2_msgs::msg::SpeedLimit::SharedPtr msg) {
     msg_ = msg;
     speed_limit_updated_ = true;
   }
 
-  nav2_msgs::msg::SpeedLimit::SharedPtr getSpeedLimit()
-  {
+  nav2_msgs::msg::SpeedLimit::SharedPtr getSpeedLimit() {
     return msg_;
   }
 
-  inline bool speedLimitUpdated()
-  {
+  inline bool speedLimitUpdated() {
     return speed_limit_updated_;
   }
 
-  inline void resetSpeedLimitIndicator()
-  {
+  inline void resetSpeedLimitIndicator() {
     speed_limit_updated_ = false;
   }
 
@@ -143,11 +124,7 @@ private:
 class TestMask : public nav_msgs::msg::OccupancyGrid
 {
 public:
-  TestMask(
-    unsigned int width, unsigned int height, double resolution,
-    const std::string & mask_frame)
-  : width_(width), height_(height)
-  {
+  TestMask( unsigned int width, unsigned int height, double resolution, const std::string & mask_frame) : width_(width), height_(height) {
     // Fill filter mask info
     header.frame_id = mask_frame;
     info.resolution = resolution;
@@ -189,8 +166,7 @@ public:
     }
   }
 
-  inline int8_t makeData(unsigned int mx, unsigned int my)
-  {
+  inline int8_t makeData(unsigned int mx, unsigned int my) {
     return mx + (my - 1) * width_ + 1;
   }
 
@@ -216,12 +192,8 @@ protected:
   void publishTransform();
 
   // Test methods
-  void testFullMask(
-    uint8_t type, double base, double multiplier,
-    double tr_x, double tr_y);
-  void testSimpleMask(
-    uint8_t type, double base, double multiplier,
-    double tr_x, double tr_y);
+  void testFullMask( uint8_t type, double base, double multiplier, double tr_x, double tr_y);
+  void testSimpleMask( uint8_t type, double base, double multiplier, double tr_x, double tr_y);
   void testOutOfMask(uint8_t type, double base, double multiplier);
   void testIncorrectLimits(uint8_t type, double base, double multiplier);
 
@@ -232,10 +204,7 @@ protected:
 
 private:
   void waitSome(const std::chrono::nanoseconds & duration);
-  void verifySpeedLimit(
-    uint8_t type, double base, double multiplier,
-    unsigned int x, unsigned int y,
-    nav2_msgs::msg::SpeedLimit::SharedPtr speed_limit);
+  void verifySpeedLimit( uint8_t type, double base, double multiplier, unsigned int x, unsigned int y, nav2_msgs::msg::SpeedLimit::SharedPtr speed_limit);
   nav2_msgs::msg::SpeedLimit::SharedPtr getSpeedLimit();
   nav2_msgs::msg::SpeedLimit::SharedPtr waitSpeedLimit();
 
@@ -257,8 +226,7 @@ private:
   std::shared_ptr<SpeedLimitSubscriber> speed_limit_subscriber_;
 };
 
-void TestNode::createMaps(const std::string & mask_frame)
-{
+void TestNode::createMaps(const std::string & mask_frame) {
   // Make map and mask put as follows:
   //  master_grid     (12,13)
   //    *----------------*
@@ -275,21 +243,18 @@ void TestNode::createMaps(const std::string & mask_frame)
   // (-2,-2)
 
   // Create master_grid_
-  master_grid_ = std::make_shared<nav2_costmap_2d::Costmap2D>(
-    width_ + 4, height_ + 4, resolution_, -2.0, -2.0, nav2_costmap_2d::FREE_SPACE);
+  master_grid_ = std::make_shared<nav2_costmap_2d::Costmap2D>( width_ + 4, height_ + 4, resolution_, -2.0, -2.0, nav2_costmap_2d::FREE_SPACE);
 
   // Create mask_
   mask_ = std::make_shared<TestMask>(width_, height_, resolution_, mask_frame);
 }
 
-void TestNode::publishMaps(uint8_t type, double base, double multiplier)
-{
+void TestNode::publishMaps(uint8_t type, double base, double multiplier) {
   info_publisher_ = std::make_shared<InfoPublisher>(type, base, multiplier);
   mask_publisher_ = std::make_shared<MaskPublisher>(*mask_);
 }
 
-void TestNode::rePublishInfo(uint8_t type, double base, double multiplier)
-{
+void TestNode::rePublishInfo(uint8_t type, double base, double multiplier) {
   info_publisher_.reset();
   info_publisher_ = std::make_shared<InfoPublisher>(type, base, multiplier);
   // Allow both CostmapFilterInfo and filter mask subscribers
@@ -297,23 +262,20 @@ void TestNode::rePublishInfo(uint8_t type, double base, double multiplier)
   waitSome(100ms);
 }
 
-void TestNode::rePublishMask()
-{
+void TestNode::rePublishMask() {
   mask_publisher_.reset();
   mask_publisher_ = std::make_shared<MaskPublisher>(*mask_);
   // Allow filter mask subscriber to receive a new message
   waitSome(100ms);
 }
 
-nav2_msgs::msg::SpeedLimit::SharedPtr TestNode::getSpeedLimit()
-{
+nav2_msgs::msg::SpeedLimit::SharedPtr TestNode::getSpeedLimit() {
   std::this_thread::sleep_for(100ms);
   rclcpp::spin_some(speed_limit_subscriber_);
   return speed_limit_subscriber_->getSpeedLimit();
 }
 
-nav2_msgs::msg::SpeedLimit::SharedPtr TestNode::waitSpeedLimit()
-{
+nav2_msgs::msg::SpeedLimit::SharedPtr TestNode::waitSpeedLimit() {
   const std::chrono::nanoseconds timeout = 500ms;
 
   rclcpp::Time start_time = node_->now();
@@ -329,8 +291,7 @@ nav2_msgs::msg::SpeedLimit::SharedPtr TestNode::waitSpeedLimit()
   return nullptr;
 }
 
-void TestNode::waitSome(const std::chrono::nanoseconds & duration)
-{
+void TestNode::waitSome(const std::chrono::nanoseconds & duration) {
   rclcpp::Time start_time = node_->now();
   while (rclcpp::ok() && node_->now() - start_time <= rclcpp::Duration(duration)) {
     rclcpp::spin_some(node_->get_node_base_interface());
@@ -339,8 +300,7 @@ void TestNode::waitSome(const std::chrono::nanoseconds & duration)
   }
 }
 
-bool TestNode::createSpeedFilter(const std::string & global_frame)
-{
+bool TestNode::createSpeedFilter(const std::string & global_frame) {
   node_ = std::make_shared<nav2_util::LifecycleNode>("test_node");
   tf_buffer_ = std::make_shared<tf2_ros::Buffer>(node_->get_clock());
   tf_buffer_->setUsingDedicatedThread(true);  // One-thread broadcasting-listening model
@@ -348,18 +308,12 @@ bool TestNode::createSpeedFilter(const std::string & global_frame)
 
   nav2_costmap_2d::LayeredCostmap layers(global_frame, false, false);
 
-  node_->declare_parameter(
-    std::string(FILTER_NAME) + ".transform_tolerance", rclcpp::ParameterValue(0.5));
-  node_->set_parameter(
-    rclcpp::Parameter(std::string(FILTER_NAME) + ".transform_tolerance", 0.5));
-  node_->declare_parameter(
-    std::string(FILTER_NAME) + ".filter_info_topic", rclcpp::ParameterValue(INFO_TOPIC));
-  node_->set_parameter(
-    rclcpp::Parameter(std::string(FILTER_NAME) + ".filter_info_topic", INFO_TOPIC));
-  node_->declare_parameter(
-    std::string(FILTER_NAME) + ".speed_limit_topic", rclcpp::ParameterValue(SPEED_LIMIT_TOPIC));
-  node_->set_parameter(
-    rclcpp::Parameter(std::string(FILTER_NAME) + ".speed_limit_topic", SPEED_LIMIT_TOPIC));
+  node_->declare_parameter( std::string(FILTER_NAME) + ".transform_tolerance", rclcpp::ParameterValue(0.5));
+  node_->set_parameter( rclcpp::Parameter(std::string(FILTER_NAME) + ".transform_tolerance", 0.5));
+  node_->declare_parameter( std::string(FILTER_NAME) + ".filter_info_topic", rclcpp::ParameterValue(INFO_TOPIC));
+  node_->set_parameter( rclcpp::Parameter(std::string(FILTER_NAME) + ".filter_info_topic", INFO_TOPIC));
+  node_->declare_parameter( std::string(FILTER_NAME) + ".speed_limit_topic", rclcpp::ParameterValue(SPEED_LIMIT_TOPIC));
+  node_->set_parameter( rclcpp::Parameter(std::string(FILTER_NAME) + ".speed_limit_topic", SPEED_LIMIT_TOPIC));
 
   speed_filter_ = std::make_shared<nav2_costmap_2d::SpeedFilter>();
   speed_filter_->initialize(&layers, FILTER_NAME, tf_buffer_.get(), node_, nullptr);
@@ -380,8 +334,7 @@ bool TestNode::createSpeedFilter(const std::string & global_frame)
   return true;
 }
 
-void TestNode::createTFBroadcaster(const std::string & mask_frame, const std::string & global_frame)
-{
+void TestNode::createTFBroadcaster(const std::string & mask_frame, const std::string & global_frame) {
   tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(node_);
 
   transform_ = std::make_unique<geometry_msgs::msg::TransformStamped>();
@@ -403,19 +356,14 @@ void TestNode::createTFBroadcaster(const std::string & mask_frame, const std::st
   waitSome(100ms);
 }
 
-void TestNode::publishTransform()
-{
+void TestNode::publishTransform() {
   if (tf_broadcaster_) {
     transform_->header.stamp = node_->now() + rclcpp::Duration(100ms);
     tf_broadcaster_->sendTransform(*transform_);
   }
 }
 
-void TestNode::verifySpeedLimit(
-  uint8_t type, double base, double multiplier,
-  unsigned int x, unsigned int y,
-  nav2_msgs::msg::SpeedLimit::SharedPtr speed_limit)
-{
+void TestNode::verifySpeedLimit( uint8_t type, double base, double multiplier, unsigned int x, unsigned int y, nav2_msgs::msg::SpeedLimit::SharedPtr speed_limit) {
   int8_t cost = mask_->makeData(x, y);
   // expected_limit is being calculated by using float32 base and multiplier
   double expected_limit = cost * multiplier + base;
@@ -439,10 +387,7 @@ void TestNode::verifySpeedLimit(
   }
 }
 
-void TestNode::testFullMask(
-  uint8_t type, double base, double multiplier,
-  double tr_x, double tr_y)
-{
+void TestNode::testFullMask( uint8_t type, double base, double multiplier, double tr_x, double tr_y) {
   const int min_i = 0;
   const int min_j = 0;
   const int max_i = width_ + 4;
@@ -492,10 +437,7 @@ void TestNode::testFullMask(
   EXPECT_EQ(speed_limit->speed_limit, nav2_costmap_2d::NO_SPEED_LIMIT);
 }
 
-void TestNode::testSimpleMask(
-  uint8_t type, double base, double multiplier,
-  double tr_x, double tr_y)
-{
+void TestNode::testSimpleMask( uint8_t type, double base, double multiplier, double tr_x, double tr_y) {
   const int min_i = 0;
   const int min_j = 0;
   const int max_i = width_ + 4;
@@ -553,8 +495,7 @@ void TestNode::testSimpleMask(
   EXPECT_EQ(speed_limit->speed_limit, nav2_costmap_2d::NO_SPEED_LIMIT);
 }
 
-void TestNode::testOutOfMask(uint8_t type, double base, double multiplier)
-{
+void TestNode::testOutOfMask(uint8_t type, double base, double multiplier) {
   const int min_i = 0;
   const int min_j = 0;
   const int max_i = width_ + 4;
@@ -585,8 +526,7 @@ void TestNode::testOutOfMask(uint8_t type, double base, double multiplier)
   ASSERT_TRUE(speed_limit == old_speed_limit);
 }
 
-void TestNode::testIncorrectLimits(uint8_t type, double base, double multiplier)
-{
+void TestNode::testIncorrectLimits(uint8_t type, double base, double multiplier) {
   const int min_i = 0;
   const int min_j = 0;
   const int max_i = width_ + 4;
@@ -617,8 +557,7 @@ void TestNode::testIncorrectLimits(uint8_t type, double base, double multiplier)
   }
 }
 
-void TestNode::reset()
-{
+void TestNode::reset() {
   mask_.reset();
   master_grid_.reset();
   info_publisher_.reset();
@@ -631,8 +570,7 @@ void TestNode::reset()
   tf_buffer_.reset();
 }
 
-TEST_F(TestNode, testPercentSpeedLimit)
-{
+TEST_F(TestNode, testPercentSpeedLimit) {
   // Initialize test system
   createMaps("map");
   publishMaps(nav2_costmap_2d::SPEED_FILTER_PERCENT, 0.0, 1.0);
@@ -646,8 +584,7 @@ TEST_F(TestNode, testPercentSpeedLimit)
   reset();
 }
 
-TEST_F(TestNode, testIncorrectPercentSpeedLimit)
-{
+TEST_F(TestNode, testIncorrectPercentSpeedLimit) {
   // Initialize test system
   createMaps("map");
   publishMaps(nav2_costmap_2d::SPEED_FILTER_PERCENT, -50.0, 2.0);
@@ -661,8 +598,7 @@ TEST_F(TestNode, testIncorrectPercentSpeedLimit)
   reset();
 }
 
-TEST_F(TestNode, testAbsoluteSpeedLimit)
-{
+TEST_F(TestNode, testAbsoluteSpeedLimit) {
   // Initialize test system
   createMaps("map");
   publishMaps(nav2_costmap_2d::SPEED_FILTER_ABSOLUTE, 1.23, 4.5);
@@ -676,8 +612,7 @@ TEST_F(TestNode, testAbsoluteSpeedLimit)
   reset();
 }
 
-TEST_F(TestNode, testIncorrectAbsoluteSpeedLimit)
-{
+TEST_F(TestNode, testIncorrectAbsoluteSpeedLimit) {
   // Initialize test system
   createMaps("map");
   publishMaps(nav2_costmap_2d::SPEED_FILTER_ABSOLUTE, -50.0, 2.0);
@@ -691,8 +626,7 @@ TEST_F(TestNode, testIncorrectAbsoluteSpeedLimit)
   reset();
 }
 
-TEST_F(TestNode, testOutOfBounds)
-{
+TEST_F(TestNode, testOutOfBounds) {
   // Initialize test system
   createMaps("map");
   publishMaps(nav2_costmap_2d::SPEED_FILTER_PERCENT, 0.0, 1.0);
@@ -706,8 +640,7 @@ TEST_F(TestNode, testOutOfBounds)
   reset();
 }
 
-TEST_F(TestNode, testInfoRePublish)
-{
+TEST_F(TestNode, testInfoRePublish) {
   // Initialize test system
   createMaps("map");
   publishMaps(nav2_costmap_2d::SPEED_FILTER_ABSOLUTE, 1.23, 4.5);
@@ -718,16 +651,14 @@ TEST_F(TestNode, testInfoRePublish)
   rePublishInfo(nav2_costmap_2d::SPEED_FILTER_PERCENT, 0.1, 0.2);
 
   // Test SpeedFilter
-  testSimpleMask(
-    nav2_costmap_2d::SPEED_FILTER_PERCENT, 0.1, 0.2, NO_TRANSLATION, NO_TRANSLATION);
+  testSimpleMask( nav2_costmap_2d::SPEED_FILTER_PERCENT, 0.1, 0.2, NO_TRANSLATION, NO_TRANSLATION);
 
   // Clean-up
   speed_filter_->resetFilter();
   reset();
 }
 
-TEST_F(TestNode, testMaskRePublish)
-{
+TEST_F(TestNode, testMaskRePublish) {
   // Initialize test system
   createMaps("map");
   publishMaps(nav2_costmap_2d::SPEED_FILTER_ABSOLUTE, 1.23, 4.5);
@@ -737,16 +668,14 @@ TEST_F(TestNode, testMaskRePublish)
   rePublishMask();
 
   // Test SpeedFilter
-  testSimpleMask(
-    nav2_costmap_2d::SPEED_FILTER_ABSOLUTE, 1.23, 4.5, NO_TRANSLATION, NO_TRANSLATION);
+  testSimpleMask( nav2_costmap_2d::SPEED_FILTER_ABSOLUTE, 1.23, 4.5, NO_TRANSLATION, NO_TRANSLATION);
 
   // Clean-up
   speed_filter_->resetFilter();
   reset();
 }
 
-TEST_F(TestNode, testIncorrectFilterType)
-{
+TEST_F(TestNode, testIncorrectFilterType) {
   // Initialize test system
   createMaps("map");
   publishMaps(INCORRECT_TYPE, 1.23, 4.5);
@@ -757,8 +686,7 @@ TEST_F(TestNode, testIncorrectFilterType)
   reset();
 }
 
-TEST_F(TestNode, testDifferentFrame)
-{
+TEST_F(TestNode, testDifferentFrame) {
   // Initialize test system
   createMaps("map");
   publishMaps(nav2_costmap_2d::SPEED_FILTER_PERCENT, 0.0, 1.0);
@@ -773,8 +701,7 @@ TEST_F(TestNode, testDifferentFrame)
   reset();
 }
 
-int main(int argc, char ** argv)
-{
+int main(int argc, char ** argv) {
   // Initialize the system
   testing::InitGoogleTest(&argc, argv);
   rclcpp::init(argc, argv);

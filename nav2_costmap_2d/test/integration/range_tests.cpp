@@ -56,13 +56,11 @@ using std::string;
 class RclCppFixture
 {
 public:
-  RclCppFixture()
-  {
+  RclCppFixture() {
     rclcpp::init(0, nullptr);
   }
 
-  ~RclCppFixture()
-  {
+  ~RclCppFixture() {
     rclcpp::shutdown();
   }
 };
@@ -72,38 +70,30 @@ RclCppFixture g_rclcppfixture;
 class TestLifecycleNode : public nav2_util::LifecycleNode
 {
 public:
-  explicit TestLifecycleNode(const string & name)
-  : nav2_util::LifecycleNode(name)
-  {
+  explicit TestLifecycleNode(const string & name) : nav2_util::LifecycleNode(name) {
   }
 
-  nav2_util::CallbackReturn on_configure(const rclcpp_lifecycle::State &)
-  {
+  nav2_util::CallbackReturn on_configure(const rclcpp_lifecycle::State &) {
     return nav2_util::CallbackReturn::SUCCESS;
   }
 
-  nav2_util::CallbackReturn on_activate(const rclcpp_lifecycle::State &)
-  {
+  nav2_util::CallbackReturn on_activate(const rclcpp_lifecycle::State &) {
     return nav2_util::CallbackReturn::SUCCESS;
   }
 
-  nav2_util::CallbackReturn on_deactivate(const rclcpp_lifecycle::State &)
-  {
+  nav2_util::CallbackReturn on_deactivate(const rclcpp_lifecycle::State &) {
     return nav2_util::CallbackReturn::SUCCESS;
   }
 
-  nav2_util::CallbackReturn on_cleanup(const rclcpp_lifecycle::State &)
-  {
+  nav2_util::CallbackReturn on_cleanup(const rclcpp_lifecycle::State &) {
     return nav2_util::CallbackReturn::SUCCESS;
   }
 
-  nav2_util::CallbackReturn onShutdown(const rclcpp_lifecycle::State &)
-  {
+  nav2_util::CallbackReturn onShutdown(const rclcpp_lifecycle::State &) {
     return nav2_util::CallbackReturn::SUCCESS;
   }
 
-  nav2_util::CallbackReturn onError(const rclcpp_lifecycle::State &)
-  {
+  nav2_util::CallbackReturn onError(const rclcpp_lifecycle::State &) {
     return nav2_util::CallbackReturn::SUCCESS;
   }
 };
@@ -111,19 +101,14 @@ public:
 class TestNode : public ::testing::Test
 {
 public:
-  TestNode()
-  : node_(std::make_shared<TestLifecycleNode>("range_test_node")),
-    tf_(node_->get_clock())
-  {
+  TestNode() : node_(std::make_shared<TestLifecycleNode>("range_test_node")), tf_(node_->get_clock()) {
     tf_.setUsingDedicatedThread(true);
     // Standard non-plugin specific parameters
     node_->declare_parameter("map_topic", rclcpp::ParameterValue(std::string("map")));
     node_->declare_parameter("track_unknown_space", rclcpp::ParameterValue(false));
     node_->declare_parameter("use_maximum", rclcpp::ParameterValue(false));
     node_->declare_parameter("lethal_cost_threshold", rclcpp::ParameterValue(100));
-    node_->declare_parameter(
-      "unknown_cost_value",
-      rclcpp::ParameterValue(static_cast<unsigned char>(0xff)));
+    node_->declare_parameter( "unknown_cost_value", rclcpp::ParameterValue(static_cast<unsigned char>(0xff)));
     node_->declare_parameter("trinary_costmap", rclcpp::ParameterValue(true));
     node_->declare_parameter("transform_tolerance", rclcpp::ParameterValue(0.3));
     node_->declare_parameter("observation_sources", rclcpp::ParameterValue(std::string("range")));
@@ -131,10 +116,7 @@ public:
 
 
     // Range sensor specific parameters
-    node_->declare_parameter(
-      "range.topics",
-      rclcpp::ParameterValue(
-        std::vector<std::string>{"/range/topic"}));
+    node_->declare_parameter( "range.topics", rclcpp::ParameterValue( std::vector<std::string>{"/range/topic"}));
     node_->declare_parameter("range.phi", rclcpp::ParameterValue(1.2));
     node_->declare_parameter("range.clear_on_max_reading", rclcpp::ParameterValue(true));
   }

@@ -52,14 +52,10 @@ static const uint8_t INCORRECT_TYPE = 200;
 class InfoPublisher : public rclcpp::Node
 {
 public:
-  InfoPublisher(uint8_t type, const char * mask_topic, double base, double multiplier)
-  : Node("costmap_filter_info_pub")
-  {
-    publisher_ = this->create_publisher<nav2_msgs::msg::CostmapFilterInfo>(
-      INFO_TOPIC, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
+  InfoPublisher(uint8_t type, const char * mask_topic, double base, double multiplier) : Node("costmap_filter_info_pub") {
+    publisher_ = this->create_publisher<nav2_msgs::msg::CostmapFilterInfo>( INFO_TOPIC, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
 
-    std::unique_ptr<nav2_msgs::msg::CostmapFilterInfo> msg =
-      std::make_unique<nav2_msgs::msg::CostmapFilterInfo>();
+    std::unique_ptr<nav2_msgs::msg::CostmapFilterInfo> msg = std::make_unique<nav2_msgs::msg::CostmapFilterInfo>();
     msg->type = type;
     msg->filter_mask_topic = mask_topic;
     msg->base = static_cast<float>(base);
@@ -68,8 +64,7 @@ public:
     publisher_->publish(std::move(msg));
   }
 
-  ~InfoPublisher()
-  {
+  ~InfoPublisher() {
     publisher_.reset();
   }
 
@@ -80,18 +75,13 @@ private:
 class MaskPublisher : public rclcpp::Node
 {
 public:
-  explicit MaskPublisher(const nav_msgs::msg::OccupancyGrid & mask)
-  : Node("mask_pub")
-  {
-    publisher_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>(
-      MASK_TOPIC,
-      rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
+  explicit MaskPublisher(const nav_msgs::msg::OccupancyGrid & mask) : Node("mask_pub") {
+    publisher_ = this->create_publisher<nav_msgs::msg::OccupancyGrid>( MASK_TOPIC, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
 
     publisher_->publish(mask);
   }
 
-  ~MaskPublisher()
-  {
+  ~MaskPublisher() {
     publisher_.reset();
   }
 
@@ -102,37 +92,28 @@ private:
 class BinaryStateSubscriber : public rclcpp::Node
 {
 public:
-  explicit BinaryStateSubscriber(const std::string & binary_state_topic, bool default_state)
-  : Node("binary_state_sub"), binary_state_updated_(false)
-  {
-    subscriber_ = this->create_subscription<std_msgs::msg::Bool>(
-      binary_state_topic, rclcpp::QoS(10),
-      std::bind(&BinaryStateSubscriber::binaryStateCallback, this, std::placeholders::_1));
+  explicit BinaryStateSubscriber(const std::string & binary_state_topic, bool default_state) : Node("binary_state_sub"), binary_state_updated_(false) {
+    subscriber_ = this->create_subscription<std_msgs::msg::Bool>( binary_state_topic, rclcpp::QoS(10), std::bind(&BinaryStateSubscriber::binaryStateCallback, this, std::placeholders::_1));
 
     // Initialize with default state
     msg_ = std::make_shared<std_msgs::msg::Bool>();
     msg_->data = default_state;
   }
 
-  void binaryStateCallback(
-    const std_msgs::msg::Bool::SharedPtr msg)
-  {
+  void binaryStateCallback( const std_msgs::msg::Bool::SharedPtr msg) {
     msg_ = msg;
     binary_state_updated_ = true;
   }
 
-  std_msgs::msg::Bool::SharedPtr getBinaryState()
-  {
+  std_msgs::msg::Bool::SharedPtr getBinaryState() {
     return msg_;
   }
 
-  inline bool binaryStateUpdated()
-  {
+  inline bool binaryStateUpdated() {
     return binary_state_updated_;
   }
 
-  inline void resetBinaryStateIndicator()
-  {
+  inline void resetBinaryStateIndicator() {
     binary_state_updated_ = false;
   }
 
@@ -145,11 +126,7 @@ private:
 class TestMask : public nav_msgs::msg::OccupancyGrid
 {
 public:
-  TestMask(
-    unsigned int width, unsigned int height, double resolution,
-    const std::string & mask_frame)
-  : width_(width), height_(height)
-  {
+  TestMask( unsigned int width, unsigned int height, double resolution, const std::string & mask_frame) : width_(width), height_(height) {
     // Fill filter mask info
     header.frame_id = mask_frame;
     info.resolution = resolution;
@@ -191,8 +168,7 @@ public:
     }
   }
 
-  inline int8_t makeData(unsigned int mx, unsigned int my)
-  {
+  inline int8_t makeData(unsigned int mx, unsigned int my) {
     return mx + (my - 1) * width_ + 1;
   }
 
@@ -204,8 +180,7 @@ private:
 class TestNode : public ::testing::Test
 {
 public:
-  TestNode()
-  : default_state_(false) {}
+  TestNode() : default_state_(false) {}
 
   ~TestNode() {}
 
@@ -220,10 +195,8 @@ protected:
   void publishTransform();
 
   // Test methods
-  void testFullMask(
-    double base, double multiplier, double flip_threshold, double tr_x, double tr_y);
-  void testSimpleMask(
-    double base, double multiplier, double flip_threshold, double tr_x, double tr_y);
+  void testFullMask( double base, double multiplier, double flip_threshold, double tr_x, double tr_y);
+  void testSimpleMask( double base, double multiplier, double flip_threshold, double tr_x, double tr_y);
   void testOutOfMask();
   void testIncorrectTF();
   void testResetFilter();
@@ -240,8 +213,7 @@ private:
   void waitSome(const std::chrono::nanoseconds & duration);
   std_msgs::msg::Bool::SharedPtr getBinaryState();
   std_msgs::msg::Bool::SharedPtr waitBinaryState();
-  bool getSign(
-    unsigned int x, unsigned int y, double base, double multiplier, double flip_threshold);
+  bool getSign( unsigned int x, unsigned int y, double base, double multiplier, double flip_threshold);
   void verifyBinaryState(bool sign, std_msgs::msg::Bool::SharedPtr state);
 
   const unsigned int width_ = 10;
@@ -262,8 +234,7 @@ private:
   std::shared_ptr<BinaryStateSubscriber> binary_state_subscriber_;
 };
 
-void TestNode::createMaps(const std::string & mask_frame)
-{
+void TestNode::createMaps(const std::string & mask_frame) {
   // Make map and mask put as follows:
   //  master_grid     (12,13)
   //    *----------------*
@@ -280,23 +251,18 @@ void TestNode::createMaps(const std::string & mask_frame)
   // (-2,-2)
 
   // Create master_grid_
-  master_grid_ = std::make_shared<nav2_costmap_2d::Costmap2D>(
-    width_ + 4, height_ + 4, resolution_, -2.0, -2.0, nav2_costmap_2d::FREE_SPACE);
+  master_grid_ = std::make_shared<nav2_costmap_2d::Costmap2D>( width_ + 4, height_ + 4, resolution_, -2.0, -2.0, nav2_costmap_2d::FREE_SPACE);
 
   // Create mask_
   mask_ = std::make_shared<TestMask>(width_, height_, resolution_, mask_frame);
 }
 
-void TestNode::publishMaps(
-  uint8_t type, const char * mask_topic, double base, double multiplier)
-{
+void TestNode::publishMaps( uint8_t type, const char * mask_topic, double base, double multiplier) {
   info_publisher_ = std::make_shared<InfoPublisher>(type, mask_topic, base, multiplier);
   mask_publisher_ = std::make_shared<MaskPublisher>(*mask_);
 }
 
-void TestNode::rePublishInfo(
-  uint8_t type, const char * mask_topic, double base, double multiplier)
-{
+void TestNode::rePublishInfo( uint8_t type, const char * mask_topic, double base, double multiplier) {
   info_publisher_.reset();
   info_publisher_ = std::make_shared<InfoPublisher>(type, mask_topic, base, multiplier);
   // Allow both CostmapFilterInfo and filter mask subscribers
@@ -304,16 +270,14 @@ void TestNode::rePublishInfo(
   waitSome(100ms);
 }
 
-void TestNode::rePublishMask()
-{
+void TestNode::rePublishMask() {
   mask_publisher_.reset();
   mask_publisher_ = std::make_shared<MaskPublisher>(*mask_);
   // Allow filter mask subscriber to receive a new message
   waitSome(100ms);
 }
 
-void TestNode::waitSome(const std::chrono::nanoseconds & duration)
-{
+void TestNode::waitSome(const std::chrono::nanoseconds & duration) {
   rclcpp::Time start_time = node_->now();
   while (rclcpp::ok() && node_->now() - start_time <= rclcpp::Duration(duration)) {
     rclcpp::spin_some(node_->get_node_base_interface());
@@ -322,15 +286,13 @@ void TestNode::waitSome(const std::chrono::nanoseconds & duration)
   }
 }
 
-std_msgs::msg::Bool::SharedPtr TestNode::getBinaryState()
-{
+std_msgs::msg::Bool::SharedPtr TestNode::getBinaryState() {
   std::this_thread::sleep_for(100ms);
   rclcpp::spin_some(binary_state_subscriber_);
   return binary_state_subscriber_->getBinaryState();
 }
 
-std_msgs::msg::Bool::SharedPtr TestNode::waitBinaryState()
-{
+std_msgs::msg::Bool::SharedPtr TestNode::waitBinaryState() {
   const std::chrono::nanoseconds timeout = 500ms;
 
   rclcpp::Time start_time = node_->now();
@@ -346,13 +308,11 @@ std_msgs::msg::Bool::SharedPtr TestNode::waitBinaryState()
   return nullptr;
 }
 
-void TestNode::setDefaultState(bool default_state)
-{
+void TestNode::setDefaultState(bool default_state) {
   default_state_ = default_state;
 }
 
-bool TestNode::createBinaryFilter(const std::string & global_frame, double flip_threshold)
-{
+bool TestNode::createBinaryFilter(const std::string & global_frame, double flip_threshold) {
   node_ = std::make_shared<nav2_util::LifecycleNode>("test_node");
   tf_buffer_ = std::make_shared<tf2_ros::Buffer>(node_->get_clock());
   tf_buffer_->setUsingDedicatedThread(true);  // One-thread broadcasting-listening model
@@ -360,33 +320,22 @@ bool TestNode::createBinaryFilter(const std::string & global_frame, double flip_
 
   nav2_costmap_2d::LayeredCostmap layers(global_frame, false, false);
 
-  node_->declare_parameter(
-    std::string(FILTER_NAME) + ".transform_tolerance", rclcpp::ParameterValue(0.5));
-  node_->set_parameter(
-    rclcpp::Parameter(std::string(FILTER_NAME) + ".transform_tolerance", 0.5));
-  node_->declare_parameter(
-    std::string(FILTER_NAME) + ".filter_info_topic", rclcpp::ParameterValue(INFO_TOPIC));
-  node_->set_parameter(
-    rclcpp::Parameter(std::string(FILTER_NAME) + ".filter_info_topic", INFO_TOPIC));
-  node_->declare_parameter(
-    std::string(FILTER_NAME) + ".default_state", rclcpp::ParameterValue(default_state_));
-  node_->set_parameter(
-    rclcpp::Parameter(std::string(FILTER_NAME) + ".default_state", default_state_));
-  node_->declare_parameter(
-    std::string(FILTER_NAME) + ".binary_state_topic", rclcpp::ParameterValue(BINARY_STATE_TOPIC));
-  node_->set_parameter(
-    rclcpp::Parameter(std::string(FILTER_NAME) + ".binary_state_topic", BINARY_STATE_TOPIC));
-  node_->declare_parameter(
-    std::string(FILTER_NAME) + ".flip_threshold", rclcpp::ParameterValue(flip_threshold));
-  node_->set_parameter(
-    rclcpp::Parameter(std::string(FILTER_NAME) + ".flip_threshold", flip_threshold));
+  node_->declare_parameter( std::string(FILTER_NAME) + ".transform_tolerance", rclcpp::ParameterValue(0.5));
+  node_->set_parameter( rclcpp::Parameter(std::string(FILTER_NAME) + ".transform_tolerance", 0.5));
+  node_->declare_parameter( std::string(FILTER_NAME) + ".filter_info_topic", rclcpp::ParameterValue(INFO_TOPIC));
+  node_->set_parameter( rclcpp::Parameter(std::string(FILTER_NAME) + ".filter_info_topic", INFO_TOPIC));
+  node_->declare_parameter( std::string(FILTER_NAME) + ".default_state", rclcpp::ParameterValue(default_state_));
+  node_->set_parameter( rclcpp::Parameter(std::string(FILTER_NAME) + ".default_state", default_state_));
+  node_->declare_parameter( std::string(FILTER_NAME) + ".binary_state_topic", rclcpp::ParameterValue(BINARY_STATE_TOPIC));
+  node_->set_parameter( rclcpp::Parameter(std::string(FILTER_NAME) + ".binary_state_topic", BINARY_STATE_TOPIC));
+  node_->declare_parameter( std::string(FILTER_NAME) + ".flip_threshold", rclcpp::ParameterValue(flip_threshold));
+  node_->set_parameter( rclcpp::Parameter(std::string(FILTER_NAME) + ".flip_threshold", flip_threshold));
 
   binary_filter_ = std::make_shared<nav2_costmap_2d::BinaryFilter>();
   binary_filter_->initialize(&layers, FILTER_NAME, tf_buffer_.get(), node_, nullptr);
   binary_filter_->initializeFilter(INFO_TOPIC);
 
-  binary_state_subscriber_ =
-    std::make_shared<BinaryStateSubscriber>(BINARY_STATE_TOPIC, default_state_);
+  binary_state_subscriber_ = std::make_shared<BinaryStateSubscriber>(BINARY_STATE_TOPIC, default_state_);
 
   // Wait until mask will be received by BinaryFilter
   const std::chrono::nanoseconds timeout = 500ms;
@@ -401,8 +350,7 @@ bool TestNode::createBinaryFilter(const std::string & global_frame, double flip_
   return true;
 }
 
-void TestNode::createTFBroadcaster(const std::string & mask_frame, const std::string & global_frame)
-{
+void TestNode::createTFBroadcaster(const std::string & mask_frame, const std::string & global_frame) {
   tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(node_);
 
   transform_ = std::make_unique<geometry_msgs::msg::TransformStamped>();
@@ -424,23 +372,19 @@ void TestNode::createTFBroadcaster(const std::string & mask_frame, const std::st
   waitSome(100ms);
 }
 
-void TestNode::publishTransform()
-{
+void TestNode::publishTransform() {
   if (tf_broadcaster_) {
     transform_->header.stamp = node_->now() + rclcpp::Duration(100ms);
     tf_broadcaster_->sendTransform(*transform_);
   }
 }
 
-bool TestNode::getSign(
-  unsigned int x, unsigned int y, double base, double multiplier, double flip_threshold)
-{
+bool TestNode::getSign( unsigned int x, unsigned int y, double base, double multiplier, double flip_threshold) {
   const int8_t cost = mask_->makeData(x, y);
   return base + cost * multiplier > flip_threshold;
 }
 
-void TestNode::verifyBinaryState(bool sign, std_msgs::msg::Bool::SharedPtr state)
-{
+void TestNode::verifyBinaryState(bool sign, std_msgs::msg::Bool::SharedPtr state) {
   ASSERT_TRUE(state != nullptr);
   if (sign) {
     EXPECT_FALSE(state->data == default_state_);
@@ -449,9 +393,7 @@ void TestNode::verifyBinaryState(bool sign, std_msgs::msg::Bool::SharedPtr state
   }
 }
 
-void TestNode::testFullMask(
-  double base, double multiplier, double flip_threshold, double tr_x, double tr_y)
-{
+void TestNode::testFullMask( double base, double multiplier, double flip_threshold, double tr_x, double tr_y) {
   const int min_i = 0;
   const int min_j = 0;
   const int max_i = width_ + 4;
@@ -514,9 +456,7 @@ void TestNode::testFullMask(
   ASSERT_EQ(binary_state->data, prev_state);  // Binary state won't be updated
 }
 
-void TestNode::testSimpleMask(
-  double base, double multiplier, double flip_threshold, double tr_x, double tr_y)
-{
+void TestNode::testSimpleMask( double base, double multiplier, double flip_threshold, double tr_x, double tr_y) {
   const int min_i = 0;
   const int min_j = 0;
   const int max_i = width_ + 4;
@@ -596,8 +536,7 @@ void TestNode::testSimpleMask(
   ASSERT_EQ(binary_state->data, prev_state);  // Binary state won't be updated
 }
 
-void TestNode::testOutOfMask()
-{
+void TestNode::testOutOfMask() {
   // base, multiplier and flip_threshold should have values as below for this test
   const double base = 0.0;
   const double multiplier = 1.0;
@@ -634,8 +573,7 @@ void TestNode::testOutOfMask()
   ASSERT_EQ(binary_state->data, default_state_);
 }
 
-void TestNode::testIncorrectTF()
-{
+void TestNode::testIncorrectTF() {
   const int min_i = 0;
   const int min_j = 0;
   const int max_i = width_ + 4;
@@ -652,8 +590,7 @@ void TestNode::testIncorrectTF()
   ASSERT_TRUE(binary_state == nullptr);
 }
 
-void TestNode::testResetFilter()
-{
+void TestNode::testResetFilter() {
   // base, multiplier and flip_threshold should have values as below for this test
   const double base = 0.0;
   const double multiplier = 1.0;
@@ -682,14 +619,12 @@ void TestNode::testResetFilter()
   ASSERT_EQ(binary_state->data, default_state_);
 }
 
-void TestNode::resetMaps()
-{
+void TestNode::resetMaps() {
   mask_.reset();
   master_grid_.reset();
 }
 
-void TestNode::reset()
-{
+void TestNode::reset() {
   resetMaps();
   info_publisher_.reset();
   mask_publisher_.reset();
@@ -701,8 +636,7 @@ void TestNode::reset()
   tf_buffer_.reset();
 }
 
-TEST_F(TestNode, testBinaryState)
-{
+TEST_F(TestNode, testBinaryState) {
   // Initialize test system
   createMaps("map");
   publishMaps(nav2_costmap_2d::BINARY_FILTER, MASK_TOPIC, 0.0, 1.0);
@@ -716,8 +650,7 @@ TEST_F(TestNode, testBinaryState)
   reset();
 }
 
-TEST_F(TestNode, testBinaryStateScaled)
-{
+TEST_F(TestNode, testBinaryStateScaled) {
   // Initialize test system
   createMaps("map");
   publishMaps(nav2_costmap_2d::BINARY_FILTER, MASK_TOPIC, 100.0, -1.0);
@@ -731,8 +664,7 @@ TEST_F(TestNode, testBinaryStateScaled)
   reset();
 }
 
-TEST_F(TestNode, testInvertedBinaryState)
-{
+TEST_F(TestNode, testInvertedBinaryState) {
   // Initialize test system
   createMaps("map");
   publishMaps(nav2_costmap_2d::BINARY_FILTER, MASK_TOPIC, 0.0, 1.0);
@@ -747,8 +679,7 @@ TEST_F(TestNode, testInvertedBinaryState)
   reset();
 }
 
-TEST_F(TestNode, testOutOfBounds)
-{
+TEST_F(TestNode, testOutOfBounds) {
   // Initialize test system
   createMaps("map");
   publishMaps(nav2_costmap_2d::BINARY_FILTER, MASK_TOPIC, 0.0, 1.0);
@@ -762,8 +693,7 @@ TEST_F(TestNode, testOutOfBounds)
   reset();
 }
 
-TEST_F(TestNode, testInfoRePublish)
-{
+TEST_F(TestNode, testInfoRePublish) {
   // Initialize test system
   createMaps("map");
   // Publish Info with incorrect dummy mask topic
@@ -782,8 +712,7 @@ TEST_F(TestNode, testInfoRePublish)
   reset();
 }
 
-TEST_F(TestNode, testMaskRePublish)
-{
+TEST_F(TestNode, testMaskRePublish) {
   // Create mask in incorrect frame
   createMaps("dummy");
   publishMaps(nav2_costmap_2d::BINARY_FILTER, MASK_TOPIC, 0.0, 1.0);
@@ -803,8 +732,7 @@ TEST_F(TestNode, testMaskRePublish)
   reset();
 }
 
-TEST_F(TestNode, testIncorrectFilterType)
-{
+TEST_F(TestNode, testIncorrectFilterType) {
   // Initialize test system
   createMaps("map");
   publishMaps(INCORRECT_TYPE, MASK_TOPIC, 0.0, 1.0);
@@ -815,8 +743,7 @@ TEST_F(TestNode, testIncorrectFilterType)
   reset();
 }
 
-TEST_F(TestNode, testDifferentFrame)
-{
+TEST_F(TestNode, testDifferentFrame) {
   // Initialize test system
   createMaps("map");
   publishMaps(nav2_costmap_2d::BINARY_FILTER, MASK_TOPIC, 0.0, 1.0);
@@ -831,8 +758,7 @@ TEST_F(TestNode, testDifferentFrame)
   reset();
 }
 
-TEST_F(TestNode, testIncorrectFrame)
-{
+TEST_F(TestNode, testIncorrectFrame) {
   // Initialize test system
   createMaps("map");
   publishMaps(nav2_costmap_2d::BINARY_FILTER, MASK_TOPIC, 0.0, 1.0);
@@ -847,8 +773,7 @@ TEST_F(TestNode, testIncorrectFrame)
   reset();
 }
 
-TEST_F(TestNode, testResetState)
-{
+TEST_F(TestNode, testResetState) {
   // Initialize test system
   createMaps("map");
   publishMaps(nav2_costmap_2d::BINARY_FILTER, MASK_TOPIC, 0.0, 1.0);
@@ -861,8 +786,7 @@ TEST_F(TestNode, testResetState)
   reset();
 }
 
-int main(int argc, char ** argv)
-{
+int main(int argc, char ** argv) {
   // Initialize the system
   testing::InitGoogleTest(&argc, argv);
   rclcpp::init(argc, argv);

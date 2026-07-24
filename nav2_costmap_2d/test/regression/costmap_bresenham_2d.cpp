@@ -39,20 +39,15 @@
 class CostmapAction
 {
 public:
-  explicit CostmapAction(
-    unsigned char * costmap, unsigned int size, unsigned char mark_val = 128)
-  : costmap_(costmap), size_(size), mark_val_(mark_val)
-  {
+  explicit CostmapAction( unsigned char * costmap, unsigned int size, unsigned char mark_val = 128) : costmap_(costmap), size_(size), mark_val_(mark_val) {
   }
 
-  inline void operator()(unsigned int off)
-  {
+  inline void operator()(unsigned int off) {
     ASSERT_TRUE(off < size_);
     costmap_[off] = mark_val_;
   }
 
-  inline unsigned int get(unsigned int off)
-  {
+  inline unsigned int get(unsigned int off) {
     return costmap_[off];
   }
 
@@ -65,34 +60,23 @@ private:
 class CostmapTest : public nav2_costmap_2d::Costmap2D
 {
 public:
-  CostmapTest(
-    unsigned int size_x, unsigned int size_y, double resolution,
-    double origin_x, double origin_y, unsigned char default_val = 0)
-  : nav2_costmap_2d::Costmap2D(size_x, size_y, resolution, origin_x, origin_y, default_val)
-  {
+  CostmapTest( unsigned int size_x, unsigned int size_y, double resolution, double origin_x, double origin_y, unsigned char default_val = 0) : nav2_costmap_2d::Costmap2D(size_x, size_y, resolution, origin_x, origin_y, default_val) {
   }
 
-  unsigned char * getCostmap()
-  {
+  unsigned char * getCostmap() {
     return costmap_;
   }
 
-  unsigned int getSize()
-  {
+  unsigned int getSize() {
     return size_x_ * size_y_;
   }
 
-  void raytraceLine(
-    CostmapAction ca, unsigned int x0, unsigned int y0, unsigned int x1,
-    unsigned int y1,
-    unsigned int max_length = UINT_MAX, unsigned int min_length = 0)
-  {
+  void raytraceLine( CostmapAction ca, unsigned int x0, unsigned int y0, unsigned int x1, unsigned int y1, unsigned int max_length = UINT_MAX, unsigned int min_length = 0) {
     nav2_costmap_2d::Costmap2D::raytraceLine(ca, x0, y0, x1, y1, max_length, min_length);
   }
 };
 
-TEST(costmap_2d, bresenham2DBoundariesCheck)
-{
+TEST(costmap_2d, bresenham2DBoundariesCheck) {
   const unsigned int sz_x = 60;
   const unsigned int sz_y = 60;
   const unsigned int max_length = 60;
@@ -131,8 +115,7 @@ TEST(costmap_2d, bresenham2DBoundariesCheck)
   }
 }
 
-TEST(costmap_2d, bresenham2DSamePoint)
-{
+TEST(costmap_2d, bresenham2DSamePoint) {
   const unsigned int sz_x = 60;
   const unsigned int sz_y = 60;
   const unsigned int max_length = 60;
@@ -152,8 +135,7 @@ TEST(costmap_2d, bresenham2DSamePoint)
   ASSERT_FALSE(val_before == val_after);
 }
 
-int main(int argc, char ** argv)
-{
+int main(int argc, char ** argv) {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

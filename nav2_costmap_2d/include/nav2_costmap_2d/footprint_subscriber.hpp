@@ -36,22 +36,12 @@ public:
   /**
    * @brief A constructor
    */
-  FootprintSubscriber(
-    const nav2_util::LifecycleNode::WeakPtr & parent,
-    const std::string & topic_name,
-    tf2_ros::Buffer & tf,
-    std::string robot_base_frame = "base_link",
-    double transform_tolerance = 0.1);
+  FootprintSubscriber( const nav2_util::LifecycleNode::WeakPtr & parent, const std::string & topic_name, tf2_ros::Buffer & tf, std::string robot_base_frame = "base_link", double transform_tolerance = 0.1);
 
   /**
    * @brief A constructor
    */
-  FootprintSubscriber(
-    const rclcpp::Node::WeakPtr & parent,
-    const std::string & topic_name,
-    tf2_ros::Buffer & tf,
-    std::string robot_base_frame = "base_link",
-    double transform_tolerance = 0.1);
+  FootprintSubscriber( const rclcpp::Node::WeakPtr & parent, const std::string & topic_name, tf2_ros::Buffer & tf, std::string robot_base_frame = "base_link", double transform_tolerance = 0.1);
 
   /**
    * @brief A destructor
@@ -65,9 +55,7 @@ public:
    * @param footprint_header Output param. Header associated with the footprint
    * @return False if no footprint has been received
    */
-  bool getFootprintRaw(
-    std::vector<geometry_msgs::msg::Point> & footprint,
-    std_msgs::msg::Header & footprint_header);
+  bool getFootprintRaw( std::vector<geometry_msgs::msg::Point> & footprint, std_msgs::msg::Header & footprint_header);
 
   /**
    * @brief Returns the latest robot footprint, transformed into robot base frame (unoriented).
@@ -76,9 +64,7 @@ public:
    * @param footprint_header Output param. Header associated with the footprint
    * @return False if no footprint has been received or if transformation failed
    */
-  bool getFootprintInRobotFrame(
-    std::vector<geometry_msgs::msg::Point> & footprint,
-    std_msgs::msg::Header & footprint_header);
+  bool getFootprintInRobotFrame( std::vector<geometry_msgs::msg::Point> & footprint, std_msgs::msg::Header & footprint_header);
 
 protected:
   /**

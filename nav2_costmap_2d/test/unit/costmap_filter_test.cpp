@@ -29,23 +29,17 @@ class CostmapFilterWrapper : public nav2_costmap_2d::CostmapFilter
 public:
   CostmapFilterWrapper() {}
 
-  bool worldToMask(
-    nav_msgs::msg::OccupancyGrid::ConstSharedPtr filter_mask,
-    double wx, double wy, unsigned int & mx, unsigned int & my) const
-  {
+  bool worldToMask( nav_msgs::msg::OccupancyGrid::ConstSharedPtr filter_mask, double wx, double wy, unsigned int & mx, unsigned int & my) const {
     return nav2_costmap_2d::CostmapFilter::worldToMask(filter_mask, wx, wy, mx, my);
   }
 
   // API coverage
   void initializeFilter(const std::string &) {}
-  void process(
-    nav2_costmap_2d::Costmap2D &, int, int, int, int, const geometry_msgs::msg::Pose2D &)
-  {}
+  void process( nav2_costmap_2d::Costmap2D &, int, int, int, int, const geometry_msgs::msg::Pose2D &) {}
   void resetFilter() {}
 };
 
-TEST(CostmapFilter, testWorldToMask)
-{
+TEST(CostmapFilter, testWorldToMask) {
   // Create occupancy grid for test as follows:
   //
   //   ^
@@ -89,8 +83,7 @@ TEST(CostmapFilter, testWorldToMask)
   ASSERT_FALSE(cf.worldToMask(mask, 6.0, 6.0, mx, my));
 }
 
-int main(int argc, char ** argv)
-{
+int main(int argc, char ** argv) {
   // Initialize the system
   testing::InitGoogleTest(&argc, argv);
   rclcpp::init(argc, argv);

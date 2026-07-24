@@ -58,9 +58,7 @@ namespace nav2_costmap_2d
  * @param min_dist Output parameter of the minimum distance
  * @param max_dist Output parameter of the maximum distance
  */
-void calculateMinAndMaxDistances(
-  const std::vector<geometry_msgs::msg::Point> & footprint,
-  double & min_dist, double & max_dist);
+void calculateMinAndMaxDistances( const std::vector<geometry_msgs::msg::Point> & footprint, double & min_dist, double & max_dist);
 
 /**
  * @brief Convert Point32 to Point
@@ -80,8 +78,7 @@ geometry_msgs::msg::Polygon toPolygon(std::vector<geometry_msgs::msg::Point> pts
 /**
  * @brief Convert Polygon msg to vector of Points.
  */
-std::vector<geometry_msgs::msg::Point> toPointVector(
-  geometry_msgs::msg::Polygon::SharedPtr polygon);
+std::vector<geometry_msgs::msg::Point> toPointVector( geometry_msgs::msg::Polygon::SharedPtr polygon);
 
 /**
  * @brief  Given a pose and base footprint, build the oriented footprint of the robot (list of Points)
@@ -91,10 +88,7 @@ std::vector<geometry_msgs::msg::Point> toPointVector(
  * @param  footprint_spec Basic shape of the footprint
  * @param  oriented_footprint Will be filled with the points in the oriented footprint of the robot
 */
-void transformFootprint(
-  double x, double y, double theta,
-  const std::vector<geometry_msgs::msg::Point> & footprint_spec,
-  std::vector<geometry_msgs::msg::Point> & oriented_footprint);
+void transformFootprint( double x, double y, double theta, const std::vector<geometry_msgs::msg::Point> & footprint_spec, std::vector<geometry_msgs::msg::Point> & oriented_footprint);
 
 /**
  * @brief  Given a pose and base footprint, build the oriented footprint of the robot (PolygonStamped)
@@ -104,10 +98,7 @@ void transformFootprint(
  * @param  footprint_spec Basic shape of the footprint
  * @param  oriented_footprint Will be filled with the points in the oriented footprint of the robot
 */
-void transformFootprint(
-  double x, double y, double theta,
-  const std::vector<geometry_msgs::msg::Point> & footprint_spec,
-  geometry_msgs::msg::PolygonStamped & oriented_footprint);
+void transformFootprint( double x, double y, double theta, const std::vector<geometry_msgs::msg::Point> & footprint_spec, geometry_msgs::msg::PolygonStamped & oriented_footprint);
 
 /**
  * @brief Adds the specified amount of padding to the footprint (in place)
@@ -125,9 +116,7 @@ std::vector<geometry_msgs::msg::Point> makeFootprintFromRadius(double radius);
  * Format should be bracketed array of arrays of floats, like so: [[1.0, 2.2], [3.3, 4.2], ...]
  *
  */
-bool makeFootprintFromString(
-  const std::string & footprint_string,
-  std::vector<geometry_msgs::msg::Point> & footprint);
+bool makeFootprintFromString( const std::string & footprint_string, std::vector<geometry_msgs::msg::Point> & footprint);
 
 }  // end namespace nav2_costmap_2d
 

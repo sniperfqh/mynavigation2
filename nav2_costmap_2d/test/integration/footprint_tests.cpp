@@ -55,16 +55,14 @@ RclCppFixture g_rclcppfixture;
 class FootprintTestNode
 {
 public:
-  FootprintTestNode()
-  {
+  FootprintTestNode() {
     // Default footprint padding and footprint radius from Costmap2DROS
     testFootprint(0.01f, 0.1);
   }
 
   ~FootprintTestNode() {}
 
-  void testFootprint(double footprint_padding, std::string footprint)
-  {
+  void testFootprint(double footprint_padding, std::string footprint) {
     footprint_padding_ = footprint_padding;
     if (footprint != "" && footprint != "[]") {
       std::vector<geometry_msgs::msg::Point> new_footprint;
@@ -76,20 +74,17 @@ public:
     }
   }
 
-  void testFootprint(double footprint_padding, double robot_radius)
-  {
+  void testFootprint(double footprint_padding, double robot_radius) {
     footprint_padding_ = footprint_padding;
     setRobotFootprint(nav2_costmap_2d::makeFootprintFromRadius(robot_radius));
   }
 
-  std::vector<geometry_msgs::msg::Point> getRobotFootprint()
-  {
+  std::vector<geometry_msgs::msg::Point> getRobotFootprint() {
     return footprint_;
   }
 
 protected:
-  void setRobotFootprint(const std::vector<geometry_msgs::msg::Point> & points)
-  {
+  void setRobotFootprint(const std::vector<geometry_msgs::msg::Point> & points) {
     footprint_ = points;
     nav2_costmap_2d::padFootprint(footprint_, footprint_padding_);
   }
@@ -101,8 +96,7 @@ protected:
 class TestNode : public ::testing::Test
 {
 public:
-  TestNode()
-  {
+  TestNode() {
     footprint_tester_ = std::make_shared<FootprintTestNode>();
   }
 
@@ -113,8 +107,7 @@ protected:
 };
 
 // Start with empty test before updating test footprints
-TEST_F(TestNode, footprint_empty)
-{
+TEST_F(TestNode, footprint_empty) {
   // FootprintTestNode cm("costmap_footprint_empty", *tf_);
   std::vector<geometry_msgs::msg::Point> footprint = footprint_tester_->getRobotFootprint();
   // With no specification of footprint or radius,
@@ -126,8 +119,7 @@ TEST_F(TestNode, footprint_empty)
   EXPECT_EQ(0.0f, footprint[0].z);
 }
 
-TEST_F(TestNode, unpadded_footprint_from_string_param)
-{
+TEST_F(TestNode, unpadded_footprint_from_string_param) {
   footprint_tester_->testFootprint(0.0, "[[1, 1], [-1, 1], [-1, -1]]");
 
   std::vector<geometry_msgs::msg::Point> footprint = footprint_tester_->getRobotFootprint();
@@ -146,8 +138,7 @@ TEST_F(TestNode, unpadded_footprint_from_string_param)
   EXPECT_EQ(0.0f, footprint[2].z);
 }
 
-TEST_F(TestNode, padded_footprint_from_string_param)
-{
+TEST_F(TestNode, padded_footprint_from_string_param) {
   footprint_tester_->testFootprint(0.5, "[[1, 1], [-1, 1], [-1, -1]]");
 
   std::vector<geometry_msgs::msg::Point> footprint = footprint_tester_->getRobotFootprint();
@@ -166,8 +157,7 @@ TEST_F(TestNode, padded_footprint_from_string_param)
   EXPECT_EQ(0.0f, footprint[2].z);
 }
 
-TEST_F(TestNode, radius_param)
-{
+TEST_F(TestNode, radius_param) {
   footprint_tester_->testFootprint(0, 10.0);
   std::vector<geometry_msgs::msg::Point> footprint = footprint_tester_->getRobotFootprint();
   // Circular robot has 16-point footprint auto-generated.
@@ -184,8 +174,7 @@ TEST_F(TestNode, radius_param)
   EXPECT_EQ(0.0f, footprint[4].z);
 }
 
-TEST_F(TestNode, footprint_from_same_level_param)
-{
+TEST_F(TestNode, footprint_from_same_level_param) {
   footprint_tester_->testFootprint(0.0, "[[1, 2], [3, 4], [5, 6]]");
   std::vector<geometry_msgs::msg::Point> footprint = footprint_tester_->getRobotFootprint();
   EXPECT_EQ(3u, footprint.size());

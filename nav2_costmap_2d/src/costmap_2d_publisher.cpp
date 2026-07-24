@@ -50,18 +50,7 @@ namespace nav2_costmap_2d
 
 char * Costmap2DPublisher::cost_translation_table_ = NULL;
 
-Costmap2DPublisher::Costmap2DPublisher(
-  const nav2_util::LifecycleNode::WeakPtr & parent,
-  Costmap2D * costmap,
-  std::string global_frame,
-  std::string topic_name,
-  bool always_send_full_costmap)
-: costmap_(costmap),
-  global_frame_(global_frame),
-  topic_name_(topic_name),
-  active_(false),
-  always_send_full_costmap_(always_send_full_costmap)
-{
+Costmap2DPublisher::Costmap2DPublisher(const nav2_util::LifecycleNode::WeakPtr & parent, Costmap2D * costmap, std::string global_frame, std::string topic_name, bool always_send_full_costmap) : costmap_(costmap), global_frame_(global_frame), topic_name_(topic_name), active_(false), always_send_full_costmap_(always_send_full_costmap) {
   auto node = parent.lock();
   clock_ = node->get_clock();
   logger_ = node->get_logger();
@@ -69,24 +58,13 @@ Costmap2DPublisher::Costmap2DPublisher(
   auto custom_qos = rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable();
 
   // TODO(bpwilcox): port onNewSubscription functionality for publisher
-  costmap_pub_ = node->create_publisher<nav_msgs::msg::OccupancyGrid>(
-    topic_name,
-    custom_qos);
-  costmap_raw_pub_ = node->create_publisher<nav2_msgs::msg::Costmap>(
-    topic_name + "_raw",
-    custom_qos);
-  costmap_update_pub_ = node->create_publisher<map_msgs::msg::OccupancyGridUpdate>(
-    topic_name + "_updates", custom_qos);
+  costmap_pub_ = node->create_publisher<nav_msgs::msg::OccupancyGrid>(topic_name, custom_qos);
+  costmap_raw_pub_ = node->create_publisher<nav2_msgs::msg::Costmap>(topic_name + "_raw", custom_qos);
+  costmap_update_pub_ = node->create_publisher<map_msgs::msg::OccupancyGridUpdate>(topic_name + "_updates", custom_qos);
 
   // Create a service that will use the callback function to handle requests.
-  costmap_service_ = node->create_service<nav2_msgs::srv::GetCostmap>(
-    "get_costmap", std::bind(
-      &Costmap2DPublisher::costmap_service_callback,
-      this, std::placeholders::_1, std::placeholders::_2,
-      std::placeholders::_3));
-  LOG_INFO(
-    "Costmap2DPublisher created topic='{}', global_frame='{}', always_send_full_costmap={}",
-    topic_name_.c_str(), global_frame_.c_str(), always_send_full_costmap_);
+  costmap_service_ = node->create_service<nav2_msgs::srv::GetCostmap>("get_costmap", std::bind(&Costmap2DPublisher::costmap_service_callback, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3));
+  LOG_INFO("Costmap2DPublisher created topic='{}', global_frame='{}', always_send_full_costmap={}", topic_name_.c_str(), global_frame_.c_str(), always_send_full_costmap_);
 
   if (cost_translation_table_ == NULL) {
     cost_translation_table_ = new char[256];
@@ -113,15 +91,13 @@ Costmap2DPublisher::~Costmap2DPublisher() {}
 
 // TODO(bpwilcox): find equivalent/workaround to ros::SingleSubscriberPublishr
 /*
-void Costmap2DPublisher::onNewSubscription(const ros::SingleSubscriberPublisher& pub)
-{
+void Costmap2DPublisher::onNewSubscription(const ros::SingleSubscriberPublisher& pub) {
   prepareGrid();
   pub.publish(grid_);
 } */
 
 // prepare grid_ message for publication.
-void Costmap2DPublisher::prepareGrid()
-{
+void Costmap2DPublisher::prepareGrid() {
   std::unique_lock<Costmap2D::mutex_t> lock(*(costmap_->getMutex()));
   // Output layer 1: translated OccupancyGrid for visualization. Internal cost values
   // 0-255 are mapped to -1..100 for nav_msgs/msg/OccupancyGrid consumers.
@@ -155,14 +131,10 @@ void Costmap2DPublisher::prepareGrid()
   for (unsigned int i = 0; i < grid_->data.size(); i++) {
     grid_->data[i] = cost_translation_table_[data[i]];
   }
-  LOG_INFO(
-    "Costmap2DPublisher prepared OccupancyGrid topic='{}', width={}, height={}, resolution={}, origin=({}, {})",
-    topic_name_.c_str(), grid_width, grid_height, grid_resolution,
-    grid_->info.origin.position.x, grid_->info.origin.position.y);
+  LOG_INFO("Costmap2DPublisher prepared OccupancyGrid topic='{}', width={}, height={}, resolution={}, origin=({}, {})", topic_name_.c_str(), grid_width, grid_height, grid_resolution, grid_->info.origin.position.x, grid_->info.origin.position.y);
 }
 
-void Costmap2DPublisher::prepareCostmap()
-{
+void Costmap2DPublisher::prepareCostmap() {
   std::unique_lock<Costmap2D::mutex_t> lock(*(costmap_->getMutex()));
   // Output layer 2: raw Nav2 costmap. This preserves internal 0-255 costs for Nav2 tools.
   // 中文：输出层 2：Nav2 raw Costmap，保留内部 0-255 代价值。
@@ -192,15 +164,10 @@ void Costmap2DPublisher::prepareCostmap()
   for (unsigned int i = 0; i < costmap_raw_->data.size(); i++) {
     costmap_raw_->data[i] = data[i];
   }
-  LOG_INFO(
-    "Costmap2DPublisher prepared raw Costmap topic='{}_raw', size_x={}, size_y={}, resolution={}, origin=({}, {})",
-    topic_name_.c_str(), costmap_raw_->metadata.size_x, costmap_raw_->metadata.size_y,
-    resolution, costmap_raw_->metadata.origin.position.x,
-    costmap_raw_->metadata.origin.position.y);
+  LOG_INFO("Costmap2DPublisher prepared raw Costmap topic='{}_raw', size_x={}, size_y={}, resolution={}, origin=({}, {})", topic_name_.c_str(), costmap_raw_->metadata.size_x, costmap_raw_->metadata.size_y, resolution, costmap_raw_->metadata.origin.position.x, costmap_raw_->metadata.origin.position.y);
 }
 
-void Costmap2DPublisher::publishCostmap()
-{
+void Costmap2DPublisher::publishCostmap() {
   if (costmap_raw_pub_->get_subscription_count() > 0) {
     prepareCostmap();
     costmap_raw_pub_->publish(std::move(costmap_raw_));
@@ -208,18 +175,12 @@ void Costmap2DPublisher::publishCostmap()
   }
   float resolution = costmap_->getResolution();
 
-  if (always_send_full_costmap_ || grid_resolution != resolution ||
-    grid_width != costmap_->getSizeInCellsX() ||
-    grid_height != costmap_->getSizeInCellsY() ||
-    saved_origin_x_ != costmap_->getOriginX() ||
-    saved_origin_y_ != costmap_->getOriginY())
+  if (always_send_full_costmap_ || grid_resolution != resolution || grid_width != costmap_->getSizeInCellsX() || grid_height != costmap_->getSizeInCellsY() || saved_origin_x_ != costmap_->getOriginX() || saved_origin_y_ != costmap_->getOriginY())
   {
     if (costmap_pub_->get_subscription_count() > 0) {
       prepareGrid();
       costmap_pub_->publish(std::move(grid_));
-      LOG_INFO(
-        "Costmap2DPublisher published full OccupancyGrid topic='{}'",
-        topic_name_.c_str());
+      LOG_INFO("Costmap2DPublisher published full OccupancyGrid topic='{}'", topic_name_.c_str());
     }
   } else if (x0_ < xn_) {
     if (costmap_update_pub_->get_subscription_count() > 0) {
@@ -242,9 +203,7 @@ void Costmap2DPublisher::publishCostmap()
         }
       }
       costmap_update_pub_->publish(std::move(update));
-      LOG_INFO(
-        "Costmap2DPublisher published OccupancyGridUpdate topic='{}_updates', x={}, y={}, width={}, height={}",
-        topic_name_.c_str(), x0_, y0_, xn_ - x0_, yn_ - y0_);
+      LOG_INFO("Costmap2DPublisher published OccupancyGridUpdate topic='{}_updates', x={}, y={}, width={}, height={}", topic_name_.c_str(), x0_, y0_, xn_ - x0_, yn_ - y0_);
     }
   }
 
@@ -253,12 +212,7 @@ void Costmap2DPublisher::publishCostmap()
   y0_ = costmap_->getSizeInCellsY();
 }
 
-void
-Costmap2DPublisher::costmap_service_callback(
-  const std::shared_ptr<rmw_request_id_t>/*request_header*/,
-  const std::shared_ptr<nav2_msgs::srv::GetCostmap::Request>/*request*/,
-  const std::shared_ptr<nav2_msgs::srv::GetCostmap::Response> response)
-{
+void Costmap2DPublisher::costmap_service_callback(const std::shared_ptr<rmw_request_id_t>/*request_header*/, const std::shared_ptr<nav2_msgs::srv::GetCostmap::Request>/*request*/, const std::shared_ptr<nav2_msgs::srv::GetCostmap::Response> response) {
   RCLCPP_DEBUG(logger_, "Received costmap service request");
   LOG_INFO("Costmap2DPublisher handling GetCostmap service request");
 
@@ -286,9 +240,7 @@ Costmap2DPublisher::costmap_service_callback(
   response->map.metadata.origin.orientation = tf2::toMsg(quaternion);
   response->map.data.resize(data_length);
   response->map.data.assign(data, data + data_length);
-  LOG_INFO(
-    "Costmap2DPublisher returned GetCostmap response frame='{}', size_x={}, size_y={}, resolution={}, data_length={}",
-    global_frame_.c_str(), size_x, size_y, costmap_->getResolution(), data_length);
+  LOG_INFO("Costmap2DPublisher returned GetCostmap response frame='{}', size_x={}, size_y={}, resolution={}, data_length={}", global_frame_.c_str(), size_x, size_y, costmap_->getResolution(), data_length);
 }
 
 }  // end namespace nav2_costmap_2d

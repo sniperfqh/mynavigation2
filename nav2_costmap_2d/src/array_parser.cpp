@@ -41,8 +41,7 @@ namespace nav2_costmap_2d
  * @param input
  * @param error_return
  * Syntax is [[1.0, 2.0], [3.3, 4.4, 5.5], ...] */
-std::vector<std::vector<float>> parseVVF(const std::string & input, std::string & error_return)
-{
+std::vector<std::vector<float>> parseVVF(const std::string & input, std::string & error_return) {
   std::vector<std::vector<float>> result;
 
   std::stringstream input_ss(input);

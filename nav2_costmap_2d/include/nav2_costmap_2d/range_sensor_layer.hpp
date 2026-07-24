@@ -87,9 +87,7 @@ public:
    * @param max_x X max map coord of the window to update
    * @param max_y Y max map coord of the window to update
    */
-  virtual void updateBounds(
-    double robot_x, double robot_y, double robot_yaw,
-    double * min_x, double * min_y, double * max_x, double * max_y);
+  virtual void updateBounds( double robot_x, double robot_y, double robot_yaw, double * min_x, double * min_y, double * max_x, double * max_y);
 
   /**
    * @brief Update the costs in the master costmap in the window
@@ -99,9 +97,7 @@ public:
    * @param max_x X max map coord of the window to update
    * @param max_y Y max map coord of the window to update
    */
-  virtual void updateCosts(
-    nav2_costmap_2d::Costmap2D & master_grid, int min_i,
-    int min_j, int max_i, int max_j);
+  virtual void updateCosts( nav2_costmap_2d::Costmap2D & master_grid, int min_i, int min_j, int max_i, int max_j);
 
   /**
    * @brief Reset this costmap
@@ -178,23 +174,19 @@ protected:
   /**
    * @brief Update the cost in a cell with information
    */
-  inline void update_cell(
-    double ox, double oy, double ot,
-    double r, double nx, double ny, bool clear);
+  inline void update_cell( double ox, double oy, double ot, double r, double nx, double ny, bool clear);
 
   /**
    * @brief Find probability value of a cost
    */
-  inline double to_prob(unsigned char c)
-  {
+  inline double to_prob(unsigned char c) {
     return static_cast<double>(c) / nav2_costmap_2d::LETHAL_OBSTACLE;
   }
 
   /**
    * @brief Find cost value of a probability
    */
-  inline unsigned char to_cost(double p)
-  {
+  inline unsigned char to_cost(double p) {
     return static_cast<unsigned char>(p * nav2_costmap_2d::LETHAL_OBSTACLE);
   }
 
@@ -220,16 +212,14 @@ protected:
   /**
    * @brief Find the area of 3 points of a triangle
    */
-  float area(int x1, int y1, int x2, int y2, int x3, int y3)
-  {
+  float area(int x1, int y1, int x2, int y2, int x3, int y3) {
     return fabs((x1 * (y2 - y3) + x2 * (y3 - y1) + x3 * (y1 - y2)) / 2.0);
   }
 
   /**
    * @brief Find the cross product of 3 vectors, A,B,C
    */
-  int orient2d(int Ax, int Ay, int Bx, int By, int Cx, int Cy)
-  {
+  int orient2d(int Ax, int Ay, int Bx, int By, int Cx, int Cy) {
     return (Bx - Ax) * (Cy - Ay) - (By - Ay) * (Cx - Ax);
   }
 };

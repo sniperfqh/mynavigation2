@@ -50,10 +50,7 @@ TEST_F(ImageTester, forEach) {
   const uint8_t non_zero_initial_value = 42;
   uint8_t current(non_zero_initial_value);
 
-  image.forEach(
-    [&](uint8_t & pixel) {
-      pixel = current++;
-    });
+  image.forEach( [&](uint8_t & pixel) { pixel = current++; });
 
   for (size_t i = 0; i < image.rows(); ++i) {
     for (size_t j = 0; j < image.columns(); ++j) {
@@ -67,10 +64,7 @@ TEST_F(ImageTester, convert) {
   Image<uint16_t> source = makeImage(2, 3, image_buffer_words);
   Image<uint8_t> target = makeImage(2, 3, image_buffer_bytes);
 
-  source.convert(
-    target, [](uint16_t s, uint8_t & t) {
-      t = s * 2;
-    });
+  source.convert( target, [](uint16_t s, uint8_t & t) { t = s * 2; });
 
   const std::array<uint8_t, 6> expected = {2, 4, 6, 8, 10, 12};
   ASSERT_TRUE(std::equal(expected.begin(), expected.end(), image_buffer_bytes.begin()));
@@ -88,9 +82,7 @@ TEST_F(ImageTester, convertDifferentSizes) {
 TEST_F(ImageTester, convertEmptyImages) {
   const Image<uint16_t> source;
   Image<uint8_t> target;
-  auto shouldn_t_be_called = [](uint16_t /*src*/, uint8_t & /*trg*/) {
-      throw std::logic_error("");
-    };
+  auto shouldn_t_be_called = [](uint16_t /*src*/, uint8_t & /*trg*/) { throw std::logic_error(""); };
 
   ASSERT_NO_THROW((source.convert(target, shouldn_t_be_called)));
 }

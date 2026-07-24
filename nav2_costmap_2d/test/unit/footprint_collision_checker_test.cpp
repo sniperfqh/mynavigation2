@@ -20,10 +20,8 @@
 #include "nav2_costmap_2d/footprint_collision_checker.hpp"
 #include "nav2_costmap_2d/footprint.hpp"
 
-TEST(collision_footprint, test_basic)
-{
-  std::shared_ptr<nav2_costmap_2d::Costmap2D> costmap_ =
-    std::make_shared<nav2_costmap_2d::Costmap2D>(100, 100, 0.1, 0, 0, 0);
+TEST(collision_footprint, test_basic) {
+  std::shared_ptr<nav2_costmap_2d::Costmap2D> costmap_ = std::make_shared<nav2_costmap_2d::Costmap2D>(100, 100, 0.1, 0, 0, 0);
 
   geometry_msgs::msg::Point p1;
   p1.x = -0.5;
@@ -40,34 +38,27 @@ TEST(collision_footprint, test_basic)
 
   nav2_costmap_2d::Footprint footprint = {p1, p2, p3, p4};
 
-  nav2_costmap_2d::FootprintCollisionChecker<std::shared_ptr<nav2_costmap_2d::Costmap2D>>
-  collision_checker(costmap_);
+  nav2_costmap_2d::FootprintCollisionChecker<std::shared_ptr<nav2_costmap_2d::Costmap2D>> collision_checker(costmap_);
 
   auto value = collision_checker.footprintCostAtPose(5.0, 5.0, 0.0, footprint);
 
   EXPECT_NEAR(value, 0.0, 0.001);
 }
 
-TEST(collision_footprint, test_point_cost)
-{
-  std::shared_ptr<nav2_costmap_2d::Costmap2D> costmap_ =
-    std::make_shared<nav2_costmap_2d::Costmap2D>(100, 100, 0.1, 0, 0, 0);
+TEST(collision_footprint, test_point_cost) {
+  std::shared_ptr<nav2_costmap_2d::Costmap2D> costmap_ = std::make_shared<nav2_costmap_2d::Costmap2D>(100, 100, 0.1, 0, 0, 0);
 
-  nav2_costmap_2d::FootprintCollisionChecker<std::shared_ptr<nav2_costmap_2d::Costmap2D>>
-  collision_checker(costmap_);
+  nav2_costmap_2d::FootprintCollisionChecker<std::shared_ptr<nav2_costmap_2d::Costmap2D>> collision_checker(costmap_);
 
   auto value = collision_checker.pointCost(50, 50);
 
   EXPECT_NEAR(value, 0.0, 0.001);
 }
 
-TEST(collision_footprint, test_world_to_map)
-{
-  std::shared_ptr<nav2_costmap_2d::Costmap2D> costmap_ =
-    std::make_shared<nav2_costmap_2d::Costmap2D>(100, 100, 0.1, 0, 0, 0);
+TEST(collision_footprint, test_world_to_map) {
+  std::shared_ptr<nav2_costmap_2d::Costmap2D> costmap_ = std::make_shared<nav2_costmap_2d::Costmap2D>(100, 100, 0.1, 0, 0, 0);
 
-  nav2_costmap_2d::FootprintCollisionChecker<std::shared_ptr<nav2_costmap_2d::Costmap2D>>
-  collision_checker(costmap_);
+  nav2_costmap_2d::FootprintCollisionChecker<std::shared_ptr<nav2_costmap_2d::Costmap2D>> collision_checker(costmap_);
 
   unsigned int x, y;
 
@@ -83,10 +74,8 @@ TEST(collision_footprint, test_world_to_map)
   EXPECT_NEAR(collision_checker.pointCost(x, y), 200.0, 0.001);
 }
 
-TEST(collision_footprint, test_footprint_at_pose_with_movement)
-{
-  std::shared_ptr<nav2_costmap_2d::Costmap2D> costmap_ =
-    std::make_shared<nav2_costmap_2d::Costmap2D>(100, 100, 0.1, 0, 0, 254);
+TEST(collision_footprint, test_footprint_at_pose_with_movement) {
+  std::shared_ptr<nav2_costmap_2d::Costmap2D> costmap_ = std::make_shared<nav2_costmap_2d::Costmap2D>(100, 100, 0.1, 0, 0, 254);
 
   for (unsigned int i = 40; i <= 60; ++i) {
     for (unsigned int j = 40; j <= 60; ++j) {
@@ -109,8 +98,7 @@ TEST(collision_footprint, test_footprint_at_pose_with_movement)
 
   nav2_costmap_2d::Footprint footprint = {p1, p2, p3, p4};
 
-  nav2_costmap_2d::FootprintCollisionChecker<std::shared_ptr<nav2_costmap_2d::Costmap2D>>
-  collision_checker(costmap_);
+  nav2_costmap_2d::FootprintCollisionChecker<std::shared_ptr<nav2_costmap_2d::Costmap2D>> collision_checker(costmap_);
 
   auto value = collision_checker.footprintCostAtPose(5.0, 5.0, 0.0, footprint);
   EXPECT_NEAR(value, 0.0, 0.001);
@@ -122,10 +110,8 @@ TEST(collision_footprint, test_footprint_at_pose_with_movement)
   EXPECT_NEAR(down_value, 254.0, 0.001);
 }
 
-TEST(collision_footprint, test_point_and_line_cost)
-{
-  std::shared_ptr<nav2_costmap_2d::Costmap2D> costmap_ =
-    std::make_shared<nav2_costmap_2d::Costmap2D>(100, 100, 0.10000, 0, 0.0, 0.0);
+TEST(collision_footprint, test_point_and_line_cost) {
+  std::shared_ptr<nav2_costmap_2d::Costmap2D> costmap_ = std::make_shared<nav2_costmap_2d::Costmap2D>(100, 100, 0.10000, 0, 0.0, 0.0);
 
   costmap_->setCost(62, 50, 254);
   costmap_->setCost(39, 60, 254);
@@ -145,8 +131,7 @@ TEST(collision_footprint, test_point_and_line_cost)
 
   nav2_costmap_2d::Footprint footprint = {p1, p2, p3, p4};
 
-  nav2_costmap_2d::FootprintCollisionChecker<std::shared_ptr<nav2_costmap_2d::Costmap2D>>
-  collision_checker(costmap_);
+  nav2_costmap_2d::FootprintCollisionChecker<std::shared_ptr<nav2_costmap_2d::Costmap2D>> collision_checker(costmap_);
 
   auto value = collision_checker.footprintCostAtPose(5.0, 5.0, 0.0, footprint);
   EXPECT_NEAR(value, 0.0, 0.001);
@@ -158,8 +143,7 @@ TEST(collision_footprint, test_point_and_line_cost)
   EXPECT_NEAR(right_value, 254.0, 0.001);
 }
 
-TEST(collision_footprint, not_enough_points)
-{
+TEST(collision_footprint, not_enough_points) {
   geometry_msgs::msg::Point p1;
   p1.x = 2.0;
   p1.y = 2.0;
@@ -216,8 +200,7 @@ TEST(collision_footprint, to_polygon) {
 
 TEST(collision_footprint, make_footprint_from_string) {
   std::vector<geometry_msgs::msg::Point> footprint;
-  bool result = nav2_costmap_2d::makeFootprintFromString(
-    "[[1, 2.2], [.3, -4e4], [-.3, -4e4], [-1, 2.2]]", footprint);
+  bool result = nav2_costmap_2d::makeFootprintFromString( "[[1, 2.2], [.3, -4e4], [-.3, -4e4], [-1, 2.2]]", footprint);
   EXPECT_EQ(result, true);
   EXPECT_EQ(4u, footprint.size());
   EXPECT_NEAR(footprint[0].x, 1.0, 1e-5);
@@ -232,21 +215,18 @@ TEST(collision_footprint, make_footprint_from_string) {
 
 TEST(collision_footprint, make_footprint_from_string_parse_error) {
   std::vector<geometry_msgs::msg::Point> footprint;
-  bool result = nav2_costmap_2d::makeFootprintFromString(
-    "[[bad_string", footprint);
+  bool result = nav2_costmap_2d::makeFootprintFromString( "[[bad_string", footprint);
   EXPECT_EQ(result, false);
 }
 
 TEST(collision_footprint, make_footprint_from_string_two_points_error) {
   std::vector<geometry_msgs::msg::Point> footprint;
-  bool result = nav2_costmap_2d::makeFootprintFromString(
-    "[[1, 2.2], [.3, -4e4]", footprint);
+  bool result = nav2_costmap_2d::makeFootprintFromString( "[[1, 2.2], [.3, -4e4]", footprint);
   EXPECT_EQ(result, false);
 }
 
 TEST(collision_footprint, make_footprint_from_string_not_pairs) {
   std::vector<geometry_msgs::msg::Point> footprint;
-  bool result = nav2_costmap_2d::makeFootprintFromString(
-    "[[1, 2.2], [.3, -4e4], [-.3, -4e4], [-1, 2.2, 5.6]]", footprint);
+  bool result = nav2_costmap_2d::makeFootprintFromString( "[[1, 2.2], [.3, -4e4], [-.3, -4e4], [-1, 2.2, 5.6]]", footprint);
   EXPECT_EQ(result, false);
 }

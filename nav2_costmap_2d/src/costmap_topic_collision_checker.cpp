@@ -32,20 +32,9 @@ using namespace std::chrono_literals;
 namespace nav2_costmap_2d
 {
 
-CostmapTopicCollisionChecker::CostmapTopicCollisionChecker(
-  CostmapSubscriber & costmap_sub,
-  FootprintSubscriber & footprint_sub,
-  std::string name)
-: name_(name),
-  costmap_sub_(costmap_sub),
-  footprint_sub_(footprint_sub),
-  collision_checker_(nullptr)
-{}
+CostmapTopicCollisionChecker::CostmapTopicCollisionChecker(CostmapSubscriber & costmap_sub, FootprintSubscriber & footprint_sub, std::string name) : name_(name), costmap_sub_(costmap_sub), footprint_sub_(footprint_sub), collision_checker_(nullptr) {}
 
-bool CostmapTopicCollisionChecker::isCollisionFree(
-  const geometry_msgs::msg::Pose2D & pose,
-  bool fetch_costmap_and_footprint)
-{
+bool CostmapTopicCollisionChecker::isCollisionFree(const geometry_msgs::msg::Pose2D & pose, bool fetch_costmap_and_footprint) {
   try {
     if (scorePose(pose, fetch_costmap_and_footprint) >= LETHAL_OBSTACLE) {
       return false;
@@ -63,10 +52,7 @@ bool CostmapTopicCollisionChecker::isCollisionFree(
   }
 }
 
-double CostmapTopicCollisionChecker::scorePose(
-  const geometry_msgs::msg::Pose2D & pose,
-  bool fetch_costmap_and_footprint)
-{
+double CostmapTopicCollisionChecker::scorePose(const geometry_msgs::msg::Pose2D & pose, bool fetch_costmap_and_footprint) {
   if (fetch_costmap_and_footprint) {
     try {
       collision_checker_.setCostmap(costmap_sub_.getCostmap());
@@ -84,10 +70,7 @@ double CostmapTopicCollisionChecker::scorePose(
   return collision_checker_.footprintCost(getFootprint(pose, fetch_costmap_and_footprint));
 }
 
-Footprint CostmapTopicCollisionChecker::getFootprint(
-  const geometry_msgs::msg::Pose2D & pose,
-  bool fetch_latest_footprint)
-{
+Footprint CostmapTopicCollisionChecker::getFootprint(const geometry_msgs::msg::Pose2D & pose, bool fetch_latest_footprint) {
   if (fetch_latest_footprint) {
     std_msgs::msg::Header header;
     if (!footprint_sub_.getFootprintInRobotFrame(footprint_, header)) {

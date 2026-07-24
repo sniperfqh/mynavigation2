@@ -43,10 +43,7 @@ public:
   /**
    * @brief A constructor
    */
-  CostmapTopicCollisionChecker(
-    CostmapSubscriber & costmap_sub,
-    FootprintSubscriber & footprint_sub,
-    std::string name = "collision_checker");
+  CostmapTopicCollisionChecker( CostmapSubscriber & costmap_sub, FootprintSubscriber & footprint_sub, std::string name = "collision_checker");
 
   /**
    * @brief A destructor
@@ -60,9 +57,7 @@ public:
    * @param fetch_costmap_and_footprint Defaults to true. When checking with multiple poses at once,
    * data should be fetched in the first check but fetching can be skipped in consequent checks for speedup
    */
-  double scorePose(
-    const geometry_msgs::msg::Pose2D & pose,
-    bool fetch_costmap_and_footprint = true);
+  double scorePose( const geometry_msgs::msg::Pose2D & pose, bool fetch_costmap_and_footprint = true);
 
   /**
    * @brief Returns if a pose is collision free
@@ -71,9 +66,7 @@ public:
    * @param fetch_costmap_and_footprint Defaults to true. When checking with multiple poses at once,
    * data should be fetched in the first check but fetching can be skipped in consequent checks for speedup
    */
-  bool isCollisionFree(
-    const geometry_msgs::msg::Pose2D & pose,
-    bool fetch_costmap_and_footprint = true);
+  bool isCollisionFree( const geometry_msgs::msg::Pose2D & pose, bool fetch_costmap_and_footprint = true);
 
 protected:
   /**
@@ -83,9 +76,7 @@ protected:
    * @param fetch_latest_footprint Defaults to true. When checking with multiple poses at once,
    * footprint should be fetched in the first check but fetching can be skipped in consequent checks for speedup
    */
-  Footprint getFootprint(
-    const geometry_msgs::msg::Pose2D & pose,
-    bool fetch_latest_footprint = true);
+  Footprint getFootprint( const geometry_msgs::msg::Pose2D & pose, bool fetch_latest_footprint = true);
 
   // Name used for logging
   std::string name_;

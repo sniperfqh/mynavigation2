@@ -54,14 +54,9 @@ RclCppFixture g_rclcppfixture;
 class DummyCostmapSubscriber : public nav2_costmap_2d::CostmapSubscriber
 {
 public:
-  DummyCostmapSubscriber(
-    nav2_util::LifecycleNode::SharedPtr node,
-    std::string & topic_name)
-  : CostmapSubscriber(node, topic_name)
-  {}
+  DummyCostmapSubscriber( nav2_util::LifecycleNode::SharedPtr node, std::string & topic_name) : CostmapSubscriber(node, topic_name) {}
 
-  void setCostmap(nav2_msgs::msg::Costmap::SharedPtr msg)
-  {
+  void setCostmap(nav2_msgs::msg::Costmap::SharedPtr msg) {
     costmap_msg_ = msg;
     costmap_received_ = true;
   }
@@ -70,15 +65,9 @@ public:
 class DummyFootprintSubscriber : public nav2_costmap_2d::FootprintSubscriber
 {
 public:
-  DummyFootprintSubscriber(
-    nav2_util::LifecycleNode::SharedPtr node,
-    std::string & topic_name,
-    tf2_ros::Buffer & tf_)
-  : FootprintSubscriber(node, topic_name, tf_)
-  {}
+  DummyFootprintSubscriber( nav2_util::LifecycleNode::SharedPtr node, std::string & topic_name, tf2_ros::Buffer & tf_) : FootprintSubscriber(node, topic_name, tf_) {}
 
-  void setFootprint(geometry_msgs::msg::PolygonStamped::SharedPtr msg)
-  {
+  void setFootprint(geometry_msgs::msg::PolygonStamped::SharedPtr msg) {
     footprint_ = msg;
     footprint_received_ = true;
   }
@@ -87,32 +76,21 @@ public:
 class TestCollisionChecker : public nav2_util::LifecycleNode
 {
 public:
-  explicit TestCollisionChecker(std::string name)
-  : LifecycleNode(name),
-    global_frame_("map")
-  {
+  explicit TestCollisionChecker(std::string name) : LifecycleNode(name), global_frame_("map") {
     // Declare non-plugin specific costmap parameters
     declare_parameter("map_topic", rclcpp::ParameterValue(std::string("map")));
     declare_parameter("track_unknown_space", rclcpp::ParameterValue(true));
     declare_parameter("use_maximum", rclcpp::ParameterValue(false));
     declare_parameter("lethal_cost_threshold", rclcpp::ParameterValue(100));
-    declare_parameter(
-      "unknown_cost_value",
-      rclcpp::ParameterValue(static_cast<unsigned char>(0xff)));
+    declare_parameter( "unknown_cost_value", rclcpp::ParameterValue(static_cast<unsigned char>(0xff)));
     declare_parameter("trinary_costmap", rclcpp::ParameterValue(true));
   }
 
-  nav2_util::CallbackReturn
-  on_configure(const rclcpp_lifecycle::State & /*state*/)
-  {
+  nav2_util::CallbackReturn on_configure(const rclcpp_lifecycle::State & /*state*/) {
     RCLCPP_INFO(get_logger(), "Configuring");
-    callback_group_ = create_callback_group(
-      rclcpp::CallbackGroupType::MutuallyExclusive, false);
+    callback_group_ = create_callback_group( rclcpp::CallbackGroupType::MutuallyExclusive, false);
     tf_buffer_ = std::make_shared<tf2_ros::Buffer>(get_clock());
-    auto timer_interface = std::make_shared<tf2_ros::CreateTimerROS>(
-      get_node_base_interface(),
-      get_node_timers_interface(),
-      callback_group_);
+    auto timer_interface = std::make_shared<tf2_ros::CreateTimerROS>( get_node_base_interface(), get_node_timers_interface(), callback_group_);
     tf_buffer_->setCreateTimerInterface(timer_interface);
     tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
     tf_broadcaster_ = std::make_shared<tf2_ros::TransformBroadcaster>(shared_from_this());
@@ -120,17 +98,11 @@ public:
     std::string costmap_topic = "costmap_raw";
     std::string footprint_topic = "published_footprint";
 
-    costmap_sub_ = std::make_shared<DummyCostmapSubscriber>(
-      shared_from_this(),
-      costmap_topic);
+    costmap_sub_ = std::make_shared<DummyCostmapSubscriber>( shared_from_this(), costmap_topic);
 
-    footprint_sub_ = std::make_shared<DummyFootprintSubscriber>(
-      shared_from_this(),
-      footprint_topic,
-      *tf_buffer_);
+    footprint_sub_ = std::make_shared<DummyFootprintSubscriber>( shared_from_this(), footprint_topic, *tf_buffer_);
 
-    collision_checker_ = std::make_unique<nav2_costmap_2d::CostmapTopicCollisionChecker>(
-      *costmap_sub_, *footprint_sub_, get_name());
+    collision_checker_ = std::make_unique<nav2_costmap_2d::CostmapTopicCollisionChecker>( *costmap_sub_, *footprint_sub_, get_name());
 
     layers_ = new nav2_costmap_2d::LayeredCostmap("map", false, false);
     // Add Static Layer
@@ -150,23 +122,17 @@ public:
     return nav2_util::CallbackReturn::SUCCESS;
   }
 
-  nav2_util::CallbackReturn
-  on_activate(const rclcpp_lifecycle::State & /*state*/)
-  {
+  nav2_util::CallbackReturn on_activate(const rclcpp_lifecycle::State & /*state*/) {
     RCLCPP_INFO(get_logger(), "Activating");
     return nav2_util::CallbackReturn::SUCCESS;
   }
 
-  nav2_util::CallbackReturn
-  on_deactivate(const rclcpp_lifecycle::State & /*state*/)
-  {
+  nav2_util::CallbackReturn on_deactivate(const rclcpp_lifecycle::State & /*state*/) {
     RCLCPP_INFO(get_logger(), "Deactivating");
     return nav2_util::CallbackReturn::SUCCESS;
   }
 
-  nav2_util::CallbackReturn
-  on_cleanup(const rclcpp_lifecycle::State & /*state*/)
-  {
+  nav2_util::CallbackReturn on_cleanup(const rclcpp_lifecycle::State & /*state*/) {
     RCLCPP_INFO(get_logger(), "Cleaning Up");
     delete layers_;
     layers_ = nullptr;
@@ -182,8 +148,7 @@ public:
 
   ~TestCollisionChecker() {}
 
-  bool testPose(double x, double y, double theta)
-  {
+  bool testPose(double x, double y, double theta) {
     rclcpp::Time stamp = now();
     publishPose(x, y, theta, stamp);
     geometry_msgs::msg::Pose2D pose;
@@ -198,8 +163,7 @@ public:
     return collision_checker_->isCollisionFree(pose);
   }
 
-  void setFootprint(double footprint_padding, double robot_radius)
-  {
+  void setFootprint(double footprint_padding, double robot_radius) {
     std::vector<geometry_msgs::msg::Point> new_footprint;
     new_footprint = nav2_costmap_2d::makeFootprintFromRadius(robot_radius);
     nav2_costmap_2d::padFootprint(new_footprint, footprint_padding);
@@ -208,8 +172,7 @@ public:
   }
 
 protected:
-  void setPose(double x, double y, double theta, const rclcpp::Time & stamp)
-  {
+  void setPose(double x, double y, double theta, const rclcpp::Time & stamp) {
     x_ = x;
     y_ = y;
     yaw_ = theta;
@@ -222,25 +185,20 @@ protected:
     current_pose_.header.stamp = stamp;
   }
 
-  void publishFootprint()
-  {
+  void publishFootprint() {
     geometry_msgs::msg::PolygonStamped oriented_footprint;
     oriented_footprint.header.frame_id = global_frame_;
     oriented_footprint.header.stamp = stamp_;
     nav2_costmap_2d::transformFootprint(x_, y_, yaw_, footprint_, oriented_footprint);
-    footprint_sub_->setFootprint(
-      std::make_shared<geometry_msgs::msg::PolygonStamped>(oriented_footprint));
+    footprint_sub_->setFootprint( std::make_shared<geometry_msgs::msg::PolygonStamped>(oriented_footprint));
   }
 
-  void publishCostmap()
-  {
+  void publishCostmap() {
     layers_->updateMap(x_, y_, yaw_);
-    costmap_sub_->setCostmap(
-      std::make_shared<nav2_msgs::msg::Costmap>(toCostmapMsg(layers_->getCostmap())));
+    costmap_sub_->setCostmap( std::make_shared<nav2_msgs::msg::Costmap>(toCostmapMsg(layers_->getCostmap())));
   }
 
-  void publishPose(double x, double y, double /*theta*/, const rclcpp::Time & stamp)
-  {
+  void publishPose(double x, double y, double /*theta*/, const rclcpp::Time & stamp) {
     geometry_msgs::msg::TransformStamped tf_stamped;
     tf_stamped.header.frame_id = "map";
     tf_stamped.header.stamp = stamp;
@@ -251,9 +209,7 @@ protected:
     tf_broadcaster_->sendTransform(tf_stamped);
   }
 
-  nav2_msgs::msg::Costmap
-  toCostmapMsg(nav2_costmap_2d::Costmap2D * costmap)
-  {
+  nav2_msgs::msg::Costmap toCostmapMsg(nav2_costmap_2d::Costmap2D * costmap) {
     double resolution = costmap->getResolution();
 
     double wx, wy;
@@ -305,15 +261,13 @@ protected:
 class TestNode : public ::testing::Test
 {
 public:
-  TestNode()
-  {
+  TestNode() {
     collision_checker_ = std::make_shared<TestCollisionChecker>("test_collision_checker");
     collision_checker_->on_configure(collision_checker_->get_current_state());
     collision_checker_->on_activate(collision_checker_->get_current_state());
   }
 
-  ~TestNode()
-  {
+  ~TestNode() {
     collision_checker_->on_deactivate(collision_checker_->get_current_state());
     collision_checker_->on_cleanup(collision_checker_->get_current_state());
   }
@@ -322,8 +276,7 @@ protected:
   std::shared_ptr<TestCollisionChecker> collision_checker_;
 };
 
-TEST_F(TestNode, unknownSpace)
-{
+TEST_F(TestNode, unknownSpace) {
   collision_checker_->setFootprint(0, 1);
 
   // Completely off map
@@ -336,8 +289,7 @@ TEST_F(TestNode, unknownSpace)
   ASSERT_EQ(collision_checker_->testPose(2, 4, 0), false);
 }
 
-TEST_F(TestNode, FreeSpace)
-{
+TEST_F(TestNode, FreeSpace) {
   collision_checker_->setFootprint(0, 1);
 
   // In complete free space
@@ -347,8 +299,7 @@ TEST_F(TestNode, FreeSpace)
   ASSERT_EQ(collision_checker_->testPose(2.5, 7, 0), true);
 }
 
-TEST_F(TestNode, CollisionSpace)
-{
+TEST_F(TestNode, CollisionSpace) {
   collision_checker_->setFootprint(0, 1);
 
   // Completely in obstacle

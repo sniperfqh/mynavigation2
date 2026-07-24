@@ -43,8 +43,7 @@ class TestNode : public ::testing::Test
 public:
   TestNode() {}
 
-  ~TestNode()
-  {
+  ~TestNode() {
     occ_grid_.reset();
     costmap_.reset();
   }
@@ -58,8 +57,7 @@ private:
   std::shared_ptr<nav2_costmap_2d::Costmap2D> costmap_;
 };
 
-void TestNode::createMaps()
-{
+void TestNode::createMaps() {
   // Create occ_grid_ map
   occ_grid_ = std::make_shared<nav_msgs::msg::OccupancyGrid>();
 
@@ -92,8 +90,7 @@ void TestNode::createMaps()
   costmap_ = std::make_shared<nav2_costmap_2d::Costmap2D>(*occ_grid_);
 }
 
-void TestNode::verifyCostmap()
-{
+void TestNode::verifyCostmap() {
   // Verify Costmap2D info
   EXPECT_NEAR(costmap_->getResolution(), RESOLUTION, EPSILON);
   EXPECT_NEAR(costmap_->getOriginX(), ORIGIN_X, EPSILON);
@@ -105,9 +102,7 @@ void TestNode::verifyCostmap()
   for (it = 0; it < (costmap_->getSizeInCellsX() * costmap_->getSizeInCellsY() - 1); it++) {
     data = costmap_->getCharMap()[it];
     if (it != costmap_->getSizeInCellsX() * costmap_->getSizeInCellsY() - 1) {
-      data_ref = std::round(
-        static_cast<double>(nav2_costmap_2d::LETHAL_OBSTACLE - nav2_costmap_2d::FREE_SPACE) * it /
-        10);
+      data_ref = std::round( static_cast<double>(nav2_costmap_2d::LETHAL_OBSTACLE - nav2_costmap_2d::FREE_SPACE) * it / 10);
     } else {
       data_ref = nav2_costmap_2d::NO_INFORMATION;
     }
@@ -115,8 +110,7 @@ void TestNode::verifyCostmap()
   }
 }
 
-TEST_F(TestNode, convertOccGridToCostmap)
-{
+TEST_F(TestNode, convertOccGridToCostmap) {
   createMaps();
   verifyCostmap();
 }

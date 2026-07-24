@@ -29,29 +29,22 @@ class CostmapFilterWrapper : public nav2_costmap_2d::CostmapFilter
 {
 public:
   // Dummy implementations of virtual methods
-  void initializeFilter(
-    const std::string &) {}
+  void initializeFilter( const std::string &) {}
 
-  void process(
-    nav2_costmap_2d::Costmap2D &,
-    int, int, int, int,
-    const geometry_msgs::msg::Pose2D &) {}
+  void process( nav2_costmap_2d::Costmap2D &, int, int, int, int, const geometry_msgs::msg::Pose2D &) {}
 
   void resetFilter() {}
 
   // Actual testing methods
-  void setName(const std::string & name)
-  {
+  void setName(const std::string & name) {
     name_ = name;
   }
 
-  void setNode(const nav2_util::LifecycleNode::WeakPtr & node)
-  {
+  void setNode(const nav2_util::LifecycleNode::WeakPtr & node) {
     node_ = node;
   }
 
-  bool getEnabled()
-  {
+  bool getEnabled() {
     return enabled_;
   }
 };
@@ -59,8 +52,7 @@ public:
 class TestNode : public ::testing::Test
 {
 public:
-  TestNode()
-  {
+  TestNode() {
     // Create new LifecycleNode
     node_ = std::make_shared<nav2_util::LifecycleNode>("test_node");
 
@@ -70,24 +62,16 @@ public:
     costmap_filter_->setName(FILTER_NAME);
 
     // Set CostmapFilter ROS-parameters
-    node_->declare_parameter(
-      std::string(FILTER_NAME) + ".filter_info_topic", rclcpp::ParameterValue("filter_info"));
-    node_->set_parameter(
-      rclcpp::Parameter(std::string(FILTER_NAME) + ".filter_info_topic", "filter_info"));
+    node_->declare_parameter( std::string(FILTER_NAME) + ".filter_info_topic", rclcpp::ParameterValue("filter_info"));
+    node_->set_parameter( rclcpp::Parameter(std::string(FILTER_NAME) + ".filter_info_topic", "filter_info"));
   }
 
-  ~TestNode()
-  {
+  ~TestNode() {
     costmap_filter_.reset();
     node_.reset();
   }
 
-  template<class T>
-  typename T::Response::SharedPtr send_request(
-    nav2_util::LifecycleNode::SharedPtr node,
-    typename rclcpp::Client<T>::SharedPtr client,
-    typename T::Request::SharedPtr request)
-  {
+  template<class T> typename T::Response::SharedPtr send_request( nav2_util::LifecycleNode::SharedPtr node, typename rclcpp::Client<T>::SharedPtr client, typename T::Request::SharedPtr request) {
     auto result = client->async_send_request(request);
 
     // Wait for the result
@@ -103,14 +87,12 @@ protected:
   std::shared_ptr<CostmapFilterWrapper> costmap_filter_;
 };
 
-TEST_F(TestNode, testEnableService)
-{
+TEST_F(TestNode, testEnableService) {
   costmap_filter_->onInitialize();
 
   RCLCPP_INFO(node_->get_logger(), "Testing enabling service");
   auto req = std::make_shared<std_srvs::srv::SetBool::Request>();
-  auto client = node_->create_client<std_srvs::srv::SetBool>(
-    std::string(FILTER_NAME) + "/toggle_filter");
+  auto client = node_->create_client<std_srvs::srv::SetBool>( std::string(FILTER_NAME) + "/toggle_filter");
 
   RCLCPP_INFO(node_->get_logger(), "Waiting for enabling service");
   ASSERT_TRUE(client->wait_for_service());
@@ -134,8 +116,7 @@ TEST_F(TestNode, testEnableService)
   ASSERT_FALSE(costmap_filter_->getEnabled());
 }
 
-int main(int argc, char ** argv)
-{
+int main(int argc, char ** argv) {
   // Initialize the system
   testing::InitGoogleTest(&argc, argv);
   rclcpp::init(argc, argv);

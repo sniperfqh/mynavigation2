@@ -25,17 +25,13 @@
 
 namespace nav2_costmap_2d
 {
-template<class T>
-Image<T> makeImage(size_t rows, size_t columns, std::vector<T> & buffer, size_t step = 0)
-{
+template<class T> Image<T> makeImage(size_t rows, size_t columns, std::vector<T> & buffer, size_t step = 0) {
   step = std::max(step, columns);
   buffer.resize(rows * step);
   return Image<T>(rows, columns, buffer.data(), step);
 }
 
-template<class T>
-Image<T> clone(const Image<T> & source, std::vector<T> & buffer)
-{
+template<class T> Image<T> clone(const Image<T> & source, std::vector<T> & buffer) {
   buffer.resize(source.rows() * source.columns());
   Image<T> result(source.rows(), source.columns(), buffer.data(), source.columns());
 
@@ -61,11 +57,7 @@ Image<T> clone(const Image<T> & source, std::vector<T> & buffer)
  * describes a 3x3 image in which a v-shape is drawn with code 255 (with default codes map)
  * @throw std::logic_error if the format of the string is incorrect
  */
-template<class T>
-Image<T> imageFromString(
-  const std::string & s, std::vector<T> & buffer,
-  const std::map<char, T> & codes = {{'.', 0}, {'x', 255}})
-{
+template<class T> Image<T> imageFromString( const std::string & s, std::vector<T> & buffer, const std::map<char, T> & codes = {{'.', 0}, {'x', 255}}) {
   const size_t side_size = static_cast<size_t>(std::sqrt(s.size()));
 
   if (size_t(side_size) * side_size != s.size()) {
@@ -76,17 +68,7 @@ Image<T> imageFromString(
 
   Image<T> image = makeImage(side_size, side_size, buffer, step);
   auto iter = s.begin();
-  image.forEach(
-    [&](T & pixel) {
-      try {
-        pixel = codes.at(*iter);
-        ++iter;
-      } catch (...) {
-        throw std::logic_error(
-          "Test data error: parseBinaryMatrix: Unexpected symbol: " +
-          std::string(1, *iter));
-      }
-    });
+  image.forEach( [&](T & pixel) { try { pixel = codes.at(*iter); ++iter; } catch (...) { throw std::logic_error( "Test data error: parseBinaryMatrix: Unexpected symbol: " + std::string(1, *iter)); } });
   return image;
 }
 
@@ -95,8 +77,7 @@ Image<T> imageFromString(
  *
  * @return true if images a and b have the same type, size, and data. Otherwise false
  */
-inline bool isEqual(const Image<uint8_t> & a, const Image<uint8_t> & b)
-{
+inline bool isEqual(const Image<uint8_t> & a, const Image<uint8_t> & b) {
   bool equal = a.rows() == b.rows() && a.columns() == b.columns();
 
   for (size_t row = 0; row < a.rows() && equal; ++row) {
@@ -107,9 +88,7 @@ inline bool isEqual(const Image<uint8_t> & a, const Image<uint8_t> & b)
   return equal;
 }
 
-template<class T>
-std::ostream & operator<<(std::ostream & out, const Image<T> & image)
-{
+template<class T> std::ostream & operator<<(std::ostream & out, const Image<T> & image) {
   for (size_t i = 0; i < image.rows(); ++i) {
     for (size_t j = 0; j < image.columns(); ++j) {
       out << int64_t(image.row(i)[j]) << " ";

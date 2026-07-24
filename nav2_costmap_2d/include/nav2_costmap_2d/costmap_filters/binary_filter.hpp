@@ -65,16 +65,12 @@ public:
   /**
    * @brief Initialize the filter and subscribe to the info topic
    */
-  void initializeFilter(
-    const std::string & filter_info_topic);
+  void initializeFilter( const std::string & filter_info_topic);
 
   /**
    * @brief Process the keepout layer at the current pose / bounds / grid
    */
-  void process(
-    nav2_costmap_2d::Costmap2D & master_grid,
-    int min_i, int min_j, int max_i, int max_j,
-    const geometry_msgs::msg::Pose2D & pose);
+  void process( nav2_costmap_2d::Costmap2D & master_grid, int min_i, int min_j, int max_i, int max_j, const geometry_msgs::msg::Pose2D & pose);
 
   /**
    * @brief Reset the costmap filter / topic / info

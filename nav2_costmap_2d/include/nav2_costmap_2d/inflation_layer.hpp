@@ -64,9 +64,7 @@ public:
    * @param  sy The y coordinate of the closest obstacle cell in the costmap
    * @return
    */
-  CellData(double i, unsigned int x, unsigned int y, unsigned int sx, unsigned int sy)
-  : index_(static_cast<unsigned int>(i)), x_(x), y_(y), src_x_(sx), src_y_(sy)
-  {
+  CellData(double i, unsigned int x, unsigned int y, unsigned int sx, unsigned int sy) : index_(static_cast<unsigned int>(i)), x_(x), y_(y), src_x_(sx), src_y_(sy) {
   }
   unsigned int index_;
   unsigned int x_, y_;
@@ -106,11 +104,7 @@ public:
    * @param max_x X max map coord of the window to update
    * @param max_y Y max map coord of the window to update
    */
-  void updateBounds(
-    double robot_x, double robot_y, double robot_yaw, double * min_x,
-    double * min_y,
-    double * max_x,
-    double * max_y) override;
+  void updateBounds( double robot_x, double robot_y, double robot_yaw, double * min_x, double * min_y, double * max_x, double * max_y) override;
   /**
    * @brief Update the costs in the master costmap in the window
    * @param master_grid The master costmap grid to update
@@ -119,9 +113,7 @@ public:
    * @param max_x X max map coord of the window to update
    * @param max_y Y max map coord of the window to update
    */
-  void updateCosts(
-    nav2_costmap_2d::Costmap2D & master_grid,
-    int min_i, int min_j, int max_i, int max_j) override;
+  void updateCosts( nav2_costmap_2d::Costmap2D & master_grid, int min_i, int min_j, int max_i, int max_j) override;
 
   /**
    * @brief Match the size of the master costmap
@@ -136,8 +128,7 @@ public:
   /**
    * @brief Reset this costmap
    */
-  void reset() override
-  {
+  void reset() override {
     matchSize();
     current_ = false;
   }
@@ -145,8 +136,7 @@ public:
   /** @brief  Given a distance, compute a cost.
    * @param  distance The distance from an obstacle in cells
    * @return A cost value for the distance */
-  inline unsigned char computeCost(double distance) const
-  {
+  inline unsigned char computeCost(double distance) const {
     unsigned char cost = 0;
     if (distance == 0) {
       cost = LETHAL_OBSTACLE;
@@ -154,8 +144,7 @@ public:
       cost = INSCRIBED_INFLATED_OBSTACLE;
     } else {
       // make sure cost falls off by Euclidean distance
-      double factor =
-        exp(-1.0 * cost_scaling_factor_ * (distance * resolution_ - inscribed_radius_));
+      double factor = exp(-1.0 * cost_scaling_factor_ * (distance * resolution_ - inscribed_radius_));
       cost = static_cast<unsigned char>((INSCRIBED_INFLATED_OBSTACLE - 1) * factor);
     }
     return cost;
@@ -167,8 +156,7 @@ public:
   /**
    * @brief Get the mutex of the inflation inforamtion
    */
-  mutex_t * getMutex()
-  {
+  mutex_t * getMutex() {
     return access_;
   }
 
@@ -186,10 +174,7 @@ protected:
    * @param src_y The y coordinate of the source cell
    * @return
    */
-  inline double distanceLookup(
-    unsigned int mx, unsigned int my, unsigned int src_x,
-    unsigned int src_y)
-  {
+  inline double distanceLookup( unsigned int mx, unsigned int my, unsigned int src_x, unsigned int src_y) {
     unsigned int dx = (mx > src_x) ? mx - src_x : src_x - mx;
     unsigned int dy = (my > src_y) ? my - src_y : src_y - my;
     return cached_distances_[dx * cache_length_ + dy];
@@ -203,10 +188,7 @@ protected:
    * @param src_y The y coordinate of the source cell
    * @return
    */
-  inline unsigned char costLookup(
-    unsigned int mx, unsigned int my, unsigned int src_x,
-    unsigned int src_y)
-  {
+  inline unsigned char costLookup( unsigned int mx, unsigned int my, unsigned int src_x, unsigned int src_y) {
     unsigned int dx = (mx > src_x) ? mx - src_x : src_x - mx;
     unsigned int dy = (my > src_y) ? my - src_y : src_y - my;
     return cached_costs_[dx * cache_length_ + dy];
@@ -225,24 +207,20 @@ protected:
   /**
    * @brief Compute cached dsitances
    */
-  unsigned int cellDistance(double world_dist)
-  {
+  unsigned int cellDistance(double world_dist) {
     return layered_costmap_->getCostmap()->cellDistance(world_dist);
   }
 
   /**
    * @brief Enqueue new cells in cache distance update search
    */
-  inline void enqueue(
-    unsigned int index, unsigned int mx, unsigned int my,
-    unsigned int src_x, unsigned int src_y);
+  inline void enqueue( unsigned int index, unsigned int mx, unsigned int my, unsigned int src_x, unsigned int src_y);
 
   /**
    * @brief Callback executed when a parameter change is detected
    * @param event ParameterEvent message
    */
-  rcl_interfaces::msg::SetParametersResult
-  dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters);
+  rcl_interfaces::msg::SetParametersResult dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters);
 
   double inflation_radius_, inscribed_radius_, cost_scaling_factor_;
   bool inflate_unknown_, inflate_around_unknown_;

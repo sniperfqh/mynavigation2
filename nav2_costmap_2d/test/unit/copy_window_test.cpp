@@ -25,8 +25,7 @@ public:
 };
 RclCppFixture g_rclcppfixture;
 
-TEST(CopyWindow, copyValidWindow)
-{
+TEST(CopyWindow, copyValidWindow) {
   nav2_costmap_2d::Costmap2D src(10, 10, 0.1, 0.0, 0.0);
   nav2_costmap_2d::Costmap2D dst(5, 5, 0.2, 100.0, 100.0);
   // Adding 2 marked cells to source costmap
@@ -39,8 +38,7 @@ TEST(CopyWindow, copyValidWindow)
   ASSERT_EQ(dst.getCost(3, 3), 200);
 }
 
-TEST(CopyWindow, copyInvalidWindow)
-{
+TEST(CopyWindow, copyInvalidWindow) {
   nav2_costmap_2d::Costmap2D src(10, 10, 0.1, 0.0, 0.0);
   nav2_costmap_2d::Costmap2D dst(5, 5, 0.2, 100.0, 100.0);
 

@@ -103,9 +103,7 @@ public:
    * @param max_x X max map coord of the window to update
    * @param max_y Y max map coord of the window to update
    */
-  virtual void updateBounds(
-    double robot_x, double robot_y, double robot_yaw, double * min_x,
-    double * min_y, double * max_x, double * max_y);
+  virtual void updateBounds( double robot_x, double robot_y, double robot_yaw, double * min_x, double * min_y, double * max_x, double * max_y);
 
   /**
    * @brief Update the costs in the master costmap in the window
@@ -115,9 +113,7 @@ public:
    * @param max_x X max map coord of the window to update
    * @param max_y Y max map coord of the window to update
    */
-  virtual void updateCosts(
-    nav2_costmap_2d::Costmap2D & master_grid,
-    int min_i, int min_j, int max_i, int max_j);
+  virtual void updateCosts( nav2_costmap_2d::Costmap2D & master_grid, int min_i, int min_j, int max_i, int max_j);
 
   /**
    * @brief Match the size of the master costmap
@@ -158,19 +154,14 @@ protected:
    * @brief Callback executed when a parameter change is detected
    * @param event ParameterEvent message
    */
-  rcl_interfaces::msg::SetParametersResult
-  dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters);
+  rcl_interfaces::msg::SetParametersResult dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters);
 
   std::vector<geometry_msgs::msg::Point> transformed_footprint_;
   bool footprint_clearing_enabled_;
   /**
    * @brief Clear costmap layer info below the robot's footprint
    */
-  void updateFootprint(
-    double robot_x, double robot_y, double robot_yaw, double * min_x,
-    double * min_y,
-    double * max_x,
-    double * max_y);
+  void updateFootprint( double robot_x, double robot_y, double robot_yaw, double * min_x, double * min_y, double * max_x, double * max_y);
 
   std::string global_frame_;  ///< @brief The global frame for the costmap
   std::string map_frame_;  /// @brief frame that map is located in

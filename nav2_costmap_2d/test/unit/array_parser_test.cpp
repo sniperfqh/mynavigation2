@@ -33,8 +33,7 @@
 #include "gtest/gtest.h"
 #include "nav2_costmap_2d/array_parser.hpp"
 
-TEST(array_parser, basic_operation)
-{
+TEST(array_parser, basic_operation) {
   std::string error;
   std::vector<std::vector<float>> vvf;
   vvf = nav2_costmap_2d::parseVVF("[[1, 2.2], [.3, -4e4]]", error);
@@ -48,32 +47,28 @@ TEST(array_parser, basic_operation)
   EXPECT_EQ("", error);
 }
 
-TEST(array_parser, missing_open)
-{
+TEST(array_parser, missing_open) {
   std::string error;
   std::vector<std::vector<float>> vvf;
   vvf = nav2_costmap_2d::parseVVF("[1, 2.2], [.3, -4e4]]", error);
   EXPECT_NE(error, "");
 }
 
-TEST(array_parser, missing_close)
-{
+TEST(array_parser, missing_close) {
   std::string error;
   std::vector<std::vector<float>> vvf;
   vvf = nav2_costmap_2d::parseVVF("[[1, 2.2], [.3, -4e4]", error);
   EXPECT_NE(error, "");
 }
 
-TEST(array_parser, wrong_depth)
-{
+TEST(array_parser, wrong_depth) {
   std::string error;
   std::vector<std::vector<float>> vvf;
   vvf = nav2_costmap_2d::parseVVF("[1, 2.2], [.3, -4e4]", error);
   EXPECT_NE(error, "");
 }
 
-int main(int argc, char ** argv)
-{
+int main(int argc, char ** argv) {
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }

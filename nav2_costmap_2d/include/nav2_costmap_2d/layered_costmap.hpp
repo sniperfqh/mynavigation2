@@ -79,24 +79,19 @@ public:
    */
   void updateMap(double robot_x, double robot_y, double robot_yaw);
 
-  std::string getGlobalFrameID() const
-  {
+  std::string getGlobalFrameID() const {
     return global_frame_;
   }
 
   /**
    * @brief Resize the map to a new size, resolution, or origin
    */
-  void resizeMap(
-    unsigned int size_x, unsigned int size_y, double resolution, double origin_x,
-    double origin_y,
-    bool size_locked = false);
+  void resizeMap( unsigned int size_x, unsigned int size_y, double resolution, double origin_x, double origin_y, bool size_locked = false);
 
   /**
    * @brief Get the size of the bounds for update
    */
-  void getUpdatedBounds(double & minx, double & miny, double & maxx, double & maxy)
-  {
+  void getUpdatedBounds(double & minx, double & miny, double & maxx, double & maxy) {
     minx = minx_;
     miny = miny_;
     maxx = maxx_;
@@ -112,40 +107,35 @@ public:
   /**
    * @brief Get the costmap pointer to the master costmap
    */
-  Costmap2D * getCostmap()
-  {
+  Costmap2D * getCostmap() {
     return &combined_costmap_;
   }
 
   /**
    * @brief If this costmap is rolling or not
    */
-  bool isRolling()
-  {
+  bool isRolling() {
     return rolling_window_;
   }
 
   /**
    * @brief If this costmap is tracking unknown space or not
    */
-  bool isTrackingUnknown()
-  {
+  bool isTrackingUnknown() {
     return combined_costmap_.getDefaultValue() == nav2_costmap_2d::NO_INFORMATION;
   }
 
   /**
    * @brief Get the vector of pointers to the costmap plugins
    */
-  std::vector<std::shared_ptr<Layer>> * getPlugins()
-  {
+  std::vector<std::shared_ptr<Layer>> * getPlugins() {
     return &plugins_;
   }
 
   /**
    * @brief Get the vector of pointers to the costmap filters
    */
-  std::vector<std::shared_ptr<Layer>> * getFilters()
-  {
+  std::vector<std::shared_ptr<Layer>> * getFilters() {
     return &filters_;
   }
 
@@ -164,16 +154,14 @@ public:
   /**
    * @brief Get if the size of the costmap is locked
    */
-  bool isSizeLocked()
-  {
+  bool isSizeLocked() {
     return size_locked_;
   }
 
   /**
    * @brief Get the bounds of the costmap
    */
-  void getBounds(unsigned int * x0, unsigned int * xn, unsigned int * y0, unsigned int * yn)
-  {
+  void getBounds(unsigned int * x0, unsigned int * xn, unsigned int * y0, unsigned int * yn) {
     *x0 = bx0_;
     *xn = bxn_;
     *y0 = by0_;
@@ -183,8 +171,7 @@ public:
   /**
    * @brief if the costmap is initialized
    */
-  bool isInitialized()
-  {
+  bool isInitialized() {
     return initialized_;
   }
 

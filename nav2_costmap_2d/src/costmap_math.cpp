@@ -31,8 +31,7 @@
 
 #include <vector>
 
-double distanceToLine(double pX, double pY, double x0, double y0, double x1, double y1)
-{
+double distanceToLine(double pX, double pY, double x0, double y0, double x1, double y1) {
   double A = pX - x0;
   double B = pY - y0;
   double C = x1 - x0;

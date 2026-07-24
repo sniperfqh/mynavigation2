@@ -48,10 +48,7 @@ public:
    * The method is called to ask the plugin: which area of costmap it needs to update.
    * A layer is essentially a filter, so it never needs to expand bounds.
    */
-  void updateBounds(
-    double robot_x, double robot_y, double robot_yaw,
-    double * min_x, double * min_y,
-    double * max_x, double * max_y) override;
+  void updateBounds( double robot_x, double robot_y, double robot_yaw, double * min_x, double * min_y, double * max_x, double * max_y) override;
 
   /**
    * @brief Filters noise-induced obstacles in the selected region of the costmap
@@ -63,9 +60,7 @@ public:
    * @param max_x X max map coord of the window to update
    * @param max_y Y max map coord of the window to update
    */
-  void updateCosts(
-    nav2_costmap_2d::Costmap2D & master_grid,
-    int min_x, int min_y, int max_x, int max_y) override;
+  void updateCosts( nav2_costmap_2d::Costmap2D & master_grid, int min_x, int min_y, int max_x, int max_y) override;
 
 protected:
   /**

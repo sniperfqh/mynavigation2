@@ -35,16 +35,12 @@ public:
   /**
    * @brief A constructor
    */
-  CostmapSubscriber(
-    const nav2_util::LifecycleNode::WeakPtr & parent,
-    const std::string & topic_name);
+  CostmapSubscriber( const nav2_util::LifecycleNode::WeakPtr & parent, const std::string & topic_name);
 
   /**
    * @brief A constructor
    */
-  CostmapSubscriber(
-    const rclcpp::Node::WeakPtr & parent,
-    const std::string & topic_name);
+  CostmapSubscriber( const rclcpp::Node::WeakPtr & parent, const std::string & topic_name);
 
   /**
    * @brief A destructor

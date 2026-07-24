@@ -97,10 +97,7 @@ public:
    * @param parent_namespace Absolute namespace of the node hosting the costmap node
    * @param local_namespace Namespace to append to the parent namespace
    */
-  explicit Costmap2DROS(
-    const std::string & name,
-    const std::string & parent_namespace,
-    const std::string & local_namespace);
+  explicit Costmap2DROS( const std::string & name, const std::string & parent_namespace, const std::string & local_namespace);
 
   /**
    * @brief A destructor
@@ -137,17 +134,14 @@ public:
    * Costmap2DROS may be launched by another Lifecycle Node as a composed module
    * If composed, its parents will handle the shutdown, which includes this module
    */
-  void on_rcl_preshutdown() override
-  {
+  void on_rcl_preshutdown() override {
     if (is_lifecycle_follower_) {
       // Transitioning handled by parent node
       return;
     }
 
     // Else, if this is an independent node, this node needs to handle itself.
-    RCLCPP_INFO(
-      get_logger(), "Running Nav2 LifecycleNode rcl preshutdown (%s)",
-      this->get_name());
+    RCLCPP_INFO( get_logger(), "Running Nav2 LifecycleNode rcl preshutdown (%s)", this->get_name());
 
     runCleanups();
 
@@ -189,8 +183,7 @@ public:
   void resetLayers();
 
   /** @brief Same as getLayeredCostmap()->isCurrent(). */
-  bool isCurrent()
-  {
+  bool isCurrent() {
     return layered_costmap_->isCurrent();
   }
 
@@ -207,19 +200,15 @@ public:
    * @param transformed_pose pose transformed
    * @return True if the pose was transformed successfully, false otherwise
    */
-  bool transformPoseToGlobalFrame(
-    const geometry_msgs::msg::PoseStamped & input_pose,
-    geometry_msgs::msg::PoseStamped & transformed_pose);
+  bool transformPoseToGlobalFrame( const geometry_msgs::msg::PoseStamped & input_pose, geometry_msgs::msg::PoseStamped & transformed_pose);
 
   /** @brief Returns costmap name */
-  std::string getName() const
-  {
+  std::string getName() const {
     return name_;
   }
 
   /** @brief Returns the delay in transform (tf) data that is tolerable in seconds */
-  double getTransformTolerance() const
-  {
+  double getTransformTolerance() const {
     return transform_tolerance_;
   }
 
@@ -228,8 +217,7 @@ public:
    *
    * Same as calling getLayeredCostmap()->getCostmap().
    */
-  Costmap2D * getCostmap()
-  {
+  Costmap2D * getCostmap() {
     return layered_costmap_->getCostmap();
   }
 
@@ -237,8 +225,7 @@ public:
    * @brief  Returns the global frame of the costmap
    * @return The global frame of the costmap
    */
-  std::string getGlobalFrameID()
-  {
+  std::string getGlobalFrameID() {
     return global_frame_;
   }
 
@@ -246,22 +233,19 @@ public:
    * @brief  Returns the local frame of the costmap
    * @return The local frame of the costmap
    */
-  std::string getBaseFrameID()
-  {
+  std::string getBaseFrameID() {
     return robot_base_frame_;
   }
 
   /**
    * @brief Get the layered costmap object used in the node
    */
-  LayeredCostmap * getLayeredCostmap()
-  {
+  LayeredCostmap * getLayeredCostmap() {
     return layered_costmap_.get();
   }
 
   /** @brief Returns the current padded footprint as a geometry_msgs::msg::Polygon. */
-  geometry_msgs::msg::Polygon getRobotFootprintPolygon()
-  {
+  geometry_msgs::msg::Polygon getRobotFootprintPolygon() {
     return nav2_costmap_2d::toPolygon(padded_footprint_);
   }
 
@@ -273,8 +257,7 @@ public:
    * The footprint initially comes from the rosparam "footprint" but
    * can be overwritten by dynamic reconfigure or by messages received
    * on the "footprint" topic. */
-  std::vector<geometry_msgs::msg::Point> getRobotFootprint()
-  {
+  std::vector<geometry_msgs::msg::Point> getRobotFootprint() {
     return padded_footprint_;
   }
 
@@ -285,8 +268,7 @@ public:
    * The footprint initially comes from the rosparam "footprint" but
    * can be overwritten by dynamic reconfigure or by messages received
    * on the "footprint" topic. */
-  std::vector<geometry_msgs::msg::Point> getUnpaddedRobotFootprint()
-  {
+  std::vector<geometry_msgs::msg::Point> getUnpaddedRobotFootprint() {
     return unpadded_footprint_;
   }
 
@@ -340,8 +322,7 @@ public:
 
 protected:
   // Publishers and subscribers
-  rclcpp_lifecycle::LifecyclePublisher<geometry_msgs::msg::PolygonStamped>::SharedPtr
-    footprint_pub_;
+  rclcpp_lifecycle::LifecyclePublisher<geometry_msgs::msg::PolygonStamped>::SharedPtr footprint_pub_;
   std::unique_ptr<Costmap2DPublisher> costmap_publisher_{nullptr};
 
   rclcpp::Subscription<geometry_msgs::msg::Polygon>::SharedPtr footprint_sub_;
@@ -419,8 +400,7 @@ protected:
    * @brief Callback executed when a paramter change is detected
    * @param parameters list of changed parameters
    */
-  rcl_interfaces::msg::SetParametersResult
-  dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters);
+  rcl_interfaces::msg::SetParametersResult dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters);
 };
 
 }  // namespace nav2_costmap_2d

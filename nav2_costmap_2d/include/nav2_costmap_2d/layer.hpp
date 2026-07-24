@@ -70,12 +70,7 @@ public:
   /**
    * @brief Initialization process of layer on startup
    */
-  void initialize(
-    LayeredCostmap * parent,
-    std::string name,
-    tf2_ros::Buffer * tf,
-    const nav2_util::LifecycleNode::WeakPtr & node,
-    rclcpp::CallbackGroup::SharedPtr callback_group);
+  void initialize( LayeredCostmap * parent, std::string name, tf2_ros::Buffer * tf, const nav2_util::LifecycleNode::WeakPtr & node, rclcpp::CallbackGroup::SharedPtr callback_group);
   /** @brief Stop publishers. */
   virtual void deactivate() {}
   /** @brief Restart publishers if they've been stopped. */
@@ -97,19 +92,13 @@ public:
    * For more details, see "Layered Costmaps for Context-Sensitive Navigation",
    * by Lu et. Al, IROS 2014.
    */
-  virtual void updateBounds(
-    double robot_x, double robot_y, double robot_yaw, double * min_x,
-    double * min_y,
-    double * max_x,
-    double * max_y) = 0;
+  virtual void updateBounds( double robot_x, double robot_y, double robot_yaw, double * min_x, double * min_y, double * max_x, double * max_y) = 0;
 
   /**
    * @brief Actually update the underlying costmap, only within the bounds
    *        calculated during UpdateBounds().
    */
-  virtual void updateCosts(
-    Costmap2D & master_grid,
-    int min_i, int min_j, int max_i, int max_j) = 0;
+  virtual void updateCosts( Costmap2D & master_grid, int min_i, int min_j, int max_i, int max_j) = 0;
 
   /** @brief Implement this to make this layer match the size of the parent costmap. */
   virtual void matchSize() {}
@@ -119,8 +108,7 @@ public:
    * notified of changes to the robot's footprint. */
   virtual void onFootprintChanged() {}
   /** @brief Get the name of the costmap layer */
-  std::string getName() const
-  {
+  std::string getName() const {
     return name_;
   }
 
@@ -134,14 +122,12 @@ public:
    *        variable current_.
    * @return Whether the data in the layer is up to date.
    */
-  bool isCurrent() const
-  {
+  bool isCurrent() const {
     return current_;
   }
 
   /**@brief Gets whether the layer is enabled. */
-  bool isEnabled() const
-  {
+  bool isEnabled() const {
     return enabled_;
   }
 
@@ -149,13 +135,9 @@ public:
   const std::vector<geometry_msgs::msg::Point> & getFootprint() const;
 
   /** @brief Convenience functions for declaring ROS parameters */
-  void declareParameter(
-    const std::string & param_name,
-    const rclcpp::ParameterValue & value);
+  void declareParameter( const std::string & param_name, const rclcpp::ParameterValue & value);
   /** @brief Convenience functions for declaring ROS parameters */
-  void declareParameter(
-    const std::string & param_name,
-    const rclcpp::ParameterType & param_type);
+  void declareParameter( const std::string & param_name, const rclcpp::ParameterType & param_type);
   /** @brief Convenience functions for declaring ROS parameters */
   bool hasParameter(const std::string & param_name);
   /** @brief Convenience functions for declaring ROS parameters */

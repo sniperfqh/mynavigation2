@@ -43,26 +43,19 @@
 namespace nav2_costmap_2d
 {
 
-void CostmapLayer::touch(
-  double x, double y, double * min_x, double * min_y, double * max_x,
-  double * max_y)
-{
+void CostmapLayer::touch(double x, double y, double * min_x, double * min_y, double * max_x, double * max_y) {
   *min_x = std::min(x, *min_x);
   *min_y = std::min(y, *min_y);
   *max_x = std::max(x, *max_x);
   *max_y = std::max(y, *max_y);
 }
 
-void CostmapLayer::matchSize()
-{
+void CostmapLayer::matchSize() {
   Costmap2D * master = layered_costmap_->getCostmap();
-  resizeMap(
-    master->getSizeInCellsX(), master->getSizeInCellsY(), master->getResolution(),
-    master->getOriginX(), master->getOriginY());
+  resizeMap(master->getSizeInCellsX(), master->getSizeInCellsY(), master->getResolution(), master->getOriginX(), master->getOriginY());
 }
 
-void CostmapLayer::clearArea(int start_x, int start_y, int end_x, int end_y, bool invert)
-{
+void CostmapLayer::clearArea(int start_x, int start_y, int end_x, int end_y, bool invert) {
   current_ = false;
   unsigned char * grid = getCharMap();
   for (int x = 0; x < static_cast<int>(getSizeInCellsX()); x++) {
@@ -80,8 +73,7 @@ void CostmapLayer::clearArea(int start_x, int start_y, int end_x, int end_y, boo
   }
 }
 
-void CostmapLayer::addExtraBounds(double mx0, double my0, double mx1, double my1)
-{
+void CostmapLayer::addExtraBounds(double mx0, double my0, double mx1, double my1) {
   extra_min_x_ = std::min(mx0, extra_min_x_);
   extra_max_x_ = std::max(mx1, extra_max_x_);
   extra_min_y_ = std::min(my0, extra_min_y_);
@@ -89,8 +81,7 @@ void CostmapLayer::addExtraBounds(double mx0, double my0, double mx1, double my1
   has_extra_bounds_ = true;
 }
 
-void CostmapLayer::useExtraBounds(double * min_x, double * min_y, double * max_x, double * max_y)
-{
+void CostmapLayer::useExtraBounds(double * min_x, double * min_y, double * max_x, double * max_y) {
   if (!has_extra_bounds_) {
     return;
   }
@@ -106,11 +97,7 @@ void CostmapLayer::useExtraBounds(double * min_x, double * min_y, double * max_x
   has_extra_bounds_ = false;
 }
 
-void CostmapLayer::updateWithMax(
-  nav2_costmap_2d::Costmap2D & master_grid, int min_i, int min_j,
-  int max_i,
-  int max_j)
-{
+void CostmapLayer::updateWithMax(nav2_costmap_2d::Costmap2D & master_grid, int min_i, int min_j, int max_i, int max_j) {
   if (!enabled_) {
     return;
   }
@@ -135,12 +122,7 @@ void CostmapLayer::updateWithMax(
   }
 }
 
-void CostmapLayer::updateWithTrueOverwrite(
-  nav2_costmap_2d::Costmap2D & master_grid, int min_i,
-  int min_j,
-  int max_i,
-  int max_j)
-{
+void CostmapLayer::updateWithTrueOverwrite(nav2_costmap_2d::Costmap2D & master_grid, int min_i, int min_j, int max_i, int max_j) {
   if (!enabled_) {
     return;
   }
@@ -161,10 +143,7 @@ void CostmapLayer::updateWithTrueOverwrite(
   }
 }
 
-void CostmapLayer::updateWithOverwrite(
-  nav2_costmap_2d::Costmap2D & master_grid,
-  int min_i, int min_j, int max_i, int max_j)
-{
+void CostmapLayer::updateWithOverwrite(nav2_costmap_2d::Costmap2D & master_grid, int min_i, int min_j, int max_i, int max_j) {
   if (!enabled_) {
     return;
   }
@@ -182,10 +161,7 @@ void CostmapLayer::updateWithOverwrite(
   }
 }
 
-void CostmapLayer::updateWithAddition(
-  nav2_costmap_2d::Costmap2D & master_grid,
-  int min_i, int min_j, int max_i, int max_j)
-{
+void CostmapLayer::updateWithAddition(nav2_costmap_2d::Costmap2D & master_grid, int min_i, int min_j, int max_i, int max_j) {
   if (!enabled_) {
     return;
   }

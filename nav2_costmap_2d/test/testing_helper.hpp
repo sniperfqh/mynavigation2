@@ -30,8 +30,7 @@
 
 const double MAX_Z(1.0);
 
-char printableCost(unsigned char cost)
-{
+char printableCost(unsigned char cost) {
   switch (cost) {
     case nav2_costmap_2d::NO_INFORMATION: return '?';
     case nav2_costmap_2d::LETHAL_OBSTACLE: return 'L';
@@ -41,8 +40,7 @@ char printableCost(unsigned char cost)
   }
 }
 
-void printMap(nav2_costmap_2d::Costmap2D & costmap)
-{
+void printMap(nav2_costmap_2d::Costmap2D & costmap) {
   printf("map:\n");
   for (unsigned int i = 0; i < costmap.getSizeInCellsY(); i++) {
     for (unsigned int j = 0; j < costmap.getSizeInCellsX(); j++) {
@@ -52,10 +50,7 @@ void printMap(nav2_costmap_2d::Costmap2D & costmap)
   }
 }
 
-unsigned int countValues(
-  nav2_costmap_2d::Costmap2D & costmap,
-  unsigned char value, bool equal = true)
-{
+unsigned int countValues( nav2_costmap_2d::Costmap2D & costmap, unsigned char value, bool equal = true) {
   unsigned int count = 0;
   for (unsigned int i = 0; i < costmap.getSizeInCellsY(); i++) {
     for (unsigned int j = 0; j < costmap.getSizeInCellsX(); j++) {
@@ -68,47 +63,25 @@ unsigned int countValues(
   return count;
 }
 
-void addStaticLayer(
-  nav2_costmap_2d::LayeredCostmap & layers,
-  tf2_ros::Buffer & tf, nav2_util::LifecycleNode::SharedPtr node,
-  std::shared_ptr<nav2_costmap_2d::StaticLayer> & slayer,
-  rclcpp::CallbackGroup::SharedPtr callback_group = nullptr)
-{
+void addStaticLayer( nav2_costmap_2d::LayeredCostmap & layers, tf2_ros::Buffer & tf, nav2_util::LifecycleNode::SharedPtr node, std::shared_ptr<nav2_costmap_2d::StaticLayer> & slayer, rclcpp::CallbackGroup::SharedPtr callback_group = nullptr) {
   slayer = std::make_shared<nav2_costmap_2d::StaticLayer>();
   layers.addPlugin(std::shared_ptr<nav2_costmap_2d::Layer>(slayer));
   slayer->initialize(&layers, "static", &tf, node, callback_group);
 }
 
-void addObstacleLayer(
-  nav2_costmap_2d::LayeredCostmap & layers,
-  tf2_ros::Buffer & tf, nav2_util::LifecycleNode::SharedPtr node,
-  std::shared_ptr<nav2_costmap_2d::ObstacleLayer> & olayer,
-  rclcpp::CallbackGroup::SharedPtr callback_group = nullptr)
-{
+void addObstacleLayer( nav2_costmap_2d::LayeredCostmap & layers, tf2_ros::Buffer & tf, nav2_util::LifecycleNode::SharedPtr node, std::shared_ptr<nav2_costmap_2d::ObstacleLayer> & olayer, rclcpp::CallbackGroup::SharedPtr callback_group = nullptr) {
   olayer = std::make_shared<nav2_costmap_2d::ObstacleLayer>();
   olayer->initialize(&layers, "obstacles", &tf, node, callback_group);
   layers.addPlugin(std::shared_ptr<nav2_costmap_2d::Layer>(olayer));
 }
 
-void addRangeLayer(
-  nav2_costmap_2d::LayeredCostmap & layers,
-  tf2_ros::Buffer & tf, nav2_util::LifecycleNode::SharedPtr node,
-  std::shared_ptr<nav2_costmap_2d::RangeSensorLayer> & rlayer,
-  rclcpp::CallbackGroup::SharedPtr callback_group = nullptr)
-{
+void addRangeLayer( nav2_costmap_2d::LayeredCostmap & layers, tf2_ros::Buffer & tf, nav2_util::LifecycleNode::SharedPtr node, std::shared_ptr<nav2_costmap_2d::RangeSensorLayer> & rlayer, rclcpp::CallbackGroup::SharedPtr callback_group = nullptr) {
   rlayer = std::make_shared<nav2_costmap_2d::RangeSensorLayer>();
   rlayer->initialize(&layers, "range", &tf, node, callback_group);
   layers.addPlugin(std::shared_ptr<nav2_costmap_2d::Layer>(rlayer));
 }
 
-void addObservation(
-  std::shared_ptr<nav2_costmap_2d::ObstacleLayer> olayer, double x, double y, double z = 0.0,
-  double ox = 0.0, double oy = 0.0, double oz = MAX_Z, bool marking = true, bool clearing = true,
-  double raytrace_max_range = 100.0,
-  double raytrace_min_range = 0.0,
-  double obstacle_max_range = 100.0,
-  double obstacle_min_range = 0.0)
-{
+void addObservation( std::shared_ptr<nav2_costmap_2d::ObstacleLayer> olayer, double x, double y, double z = 0.0, double ox = 0.0, double oy = 0.0, double oz = MAX_Z, bool marking = true, bool clearing = true, double raytrace_max_range = 100.0, double raytrace_min_range = 0.0, double obstacle_max_range = 100.0, double obstacle_min_range = 0.0) {
   sensor_msgs::msg::PointCloud2 cloud;
   sensor_msgs::PointCloud2Modifier modifier(cloud);
   modifier.setPointCloud2FieldsByString(1, "xyz");
@@ -125,17 +98,11 @@ void addObservation(
   p.y = oy;
   p.z = oz;
 
-  nav2_costmap_2d::Observation obs(p, cloud, obstacle_max_range, obstacle_min_range,
-    raytrace_max_range, raytrace_min_range);
+  nav2_costmap_2d::Observation obs(p, cloud, obstacle_max_range, obstacle_min_range, raytrace_max_range, raytrace_min_range);
   olayer->addStaticObservation(obs, marking, clearing);
 }
 
-void addInflationLayer(
-  nav2_costmap_2d::LayeredCostmap & layers,
-  tf2_ros::Buffer & tf, nav2_util::LifecycleNode::SharedPtr node,
-  std::shared_ptr<nav2_costmap_2d::InflationLayer> & ilayer,
-  rclcpp::CallbackGroup::SharedPtr callback_group = nullptr)
-{
+void addInflationLayer( nav2_costmap_2d::LayeredCostmap & layers, tf2_ros::Buffer & tf, nav2_util::LifecycleNode::SharedPtr node, std::shared_ptr<nav2_costmap_2d::InflationLayer> & ilayer, rclcpp::CallbackGroup::SharedPtr callback_group = nullptr) {
   ilayer = std::make_shared<nav2_costmap_2d::InflationLayer>();
   ilayer->initialize(&layers, "inflation", &tf, node, callback_group);
   std::shared_ptr<nav2_costmap_2d::Layer> ipointer(ilayer);

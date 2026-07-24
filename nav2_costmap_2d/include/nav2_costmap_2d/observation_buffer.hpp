@@ -75,17 +75,7 @@ public:
    * @param  sensor_frame The frame of the origin of the sensor, can be left blank to be read from the messages
    * @param  tf_tolerance The amount of time to wait for a transform to be available when setting a new global frame
    */
-  ObservationBuffer(
-    const nav2_util::LifecycleNode::WeakPtr & parent,
-    std::string topic_name,
-    double observation_keep_time,
-    double expected_update_rate,
-    double min_obstacle_height, double max_obstacle_height, double obstacle_max_range,
-    double obstacle_min_range,
-    double raytrace_max_range, double raytrace_min_range, tf2_ros::Buffer & tf2_buffer,
-    std::string global_frame,
-    std::string sensor_frame,
-    tf2::Duration tf_tolerance);
+  ObservationBuffer( const nav2_util::LifecycleNode::WeakPtr & parent, std::string topic_name, double observation_keep_time, double expected_update_rate, double min_obstacle_height, double max_obstacle_height, double obstacle_max_range, double obstacle_min_range, double raytrace_max_range, double raytrace_min_range, tf2_ros::Buffer & tf2_buffer, std::string global_frame, std::string sensor_frame, tf2::Duration tf_tolerance);
 
   /**
    * @brief  Destructor... cleans up
@@ -114,16 +104,14 @@ public:
   /**
    * @brief  Lock the observation buffer
    */
-  inline void lock()
-  {
+  inline void lock() {
     lock_.lock();
   }
 
   /**
    * @brief  Lock the observation buffer
    */
-  inline void unlock()
-  {
+  inline void unlock() {
     lock_.unlock();
   }
 

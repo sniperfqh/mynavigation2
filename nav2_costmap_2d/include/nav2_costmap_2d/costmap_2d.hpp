@@ -78,9 +78,7 @@ public:
    * @param  origin_y The y origin of the map
    * @param  default_value Default Value
    */
-  Costmap2D(
-    unsigned int cells_size_x, unsigned int cells_size_y, double resolution,
-    double origin_x, double origin_y, unsigned char default_value = 0);
+  Costmap2D( unsigned int cells_size_x, unsigned int cells_size_y, double resolution, double origin_x, double origin_y, unsigned char default_value = 0);
 
   /**
    * @brief  Copy constructor for a costmap, creates a copy efficiently
@@ -109,10 +107,7 @@ public:
    * @param win_size_x The x size of the window, in meters
    * @param win_size_y The y size of the window, in meters
    */
-  bool copyCostmapWindow(
-    const Costmap2D & map, double win_origin_x, double win_origin_y,
-    double win_size_x,
-    double win_size_y);
+  bool copyCostmapWindow( const Costmap2D & map, double win_origin_x, double win_origin_y, double win_size_x, double win_size_y);
 
   /**
    * @brief Copies the (x0,y0)..(xn,yn) window from source costmap into a current costmap
@@ -125,10 +120,7 @@ public:
      @param dx0 Lower y-boundary of the destination window to copy, in cells
      @returns true if copy was succeeded or false in negative case
    */
-  bool copyWindow(
-    const Costmap2D & source,
-    unsigned int sx0, unsigned int sy0, unsigned int sxn, unsigned int syn,
-    unsigned int dx0, unsigned int dy0);
+  bool copyWindow( const Costmap2D & source, unsigned int sx0, unsigned int sy0, unsigned int sxn, unsigned int syn, unsigned int dx0, unsigned int dy0);
 
   /**
    * @brief  Default constructor
@@ -208,8 +200,7 @@ public:
    * @param my The y coordinate
    * @return The associated index
    */
-  inline unsigned int getIndex(unsigned int mx, unsigned int my) const
-  {
+  inline unsigned int getIndex(unsigned int mx, unsigned int my) const {
     return my * size_x_ + mx;
   }
 
@@ -219,8 +210,7 @@ public:
    * @param  mx Will be set to the x coordinate
    * @param  my Will be set to the y coordinate
    */
-  inline void indexToCells(unsigned int index, unsigned int & mx, unsigned int & my) const
-  {
+  inline void indexToCells(unsigned int index, unsigned int & mx, unsigned int & my) const {
     my = index / size_x_;
     mx = index - (my * size_x_);
   }
@@ -277,8 +267,7 @@ public:
    * @brief Set the default background value of the costmap
    * @param c default value
    */
-  void setDefaultValue(unsigned char c)
-  {
+  void setDefaultValue(unsigned char c) {
     default_value_ = c;
   }
 
@@ -286,8 +275,7 @@ public:
    * @brief Get the default background value of the costmap
    * @return default value
    */
-  unsigned char getDefaultValue()
-  {
+  unsigned char getDefaultValue() {
     return default_value_;
   }
 
@@ -297,27 +285,21 @@ public:
    * @param cost_value The value to set costs to
    * @return True if the polygon was filled... false if it could not be filled
    */
-  bool setConvexPolygonCost(
-    const std::vector<geometry_msgs::msg::Point> & polygon,
-    unsigned char cost_value);
+  bool setConvexPolygonCost( const std::vector<geometry_msgs::msg::Point> & polygon, unsigned char cost_value);
 
   /**
    * @brief  Get the map cells that make up the outline of a polygon
    * @param polygon The polygon in map coordinates to rasterize
    * @param polygon_cells Will be set to the cells contained in the outline of the polygon
    */
-  void polygonOutlineCells(
-    const std::vector<MapLocation> & polygon,
-    std::vector<MapLocation> & polygon_cells);
+  void polygonOutlineCells( const std::vector<MapLocation> & polygon, std::vector<MapLocation> & polygon_cells);
 
   /**
    * @brief  Get the map cells that fill a convex polygon
    * @param polygon The polygon in map coordinates to rasterize
    * @param polygon_cells Will be set to the cells that fill the polygon
    */
-  void convexFillCells(
-    const std::vector<MapLocation> & polygon,
-    std::vector<MapLocation> & polygon_cells);
+  void convexFillCells( const std::vector<MapLocation> & polygon, std::vector<MapLocation> & polygon_cells);
 
   /**
    * @brief  Move the origin of the costmap to a new location.... keeping data when it can
@@ -335,9 +317,7 @@ public:
   /**
    * @brief Resize the costmap
    */
-  void resizeMap(
-    unsigned int size_x, unsigned int size_y, double resolution, double origin_x,
-    double origin_y);
+  void resizeMap( unsigned int size_x, unsigned int size_y, double resolution, double origin_x, double origin_y);
 
   /**
    * @brief Reset the costmap in bounds
@@ -347,8 +327,7 @@ public:
   /**
    * @brief Reset the costmap in bounds to a value
    */
-  void resetMapToValue(
-    unsigned int x0, unsigned int y0, unsigned int xn, unsigned int yn, unsigned char value);
+  void resetMapToValue( unsigned int x0, unsigned int y0, unsigned int xn, unsigned int yn, unsigned char value);
 
   /**
    * @brief  Given distance in the world... convert it to cells
@@ -359,8 +338,7 @@ public:
 
   // Provide a typedef to ease future code maintenance
   typedef std::recursive_mutex mutex_t;
-  mutex_t * getMutex()
-  {
+  mutex_t * getMutex() {
     return access_;
   }
 
@@ -378,14 +356,7 @@ protected:
    * @param region_size_x The x size of the region to copy
    * @param region_size_y The y size of the region to copy
    */
-  template<typename data_type>
-  void copyMapRegion(
-    data_type * source_map, unsigned int sm_lower_left_x,
-    unsigned int sm_lower_left_y,
-    unsigned int sm_size_x, data_type * dest_map, unsigned int dm_lower_left_x,
-    unsigned int dm_lower_left_y, unsigned int dm_size_x, unsigned int region_size_x,
-    unsigned int region_size_y)
-  {
+  template<typename data_type> void copyMapRegion( data_type * source_map, unsigned int sm_lower_left_x, unsigned int sm_lower_left_y, unsigned int sm_size_x, data_type * dest_map, unsigned int dm_lower_left_x, unsigned int dm_lower_left_y, unsigned int dm_size_x, unsigned int region_size_x, unsigned int region_size_y) {
     // we'll first need to compute the starting points for each map
     data_type * sm_index = source_map + (sm_lower_left_y * sm_size_x + sm_lower_left_x);
     data_type * dm_index = dest_map + (dm_lower_left_y * dm_size_x + dm_lower_left_x);
@@ -426,12 +397,7 @@ protected:
    * allows you to not go all the way to the endpoint
    * @param  min_length The minimum desired length of the segment
    */
-  template<class ActionType>
-  inline void raytraceLine(
-    ActionType at, unsigned int x0, unsigned int y0, unsigned int x1,
-    unsigned int y1,
-    unsigned int max_length = UINT_MAX, unsigned int min_length = 0)
-  {
+  template<class ActionType> inline void raytraceLine( ActionType at, unsigned int x0, unsigned int y0, unsigned int x1, unsigned int y1, unsigned int max_length = UINT_MAX, unsigned int min_length = 0) {
     int dx_full = x1 - x0;
     int dy_full = y1 - y0;
 
@@ -469,16 +435,14 @@ protected:
     if (abs_dx >= abs_dy) {
       int error_y = abs_dx / 2;
 
-      bresenham2D(
-        at, abs_dx, abs_dy, error_y, offset_dx, offset_dy, offset, (unsigned int)(scale * abs_dx));
+      bresenham2D( at, abs_dx, abs_dy, error_y, offset_dx, offset_dy, offset, (unsigned int)(scale * abs_dx));
       return;
     }
 
     // otherwise y is dominant
     int error_x = abs_dy / 2;
 
-    bresenham2D(
-      at, abs_dy, abs_dx, error_x, offset_dy, offset_dx, offset, (unsigned int)(scale * abs_dy));
+    bresenham2D( at, abs_dy, abs_dx, error_x, offset_dy, offset_dx, offset, (unsigned int)(scale * abs_dy));
   }
 
 private:
@@ -486,13 +450,7 @@ private:
    * @brief  A 2D implementation of Bresenham's raytracing algorithm...
    * applies an action at each step
    */
-  template<class ActionType>
-  inline void bresenham2D(
-    ActionType at, unsigned int abs_da, unsigned int abs_db, int error_b,
-    int offset_a,
-    int offset_b, unsigned int offset,
-    unsigned int max_length)
-  {
+  template<class ActionType> inline void bresenham2D( ActionType at, unsigned int abs_da, unsigned int abs_db, int error_b, int offset_a, int offset_b, unsigned int offset, unsigned int max_length) {
     unsigned int end = std::min(max_length, abs_da);
     for (unsigned int i = 0; i < end; ++i) {
       at(offset);
@@ -509,8 +467,7 @@ private:
   /**
    * @brief get the sign of an int
    */
-  inline int sign(int x)
-  {
+  inline int sign(int x) {
     return x > 0 ? 1.0 : -1.0;
   }
 
@@ -529,12 +486,9 @@ protected:
   class MarkCell
   {
   public:
-    MarkCell(unsigned char * costmap, unsigned char value)
-    : costmap_(costmap), value_(value)
-    {
+    MarkCell(unsigned char * costmap, unsigned char value) : costmap_(costmap), value_(value) {
     }
-    inline void operator()(unsigned int offset)
-    {
+    inline void operator()(unsigned int offset) {
       costmap_[offset] = value_;
     }
 
@@ -546,16 +500,11 @@ protected:
   class PolygonOutlineCells
   {
   public:
-    PolygonOutlineCells(
-      const Costmap2D & costmap, const unsigned char * /*char_map*/,
-      std::vector<MapLocation> & cells)
-    : costmap_(costmap), cells_(cells)
-    {
+    PolygonOutlineCells( const Costmap2D & costmap, const unsigned char * /*char_map*/, std::vector<MapLocation> & cells) : costmap_(costmap), cells_(cells) {
     }
 
     // just push the relevant cells back onto the list
-    inline void operator()(unsigned int offset)
-    {
+    inline void operator()(unsigned int offset) {
       MapLocation loc;
       costmap_.indexToCells(offset, loc.x, loc.y);
       cells_.push_back(loc);
