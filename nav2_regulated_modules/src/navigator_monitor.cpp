@@ -13,8 +13,7 @@ using namespace std::chrono_literals;
 namespace nav2_regulated_modules
 {
 
-void RegulatedNavigator::startRecovery(const std::string & reason)
-{
+void RegulatedNavigator::startRecovery(const std::string & reason) {
   if (task_.type == TaskType::NONE) {return;}
   if (task_.recovery_count >= max_recovery_rounds_) {
     failTask(reason + "，恢复次数已用尽");
@@ -37,8 +36,7 @@ void RegulatedNavigator::startRecovery(const std::string & reason)
   recovery_ready_time_ = now() + rclcpp::Duration::from_seconds(costmap_wait_duration_);
 }
 
-void RegulatedNavigator::monitorTask()
-{
+void RegulatedNavigator::monitorTask() {
   if (!active_ || task_.type == TaskType::NONE) {return;}
   if (cancel_requested_) {
     cancelTask("收到外层导航取消请求");
@@ -84,8 +82,7 @@ void RegulatedNavigator::monitorTask()
 
   if (has_last_pose_) {
     const double translation_jump = navigation_utils::poseDistance(current_pose, last_pose_);
-    const double rotation_jump = std::abs(navigation_utils::normalizeAngle(
-        navigation_utils::yawFromPose(current_pose) - navigation_utils::yawFromPose(last_pose_)));
+    const double rotation_jump = std::abs(navigation_utils::normalizeAngle(navigation_utils::yawFromPose(current_pose) - navigation_utils::yawFromPose(last_pose_)));
     if (translation_jump > max_translation_jump_ || rotation_jump > max_rotation_jump_) {
       RCLCPP_WARN(get_logger(), "检测到定位跳变，废弃旧路径并重新规划");
       cancelSubGoals(true);
@@ -122,11 +119,9 @@ void RegulatedNavigator::monitorTask()
   }
 }
 
-bool RegulatedNavigator::lookupCurrentPose(geometry_msgs::msg::PoseStamped & pose)
-{
+bool RegulatedNavigator::lookupCurrentPose(geometry_msgs::msg::PoseStamped & pose) {
   try {
-    const auto transform = tf_buffer_->lookupTransform(
-      global_frame_, robot_base_frame_, tf2::TimePointZero, 50ms);
+    const auto transform = tf_buffer_->lookupTransform(global_frame_, robot_base_frame_, tf2::TimePointZero, 50ms);
     pose.header = transform.header;
     pose.pose.position.x = transform.transform.translation.x;
     pose.pose.position.y = transform.transform.translation.y;
@@ -139,9 +134,7 @@ bool RegulatedNavigator::lookupCurrentPose(geometry_msgs::msg::PoseStamped & pos
   }
 }
 
-void RegulatedNavigator::updatePassedGoals(
-  const geometry_msgs::msg::PoseStamped & current_pose)
-{
+void RegulatedNavigator::updatePassedGoals(const geometry_msgs::msg::PoseStamped & current_pose) {
   if (task_.type != TaskType::THROUGH_POSES || task_.goals.size() <= 1) {return;}
   while (task_.goals.size() > 1 &&
     navigation_utils::poseDistance(current_pose, task_.goals.front()) <= passed_goal_radius_)

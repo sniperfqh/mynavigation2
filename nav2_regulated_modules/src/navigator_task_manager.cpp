@@ -6,8 +6,7 @@
 namespace nav2_regulated_modules
 {
 
-void RegulatedNavigator::cancelSubGoals(const bool invalidate_callbacks)
-{
+void RegulatedNavigator::cancelSubGoals(const bool invalidate_callbacks) {
   if (invalidate_callbacks) {
     ++plan_sequence_;
     ++follow_sequence_;
@@ -31,8 +30,7 @@ void RegulatedNavigator::cancelSubGoals(const bool invalidate_callbacks)
   }
 }
 
-void RegulatedNavigator::cancelTask(const std::string & reason)
-{
+void RegulatedNavigator::cancelTask(const std::string & reason) {
   if (task_.type == TaskType::NONE) {return;}
   task_.state = NavigationState::CANCELING;
   ++task_generation_;
@@ -60,8 +58,7 @@ void RegulatedNavigator::cancelTask(const std::string & reason)
   resetTask();
 }
 
-void RegulatedNavigator::preemptCurrentTask()
-{
+void RegulatedNavigator::preemptCurrentTask() {
   if (task_.type == TaskType::NONE) {return;}
   ++task_generation_;
   cancelSubGoals(true);
@@ -79,8 +76,7 @@ void RegulatedNavigator::preemptCurrentTask()
   resetTask();
 }
 
-void RegulatedNavigator::succeedTask()
-{
+void RegulatedNavigator::succeedTask() {
   task_.state = NavigationState::SUCCEEDED;
   if (active_pose_goal_) {
     active_pose_goal_->succeed(std::make_shared<NavigateToPose::Result>());
@@ -94,8 +90,7 @@ void RegulatedNavigator::succeedTask()
   resetTask();
 }
 
-void RegulatedNavigator::failTask(const std::string & reason)
-{
+void RegulatedNavigator::failTask(const std::string & reason) {
   task_.state = NavigationState::FAILED;
   cancelSubGoals(true);
   if (active_pose_goal_) {
@@ -110,8 +105,7 @@ void RegulatedNavigator::failTask(const std::string & reason)
   resetTask();
 }
 
-void RegulatedNavigator::resetTask()
-{
+void RegulatedNavigator::resetTask() {
   task_ = NavigationTask();
   task_.generation = task_generation_;
   updating_path_ = false;

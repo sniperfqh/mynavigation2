@@ -9,9 +9,7 @@ using namespace std::chrono_literals;
 namespace nav2_regulated_modules
 {
 
-RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options)
-: nav2_util::LifecycleNode("regulated_navigator", "", options)
-{
+RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : nav2_util::LifecycleNode("regulated_navigator", "", options) {
   // 中文注释：构造阶段只声明参数，通信接口在 configure 阶段创建。
   declare_parameter("global_frame", "map");
   declare_parameter("robot_base_frame", "base_link");
@@ -47,8 +45,7 @@ RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options)
   declare_parameter("stop_cmd_vel_topic", "cmd_vel_nav");
 }
 
-nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycle::State &)
-{
+nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycle::State &) {
   // 中文注释：读取配置并初始化规划、控制、恢复和定位监控所需接口。
   global_frame_ = get_parameter("global_frame").as_string();
   robot_base_frame_ = get_parameter("robot_base_frame").as_string();
@@ -68,56 +65,27 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   localization_recovery_timeout_ = get_parameter("localization_recovery_timeout").as_double();
   localization_stable_duration_ = get_parameter("localization_stable_duration").as_double();
 
-  planning_module_.configure(
-    get_parameter("planner_id").as_string(),
-    get_parameter("smoother_id").as_string(),
-    get_parameter("use_smoother").as_bool(),
-    get_parameter("replan_frequency").as_double(),
-    get_parameter("max_consecutive_planning_failures").as_int());
-  control_module_.configure(
-    get_parameter("controller_id").as_string(),
-    get_parameter("goal_checker_id").as_string(),
-    get_parameter("progress_timeout").as_double());
+  planning_module_.configure(get_parameter("planner_id").as_string(), get_parameter("smoother_id").as_string(), get_parameter("use_smoother").as_bool(), get_parameter("replan_frequency").as_double(), get_parameter("max_consecutive_planning_failures").as_int());
+  control_module_.configure(get_parameter("controller_id").as_string(), get_parameter("goal_checker_id").as_string(), get_parameter("progress_timeout").as_double());
 
-  compute_pose_client_ = rclcpp_action::create_client<ComputePathToPose>(
-    this, get_parameter("compute_path_to_pose_action").as_string());
-  compute_poses_client_ = rclcpp_action::create_client<ComputePathThroughPoses>(
-    this, get_parameter("compute_path_through_poses_action").as_string());
-  smooth_client_ = rclcpp_action::create_client<SmoothPath>(
-    this, get_parameter("smooth_path_action").as_string());
-  follow_client_ = rclcpp_action::create_client<FollowPath>(
-    this, get_parameter("follow_path_action").as_string());
-  clear_local_client_ = create_client<ClearCostmap>(
-    "local_costmap/clear_entirely_local_costmap");
-  clear_global_client_ = create_client<ClearCostmap>(
-    "global_costmap/clear_entirely_global_costmap");
+  compute_pose_client_ = rclcpp_action::create_client<ComputePathToPose>(this, get_parameter("compute_path_to_pose_action").as_string());
+  compute_poses_client_ = rclcpp_action::create_client<ComputePathThroughPoses>(this, get_parameter("compute_path_through_poses_action").as_string());
+  smooth_client_ = rclcpp_action::create_client<SmoothPath>(this, get_parameter("smooth_path_action").as_string());
+  follow_client_ = rclcpp_action::create_client<FollowPath>(this, get_parameter("follow_path_action").as_string());
+  clear_local_client_ = create_client<ClearCostmap>("local_costmap/clear_entirely_local_costmap");
+  clear_global_client_ = create_client<ClearCostmap>("global_costmap/clear_entirely_global_costmap");
 
-  navigate_pose_server_ = rclcpp_action::create_server<NavigateToPose>(
-    this, get_parameter("navigate_to_pose_action").as_string(),
-    std::bind(&RegulatedNavigator::handlePoseGoal, this, std::placeholders::_1,
-      std::placeholders::_2),
-    std::bind(&RegulatedNavigator::handlePoseCancel, this, std::placeholders::_1),
-    std::bind(&RegulatedNavigator::handlePoseAccepted, this, std::placeholders::_1));
-  navigate_poses_server_ = rclcpp_action::create_server<NavigateThroughPoses>(
-    this, get_parameter("navigate_through_poses_action").as_string(),
-    std::bind(&RegulatedNavigator::handlePosesGoal, this, std::placeholders::_1,
-      std::placeholders::_2),
-    std::bind(&RegulatedNavigator::handlePosesCancel, this, std::placeholders::_1),
-    std::bind(&RegulatedNavigator::handlePosesAccepted, this, std::placeholders::_1));
+  navigate_pose_server_ = rclcpp_action::create_server<NavigateToPose>(this, get_parameter("navigate_to_pose_action").as_string(), std::bind(&RegulatedNavigator::handlePoseGoal, this, std::placeholders::_1, std::placeholders::_2), std::bind(&RegulatedNavigator::handlePoseCancel, this, std::placeholders::_1), std::bind(&RegulatedNavigator::handlePoseAccepted, this, std::placeholders::_1));
+  navigate_poses_server_ = rclcpp_action::create_server<NavigateThroughPoses>(this, get_parameter("navigate_through_poses_action").as_string(), std::bind(&RegulatedNavigator::handlePosesGoal, this, std::placeholders::_1, std::placeholders::_2), std::bind(&RegulatedNavigator::handlePosesCancel, this, std::placeholders::_1), std::bind(&RegulatedNavigator::handlePosesAccepted, this, std::placeholders::_1));
 
-  goal_sub_ = create_subscription<geometry_msgs::msg::PoseStamped>(
-    goal_topic_, rclcpp::SystemDefaultsQoS(),
-    std::bind(&RegulatedNavigator::onTopicGoal, this, std::placeholders::_1));
+  goal_sub_ = create_subscription<geometry_msgs::msg::PoseStamped>(goal_topic_, rclcpp::SystemDefaultsQoS(), std::bind(&RegulatedNavigator::onTopicGoal, this, std::placeholders::_1));
   // 中文注释：取消、定位丢失或失败时直接向控制链入口发布零速度，形成停车兜底。
-  stop_cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>(
-    get_parameter("stop_cmd_vel_topic").as_string(), rclcpp::SystemDefaultsQoS());
+  stop_cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>(get_parameter("stop_cmd_vel_topic").as_string(), rclcpp::SystemDefaultsQoS());
 
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
   const auto feedback_period = std::chrono::duration<double>(1.0 / feedback_frequency_);
-  feedback_timer_ = create_wall_timer(
-    std::chrono::duration_cast<std::chrono::milliseconds>(feedback_period),
-    std::bind(&RegulatedNavigator::publishFeedback, this));
+  feedback_timer_ = create_wall_timer(std::chrono::duration_cast<std::chrono::milliseconds>(feedback_period), std::bind(&RegulatedNavigator::publishFeedback, this));
   monitor_timer_ = create_wall_timer(200ms, std::bind(&RegulatedNavigator::monitorTask, this));
 
   configured_ = true;
@@ -125,8 +93,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
-nav2_util::CallbackReturn RegulatedNavigator::on_activate(const rclcpp_lifecycle::State &)
-{
+nav2_util::CallbackReturn RegulatedNavigator::on_activate(const rclcpp_lifecycle::State &) {
   // 中文注释：入口最后激活，确保规划、控制和平滑服务器已由 Lifecycle Manager 拉起。
   active_ = true;
   createBond();
@@ -134,8 +101,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_activate(const rclcpp_lifecycle
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
-nav2_util::CallbackReturn RegulatedNavigator::on_deactivate(const rclcpp_lifecycle::State &)
-{
+nav2_util::CallbackReturn RegulatedNavigator::on_deactivate(const rclcpp_lifecycle::State &) {
   // 中文注释：停用时先取消底层任务，防止 Lifecycle 关闭后仍继续输出速度。
   active_ = false;
   cancelTask("节点停用");
@@ -143,8 +109,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_deactivate(const rclcpp_lifecyc
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
-nav2_util::CallbackReturn RegulatedNavigator::on_cleanup(const rclcpp_lifecycle::State &)
-{
+nav2_util::CallbackReturn RegulatedNavigator::on_cleanup(const rclcpp_lifecycle::State &) {
   cancelTask("节点清理");
   navigate_pose_server_.reset();
   navigate_poses_server_.reset();
@@ -164,8 +129,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_cleanup(const rclcpp_lifecycle:
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
-nav2_util::CallbackReturn RegulatedNavigator::on_shutdown(const rclcpp_lifecycle::State &)
-{
+nav2_util::CallbackReturn RegulatedNavigator::on_shutdown(const rclcpp_lifecycle::State &) {
   cancelTask("节点关闭");
   return nav2_util::CallbackReturn::SUCCESS;
 }

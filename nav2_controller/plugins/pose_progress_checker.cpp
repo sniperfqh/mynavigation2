@@ -30,25 +30,19 @@ using std::placeholders::_1;
 namespace nav2_controller
 {
 
-void PoseProgressChecker::initialize(
-  const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
-  const std::string & plugin_name)
-{
+void PoseProgressChecker::initialize(const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent, const std::string & plugin_name) {
   plugin_name_ = plugin_name;
   SimpleProgressChecker::initialize(parent, plugin_name);
   auto node = parent.lock();
 
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name + ".required_movement_angle", rclcpp::ParameterValue(0.5));
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name + ".required_movement_angle", rclcpp::ParameterValue(0.5));
   node->get_parameter_or(plugin_name + ".required_movement_angle", required_movement_angle_, 0.5);
 
   // Add callback for dynamic parameters
-  dyn_params_handler_ = node->add_on_set_parameters_callback(
-    std::bind(&PoseProgressChecker::dynamicParametersCallback, this, _1));
+  dyn_params_handler_ = node->add_on_set_parameters_callback(std::bind(&PoseProgressChecker::dynamicParametersCallback, this, _1));
 }
 
-bool PoseProgressChecker::check(geometry_msgs::msg::PoseStamped & current_pose)
-{
+bool PoseProgressChecker::check(geometry_msgs::msg::PoseStamped & current_pose) {
   // relies on short circuit evaluation to not call is_robot_moved_enough if
   // baseline_pose is not set.
   geometry_msgs::msg::Pose2D current_pose2d;
@@ -61,22 +55,15 @@ bool PoseProgressChecker::check(geometry_msgs::msg::PoseStamped & current_pose)
   return clock_->now() - baseline_time_ <= time_allowance_;
 }
 
-bool PoseProgressChecker::isRobotMovedEnough(const geometry_msgs::msg::Pose2D & pose)
-{
-  return pose_distance(pose, baseline_pose_) > radius_ ||
-         poseAngleDistance(pose, baseline_pose_) > required_movement_angle_;
+bool PoseProgressChecker::isRobotMovedEnough(const geometry_msgs::msg::Pose2D & pose) {
+  return pose_distance(pose, baseline_pose_) > radius_ || poseAngleDistance(pose, baseline_pose_) > required_movement_angle_;
 }
 
-double PoseProgressChecker::poseAngleDistance(
-  const geometry_msgs::msg::Pose2D & pose1,
-  const geometry_msgs::msg::Pose2D & pose2)
-{
+double PoseProgressChecker::poseAngleDistance(const geometry_msgs::msg::Pose2D & pose1, const geometry_msgs::msg::Pose2D & pose2) {
   return abs(angles::shortest_angular_distance(pose1.theta, pose2.theta));
 }
 
-rcl_interfaces::msg::SetParametersResult
-PoseProgressChecker::dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters)
-{
+rcl_interfaces::msg::SetParametersResult PoseProgressChecker::dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters) {
   rcl_interfaces::msg::SetParametersResult result;
   for (auto parameter : parameters) {
     const auto & type = parameter.get_type();

@@ -6,9 +6,7 @@
 namespace nav2_regulated_modules
 {
 
-void ControlModule::configure(
-  std::string controller_id, std::string goal_checker_id, const double progress_timeout)
-{
+void ControlModule::configure(std::string controller_id, std::string goal_checker_id, const double progress_timeout) {
   if (progress_timeout <= 0.0) {
     throw std::invalid_argument("控制无进展超时必须大于零");
   }

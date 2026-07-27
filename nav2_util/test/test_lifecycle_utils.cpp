@@ -31,10 +31,7 @@ public:
 };
 RclCppFixture g_rclcppfixture;
 
-void SpinNodesUntilDone(
-  std::vector<rclcpp_lifecycle::LifecycleNode::SharedPtr> nodes,
-  std::atomic<bool> * test_done)
-{
+void SpinNodesUntilDone(std::vector<rclcpp_lifecycle::LifecycleNode::SharedPtr> nodes, std::atomic<bool> * test_done) {
   rclcpp::executors::SingleThreadedExecutor exec;
   for (const auto & node : nodes) {
     exec.add_node(node->get_node_base_interface());
@@ -44,8 +41,7 @@ void SpinNodesUntilDone(
   }
 }
 
-TEST(Lifecycle, interface)
-{
+TEST(Lifecycle, interface) {
   std::vector<rclcpp_lifecycle::LifecycleNode::SharedPtr> nodes;
   nodes.push_back(rclcpp_lifecycle::LifecycleNode::make_shared("foo"));
   nodes.push_back(rclcpp_lifecycle::LifecycleNode::make_shared("bar"));

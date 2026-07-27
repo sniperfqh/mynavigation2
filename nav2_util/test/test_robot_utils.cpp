@@ -23,8 +23,7 @@
 #include "nav2_util/node_thread.hpp"
 #include "tf2_ros/create_timer_ros.h"
 
-TEST(RobotUtils, LookupExceptionError)
-{
+TEST(RobotUtils, LookupExceptionError) {
   rclcpp::init(0, nullptr);
   auto node = std::make_shared<rclcpp::Node>("name", rclcpp::NodeOptions());
   geometry_msgs::msg::PoseStamped global_pose;
@@ -34,8 +33,7 @@ TEST(RobotUtils, LookupExceptionError)
   ASSERT_FALSE(nav2_util::transformPoseInTargetFrame(global_pose, global_pose, tf, "map", 0.1));
 }
 
-TEST(RobotUtils, validateTwist)
-{
+TEST(RobotUtils, validateTwist) {
   geometry_msgs::msg::Twist msg;
   EXPECT_TRUE(nav2_util::validateTwist(msg));
 

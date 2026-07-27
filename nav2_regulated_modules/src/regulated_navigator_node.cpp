@@ -3,8 +3,7 @@
 #include "nav2_regulated_modules/regulated_navigator.hpp"
 #include "rclcpp/rclcpp.hpp"
 
-int main(int argc, char ** argv)
-{
+int main(int argc, char ** argv) {
   rclcpp::init(argc, argv);
   auto node = std::make_shared<nav2_regulated_modules::RegulatedNavigator>();
   // 中文注释：多线程执行器允许 Action 结果、反馈和定位监控并发推进。

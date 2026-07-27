@@ -23,17 +23,9 @@ using namespace std::chrono_literals;  // NOLINT
 namespace nav2_util
 {
 
-OdomSmoother::OdomSmoother(
-  const rclcpp::Node::WeakPtr & parent,
-  double filter_duration,
-  const std::string & odom_topic)
-: odom_history_duration_(rclcpp::Duration::from_seconds(filter_duration))
-{
+OdomSmoother::OdomSmoother(const rclcpp::Node::WeakPtr & parent, double filter_duration, const std::string & odom_topic) : odom_history_duration_(rclcpp::Duration::from_seconds(filter_duration)) {
   auto node = parent.lock();
-  odom_sub_ = node->create_subscription<nav_msgs::msg::Odometry>(
-    odom_topic,
-    rclcpp::SystemDefaultsQoS(),
-    std::bind(&OdomSmoother::odomCallback, this, std::placeholders::_1));
+  odom_sub_ = node->create_subscription<nav_msgs::msg::Odometry>(odom_topic, rclcpp::SystemDefaultsQoS(), std::bind(&OdomSmoother::odomCallback, this, std::placeholders::_1));
 
   odom_cumulate_.twist.twist.linear.x = 0;
   odom_cumulate_.twist.twist.linear.y = 0;
@@ -43,17 +35,9 @@ OdomSmoother::OdomSmoother(
   odom_cumulate_.twist.twist.angular.z = 0;
 }
 
-OdomSmoother::OdomSmoother(
-  const nav2_util::LifecycleNode::WeakPtr & parent,
-  double filter_duration,
-  const std::string & odom_topic)
-: odom_history_duration_(rclcpp::Duration::from_seconds(filter_duration))
-{
+OdomSmoother::OdomSmoother(const nav2_util::LifecycleNode::WeakPtr & parent, double filter_duration, const std::string & odom_topic) : odom_history_duration_(rclcpp::Duration::from_seconds(filter_duration)) {
   auto node = parent.lock();
-  odom_sub_ = node->create_subscription<nav_msgs::msg::Odometry>(
-    odom_topic,
-    rclcpp::SystemDefaultsQoS(),
-    std::bind(&OdomSmoother::odomCallback, this, std::placeholders::_1));
+  odom_sub_ = node->create_subscription<nav_msgs::msg::Odometry>(odom_topic, rclcpp::SystemDefaultsQoS(), std::bind(&OdomSmoother::odomCallback, this, std::placeholders::_1));
 
   odom_cumulate_.twist.twist.linear.x = 0;
   odom_cumulate_.twist.twist.linear.y = 0;
@@ -63,8 +47,7 @@ OdomSmoother::OdomSmoother(
   odom_cumulate_.twist.twist.angular.z = 0;
 }
 
-void OdomSmoother::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
-{
+void OdomSmoother::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg) {
   std::lock_guard<std::mutex> lock(odom_mutex_);
 
   // update cumulated odom only if history is not empty
@@ -99,8 +82,7 @@ void OdomSmoother::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
   updateState();
 }
 
-void OdomSmoother::updateState()
-{
+void OdomSmoother::updateState() {
   const auto & odom = odom_history_.back();
   odom_cumulate_.twist.twist.linear.x += odom.twist.twist.linear.x;
   odom_cumulate_.twist.twist.linear.y += odom.twist.twist.linear.y;

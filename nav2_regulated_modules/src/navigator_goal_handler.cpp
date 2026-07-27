@@ -8,9 +8,7 @@
 namespace nav2_regulated_modules
 {
 
-rclcpp_action::GoalResponse RegulatedNavigator::handlePoseGoal(
-  const rclcpp_action::GoalUUID &, const std::shared_ptr<const NavigateToPose::Goal> goal)
-{
+rclcpp_action::GoalResponse RegulatedNavigator::handlePoseGoal(const rclcpp_action::GoalUUID &, const std::shared_ptr<const NavigateToPose::Goal> goal) {
   if (!active_ || !navigation_utils::validPose(goal->pose) || !goal->behavior_tree.empty()) {
     RCLCPP_WARN(get_logger(), "拒绝单点目标：节点未激活、位姿无效或请求了行为树 XML");
     return rclcpp_action::GoalResponse::REJECT;
@@ -18,13 +16,8 @@ rclcpp_action::GoalResponse RegulatedNavigator::handlePoseGoal(
   return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
 
-rclcpp_action::GoalResponse RegulatedNavigator::handlePosesGoal(
-  const rclcpp_action::GoalUUID &,
-  const std::shared_ptr<const NavigateThroughPoses::Goal> goal)
-{
-  const bool poses_valid = !goal->poses.empty() && std::all_of(
-    goal->poses.begin(), goal->poses.end(),
-    [](const auto & pose) {return navigation_utils::validPose(pose);});
+rclcpp_action::GoalResponse RegulatedNavigator::handlePosesGoal(const rclcpp_action::GoalUUID &, const std::shared_ptr<const NavigateThroughPoses::Goal> goal) {
+  const bool poses_valid = !goal->poses.empty() && std::all_of(goal->poses.begin(), goal->poses.end(), [](const auto & pose) {return navigation_utils::validPose(pose);});
   if (!active_ || !poses_valid || !goal->behavior_tree.empty()) {
     RCLCPP_WARN(get_logger(), "拒绝多点目标：节点未激活、目标数组无效或请求了行为树 XML");
     return rclcpp_action::GoalResponse::REJECT;
@@ -32,9 +25,7 @@ rclcpp_action::GoalResponse RegulatedNavigator::handlePosesGoal(
   return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
 
-rclcpp_action::CancelResponse RegulatedNavigator::handlePoseCancel(
-  const std::shared_ptr<NavigatePoseHandle> goal)
-{
+rclcpp_action::CancelResponse RegulatedNavigator::handlePoseCancel(const std::shared_ptr<NavigatePoseHandle> goal) {
   if (goal == active_pose_goal_) {
     // 中文注释：先让 rclcpp_action 完成 ACCEPT 状态迁移，再由监控周期执行取消收尾。
     cancel_requested_ = true;
@@ -42,17 +33,14 @@ rclcpp_action::CancelResponse RegulatedNavigator::handlePoseCancel(
   return rclcpp_action::CancelResponse::ACCEPT;
 }
 
-rclcpp_action::CancelResponse RegulatedNavigator::handlePosesCancel(
-  const std::shared_ptr<NavigatePosesHandle> goal)
-{
+rclcpp_action::CancelResponse RegulatedNavigator::handlePosesCancel(const std::shared_ptr<NavigatePosesHandle> goal) {
   if (goal == active_poses_goal_) {
     cancel_requested_ = true;
   }
   return rclcpp_action::CancelResponse::ACCEPT;
 }
 
-void RegulatedNavigator::handlePoseAccepted(const std::shared_ptr<NavigatePoseHandle> goal)
-{
+void RegulatedNavigator::handlePoseAccepted(const std::shared_ptr<NavigatePoseHandle> goal) {
   // 中文注释：新目标采用 replace 抢占策略，先结束旧外层目标并取消全部子 Goal。
   preemptCurrentTask();
   active_pose_goal_ = goal;
@@ -65,8 +53,7 @@ void RegulatedNavigator::handlePoseAccepted(const std::shared_ptr<NavigatePoseHa
   startPlanning(false);
 }
 
-void RegulatedNavigator::handlePosesAccepted(const std::shared_ptr<NavigatePosesHandle> goal)
-{
+void RegulatedNavigator::handlePosesAccepted(const std::shared_ptr<NavigatePosesHandle> goal) {
   preemptCurrentTask();
   active_poses_goal_ = goal;
   task_ = NavigationTask();
@@ -79,8 +66,7 @@ void RegulatedNavigator::handlePosesAccepted(const std::shared_ptr<NavigatePoses
   startPlanning(false);
 }
 
-void RegulatedNavigator::onTopicGoal(const geometry_msgs::msg::PoseStamped::SharedPtr goal)
-{
+void RegulatedNavigator::onTopicGoal(const geometry_msgs::msg::PoseStamped::SharedPtr goal) {
   if (!active_ || !navigation_utils::validPose(*goal)) {
     RCLCPP_WARN(get_logger(), "忽略无效或未激活状态下的 goal_pose");
     return;
@@ -95,8 +81,7 @@ void RegulatedNavigator::onTopicGoal(const geometry_msgs::msg::PoseStamped::Shar
   startPlanning(false);
 }
 
-void RegulatedNavigator::publishFeedback()
-{
+void RegulatedNavigator::publishFeedback() {
   if (!active_ || task_.type == TaskType::NONE) {return;}
   geometry_msgs::msg::PoseStamped current_pose;
   if (!lookupCurrentPose(current_pose)) {return;}

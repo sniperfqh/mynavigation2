@@ -32,8 +32,7 @@ public:
 };
 RclCppFixture g_rclcppfixture;
 
-TEST(OdometryUtils, test_smoothed_velocity)
-{
+TEST(OdometryUtils, test_smoothed_velocity) {
   auto node = std::make_shared<rclcpp::Node>("test_node");
   auto odom_pub = node->create_publisher<nav_msgs::msg::Odometry>("odom", 1);
 

@@ -9,17 +9,12 @@
 namespace nav2_regulated_modules
 {
 
-bool RegulatedNavigator::dependenciesReady()
-{
+bool RegulatedNavigator::dependenciesReady() {
   const auto timeout = std::chrono::duration<double>(server_timeout_);
-  return compute_pose_client_->wait_for_action_server(timeout) &&
-         compute_poses_client_->wait_for_action_server(timeout) &&
-         (!planning_module_.useSmoother() || smooth_client_->wait_for_action_server(timeout)) &&
-         follow_client_->wait_for_action_server(timeout);
+  return compute_pose_client_->wait_for_action_server(timeout) && compute_poses_client_->wait_for_action_server(timeout) && (!planning_module_.useSmoother() || smooth_client_->wait_for_action_server(timeout)) && follow_client_->wait_for_action_server(timeout);
 }
 
-void RegulatedNavigator::startPlanning(const bool replanning)
-{
+void RegulatedNavigator::startPlanning(const bool replanning) {
   if (!active_ || task_.type == TaskType::NONE || planning_active_) {
     return;
   }
@@ -94,14 +89,11 @@ void RegulatedNavigator::startPlanning(const bool replanning)
   }
 }
 
-bool RegulatedNavigator::isCurrentPlan(
-  const uint64_t generation, const uint64_t sequence) const
-{
+bool RegulatedNavigator::isCurrentPlan(const uint64_t generation, const uint64_t sequence) const {
   return generation == task_.generation && sequence == plan_sequence_;
 }
 
-void RegulatedNavigator::onPathReady(const nav_msgs::msg::Path & path)
-{
+void RegulatedNavigator::onPathReady(const nav_msgs::msg::Path & path) {
   task_.consecutive_planning_failures = 0;
   pending_raw_path_ = path;
   if (!planning_module_.useSmoother()) {
@@ -142,8 +134,7 @@ void RegulatedNavigator::onPathReady(const nav_msgs::msg::Path & path)
   smooth_client_->async_send_goal(goal, options);
 }
 
-void RegulatedNavigator::handlePlanningFailure(const std::string & reason)
-{
+void RegulatedNavigator::handlePlanningFailure(const std::string & reason) {
   task_.last_error = reason;
   ++task_.consecutive_planning_failures;
   if (updating_path_ && active_follow_goal_ &&

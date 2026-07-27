@@ -6,10 +6,7 @@
 namespace nav2_regulated_modules
 {
 
-void PlanningModule::configure(
-  std::string planner_id, std::string smoother_id, const bool use_smoother,
-  const double replan_frequency, const int max_failures)
-{
+void PlanningModule::configure(std::string planner_id, std::string smoother_id, const bool use_smoother, const double replan_frequency, const int max_failures) {
   if (replan_frequency <= 0.0 || max_failures < 1) {
     throw std::invalid_argument("规划频率必须大于零，最大连续失败次数必须大于零");
   }

@@ -30,14 +30,11 @@
 class DummyNode : public nav2_util::LifecycleNode
 {
 public:
-  DummyNode()
-  : nav2_util::LifecycleNode("nav2_test_cli", "")
-  {
+  DummyNode() : nav2_util::LifecycleNode("nav2_test_cli", "") {
     activated = false;
   }
 
-  nav2_util::CallbackReturn on_activate(const rclcpp_lifecycle::State & /*state*/)
-  {
+  nav2_util::CallbackReturn on_activate(const rclcpp_lifecycle::State & /*state*/) {
     activated = true;
     return nav2_util::CallbackReturn::SUCCESS;
   }
@@ -48,13 +45,11 @@ public:
 class Handle
 {
 public:
-  Handle()
-  {
+  Handle() {
     node = std::make_shared<DummyNode>();
     thread = std::make_shared<nav2_util::NodeThread>(node->get_node_base_interface());
   }
-  ~Handle()
-  {
+  ~Handle() {
     thread.reset();
     node.reset();
   }
@@ -66,21 +61,18 @@ public:
 class RclCppFixture
 {
 public:
-  RclCppFixture()
-  {
+  RclCppFixture() {
     rclcpp::init(0, nullptr);
   }
 
-  ~RclCppFixture()
-  {
+  ~RclCppFixture() {
     rclcpp::shutdown();
   }
 };
 
 RclCppFixture g_rclcppfixture;
 
-TEST(LifeycleCLI, fails_no_node_name)
-{
+TEST(LifeycleCLI, fails_no_node_name) {
   Handle handle;
   auto rc = system("ros2 run nav2_util lifecycle_bringup");
   (void)rc;
@@ -94,8 +86,7 @@ TEST(LifeycleCLI, fails_no_node_name)
   SUCCEED();
 }
 
-TEST(LifeycleCLI, succeeds_node_name)
-{
+TEST(LifeycleCLI, succeeds_node_name) {
   Handle handle;
   auto rc = system("ros2 run nav2_util lifecycle_bringup nav2_test_cli");
 #ifdef _WIN32

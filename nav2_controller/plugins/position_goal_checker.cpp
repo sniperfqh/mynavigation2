@@ -25,28 +25,15 @@ using std::placeholders::_1;
 namespace nav2_controller
 {
 
-PositionGoalChecker::PositionGoalChecker()
-: xy_goal_tolerance_(0.25),
-  xy_goal_tolerance_sq_(0.0625),
-  stateful_(true),
-  position_reached_(false)
-{
+PositionGoalChecker::PositionGoalChecker() : xy_goal_tolerance_(0.25), xy_goal_tolerance_sq_(0.0625), stateful_(true), position_reached_(false) {
 }
 
-void PositionGoalChecker::initialize(
-  const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
-  const std::string & plugin_name,
-  const std::shared_ptr<nav2_costmap_2d::Costmap2DROS>/*costmap_ros*/)
-{
+void PositionGoalChecker::initialize(const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent, const std::string & plugin_name, const std::shared_ptr<nav2_costmap_2d::Costmap2DROS>/*costmap_ros*/) {
   plugin_name_ = plugin_name;
   auto node = parent.lock();
 
-  nav2_util::declare_parameter_if_not_declared(
-    node,
-    plugin_name + ".xy_goal_tolerance", rclcpp::ParameterValue(0.25));
-  nav2_util::declare_parameter_if_not_declared(
-    node,
-    plugin_name + ".stateful", rclcpp::ParameterValue(true));
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name + ".xy_goal_tolerance", rclcpp::ParameterValue(0.25));
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name + ".stateful", rclcpp::ParameterValue(true));
 
   node->get_parameter(plugin_name + ".xy_goal_tolerance", xy_goal_tolerance_);
   node->get_parameter(plugin_name + ".stateful", stateful_);
@@ -54,19 +41,14 @@ void PositionGoalChecker::initialize(
   xy_goal_tolerance_sq_ = xy_goal_tolerance_ * xy_goal_tolerance_;
 
   // Add callback for dynamic parameters
-  dyn_params_handler_ = node->add_on_set_parameters_callback(
-    std::bind(&PositionGoalChecker::dynamicParametersCallback, this, _1));
+  dyn_params_handler_ = node->add_on_set_parameters_callback(std::bind(&PositionGoalChecker::dynamicParametersCallback, this, _1));
 }
 
-void PositionGoalChecker::reset()
-{
+void PositionGoalChecker::reset() {
   position_reached_ = false;
 }
 
-bool PositionGoalChecker::isGoalReached(
-  const geometry_msgs::msg::Pose & query_pose, const geometry_msgs::msg::Pose & goal_pose,
-  const geometry_msgs::msg::Twist &)
-{
+bool PositionGoalChecker::isGoalReached(const geometry_msgs::msg::Pose & query_pose, const geometry_msgs::msg::Pose & goal_pose, const geometry_msgs::msg::Twist &) {
   // If stateful and position was already reached, maintain state
   if (stateful_ && position_reached_) {
     return true;
@@ -86,10 +68,7 @@ bool PositionGoalChecker::isGoalReached(
   return position_reached;
 }
 
-bool PositionGoalChecker::getTolerances(
-  geometry_msgs::msg::Pose & pose_tolerance,
-  geometry_msgs::msg::Twist & vel_tolerance)
-{
+bool PositionGoalChecker::getTolerances(geometry_msgs::msg::Pose & pose_tolerance, geometry_msgs::msg::Twist & vel_tolerance) {
   double invalid_field = std::numeric_limits<double>::lowest();
 
   pose_tolerance.position.x = xy_goal_tolerance_;
@@ -113,15 +92,12 @@ bool PositionGoalChecker::getTolerances(
   return true;
 }
 
-void nav2_controller::PositionGoalChecker::setXYGoalTolerance(double tolerance)
-{
+void nav2_controller::PositionGoalChecker::setXYGoalTolerance(double tolerance) {
   xy_goal_tolerance_ = tolerance;
   xy_goal_tolerance_sq_ = tolerance * tolerance;
 }
 
-rcl_interfaces::msg::SetParametersResult
-PositionGoalChecker::dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters)
-{
+rcl_interfaces::msg::SetParametersResult PositionGoalChecker::dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters) {
   rcl_interfaces::msg::SetParametersResult result;
   for (auto & parameter : parameters) {
     const auto & type = parameter.get_type();

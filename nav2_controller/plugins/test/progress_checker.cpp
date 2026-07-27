@@ -48,49 +48,35 @@ using nav2_controller::PoseProgressChecker;
 class TestLifecycleNode : public nav2_util::LifecycleNode
 {
 public:
-  explicit TestLifecycleNode(const std::string & name)
-  : nav2_util::LifecycleNode(name)
-  {
+  explicit TestLifecycleNode(const std::string & name) : nav2_util::LifecycleNode(name) {
   }
 
-  nav2_util::CallbackReturn on_configure(const rclcpp_lifecycle::State &)
-  {
+  nav2_util::CallbackReturn on_configure(const rclcpp_lifecycle::State &) {
     return nav2_util::CallbackReturn::SUCCESS;
   }
 
-  nav2_util::CallbackReturn on_activate(const rclcpp_lifecycle::State &)
-  {
+  nav2_util::CallbackReturn on_activate(const rclcpp_lifecycle::State &) {
     return nav2_util::CallbackReturn::SUCCESS;
   }
 
-  nav2_util::CallbackReturn on_deactivate(const rclcpp_lifecycle::State &)
-  {
+  nav2_util::CallbackReturn on_deactivate(const rclcpp_lifecycle::State &) {
     return nav2_util::CallbackReturn::SUCCESS;
   }
 
-  nav2_util::CallbackReturn on_cleanup(const rclcpp_lifecycle::State &)
-  {
+  nav2_util::CallbackReturn on_cleanup(const rclcpp_lifecycle::State &) {
     return nav2_util::CallbackReturn::SUCCESS;
   }
 
-  nav2_util::CallbackReturn onShutdown(const rclcpp_lifecycle::State &)
-  {
+  nav2_util::CallbackReturn onShutdown(const rclcpp_lifecycle::State &) {
     return nav2_util::CallbackReturn::SUCCESS;
   }
 
-  nav2_util::CallbackReturn onError(const rclcpp_lifecycle::State &)
-  {
+  nav2_util::CallbackReturn onError(const rclcpp_lifecycle::State &) {
     return nav2_util::CallbackReturn::SUCCESS;
   }
 };
 
-void checkMacro(
-  nav2_core::ProgressChecker & pc,
-  double x0, double y0, double theta0,
-  double x1, double y1, double theta1,
-  int delay,
-  bool expected_result)
-{
+void checkMacro(nav2_core::ProgressChecker & pc, double x0, double y0, double theta0, double x1, double y1, double theta1, int delay, bool expected_result) {
   pc.reset();
   geometry_msgs::msg::PoseStamped pose0, pose1;
   pose0.pose.position.x = x0;
@@ -108,8 +94,7 @@ void checkMacro(
   }
 }
 
-TEST(SimpleProgressChecker, progress_checker_reset)
-{
+TEST(SimpleProgressChecker, progress_checker_reset) {
   auto x = std::make_shared<TestLifecycleNode>("progress_checker");
 
   nav2_core::ProgressChecker * pc = new SimpleProgressChecker;
@@ -118,8 +103,7 @@ TEST(SimpleProgressChecker, progress_checker_reset)
   EXPECT_TRUE(true);
 }
 
-TEST(SimpleProgressChecker, unit_tests)
-{
+TEST(SimpleProgressChecker, unit_tests) {
   auto x = std::make_shared<TestLifecycleNode>("progress_checker");
 
   SimpleProgressChecker pc;
@@ -129,21 +113,13 @@ TEST(SimpleProgressChecker, unit_tests)
   int half_time_allowance_ms = static_cast<int>(time_allowance * 0.5 * 1000);
   int twice_time_allowance_ms = static_cast<int>(time_allowance * 2.0 * 1000);
 
-  auto rec_param = std::make_shared<rclcpp::AsyncParametersClient>(
-    x->get_node_base_interface(), x->get_node_topics_interface(),
-    x->get_node_graph_interface(),
-    x->get_node_services_interface());
+  auto rec_param = std::make_shared<rclcpp::AsyncParametersClient>(x->get_node_base_interface(), x->get_node_topics_interface(), x->get_node_graph_interface(), x->get_node_services_interface());
 
-  auto results = rec_param->set_parameters_atomically(
-    {rclcpp::Parameter("nav2_controller.movement_time_allowance", time_allowance)});
+  auto results = rec_param->set_parameters_atomically({rclcpp::Parameter("nav2_controller.movement_time_allowance", time_allowance)});
 
-  rclcpp::spin_until_future_complete(
-    x->get_node_base_interface(),
-    results);
+  rclcpp::spin_until_future_complete(x->get_node_base_interface(), results);
 
-  EXPECT_EQ(
-    x->get_parameter("nav2_controller.movement_time_allowance").as_double(),
-    time_allowance);
+  EXPECT_EQ(x->get_parameter("nav2_controller.movement_time_allowance").as_double(), time_allowance);
 
   // BELOW time allowance (set to time_allowance)
   // no movement
@@ -166,8 +142,7 @@ TEST(SimpleProgressChecker, unit_tests)
   checkMacro(pc, 0, 0, 0, 0, 1, 0, twice_time_allowance_ms, true);
 }
 
-TEST(PoseProgressChecker, pose_progress_checker_reset)
-{
+TEST(PoseProgressChecker, pose_progress_checker_reset) {
   auto x = std::make_shared<TestLifecycleNode>("pose_progress_checker");
 
   PoseProgressChecker * rpc = new PoseProgressChecker;
@@ -176,8 +151,7 @@ TEST(PoseProgressChecker, pose_progress_checker_reset)
   EXPECT_TRUE(true);
 }
 
-TEST(PoseProgressChecker, unit_tests)
-{
+TEST(PoseProgressChecker, unit_tests) {
   auto x = std::make_shared<TestLifecycleNode>("pose_progress_checker");
 
   PoseProgressChecker rpc;
@@ -187,21 +161,13 @@ TEST(PoseProgressChecker, unit_tests)
   int half_time_allowance_ms = static_cast<int>(time_allowance * 0.5 * 1000);
   int twice_time_allowance_ms = static_cast<int>(time_allowance * 2.0 * 1000);
 
-  auto rec_param = std::make_shared<rclcpp::AsyncParametersClient>(
-    x->get_node_base_interface(), x->get_node_topics_interface(),
-    x->get_node_graph_interface(),
-    x->get_node_services_interface());
+  auto rec_param = std::make_shared<rclcpp::AsyncParametersClient>(x->get_node_base_interface(), x->get_node_topics_interface(), x->get_node_graph_interface(), x->get_node_services_interface());
 
-  auto results = rec_param->set_parameters_atomically(
-    {rclcpp::Parameter("nav2_controller.movement_time_allowance", time_allowance)});
+  auto results = rec_param->set_parameters_atomically({rclcpp::Parameter("nav2_controller.movement_time_allowance", time_allowance)});
 
-  rclcpp::spin_until_future_complete(
-    x->get_node_base_interface(),
-    results);
+  rclcpp::spin_until_future_complete(x->get_node_base_interface(), results);
 
-  EXPECT_EQ(
-    x->get_parameter("nav2_controller.movement_time_allowance").as_double(),
-    time_allowance);
+  EXPECT_EQ(x->get_parameter("nav2_controller.movement_time_allowance").as_double(), time_allowance);
 
   // BELOW time allowance (set to time_allowance)
   // no movement
@@ -236,8 +202,7 @@ TEST(PoseProgressChecker, unit_tests)
   checkMacro(rpc, 0, 0, 0, 0, 0, -1, twice_time_allowance_ms, true);
 }
 
-int main(int argc, char ** argv)
-{
+int main(int argc, char ** argv) {
   rclcpp::init(argc, argv);
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

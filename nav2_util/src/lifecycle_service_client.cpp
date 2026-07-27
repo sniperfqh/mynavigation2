@@ -30,40 +30,25 @@ using namespace std::chrono_literals;
 namespace nav2_util
 {
 
-LifecycleServiceClient::LifecycleServiceClient(const string & lifecycle_node_name)
-: node_(generate_internal_node(lifecycle_node_name + "_lifecycle_client")),
-  change_state_(lifecycle_node_name + "/change_state", node_),
-  get_state_(lifecycle_node_name + "/get_state", node_)
-{
+LifecycleServiceClient::LifecycleServiceClient(const string & lifecycle_node_name) : node_(generate_internal_node(lifecycle_node_name + "_lifecycle_client")), change_state_(lifecycle_node_name + "/change_state", node_), get_state_(lifecycle_node_name + "/get_state", node_) {
   // Block until server is up
   rclcpp::Rate r(20);
   while (!get_state_.wait_for_service(2s)) {
-    RCLCPP_INFO(
-      node_->get_logger(), "Waiting for service %s...", get_state_.getServiceName().c_str());
+    RCLCPP_INFO(node_->get_logger(), "Waiting for service %s...", get_state_.getServiceName().c_str());
     r.sleep();
   }
 }
 
-LifecycleServiceClient::LifecycleServiceClient(
-  const string & lifecycle_node_name,
-  rclcpp::Node::SharedPtr parent_node)
-: node_(parent_node),
-  change_state_(lifecycle_node_name + "/change_state", node_),
-  get_state_(lifecycle_node_name + "/get_state", node_)
-{
+LifecycleServiceClient::LifecycleServiceClient(const string & lifecycle_node_name, rclcpp::Node::SharedPtr parent_node) : node_(parent_node), change_state_(lifecycle_node_name + "/change_state", node_), get_state_(lifecycle_node_name + "/get_state", node_) {
   // Block until server is up
   rclcpp::Rate r(20);
   while (!get_state_.wait_for_service(2s)) {
-    RCLCPP_INFO(
-      node_->get_logger(), "Waiting for service %s...", get_state_.getServiceName().c_str());
+    RCLCPP_INFO(node_->get_logger(), "Waiting for service %s...", get_state_.getServiceName().c_str());
     r.sleep();
   }
 }
 
-bool LifecycleServiceClient::change_state(
-  const uint8_t transition,
-  const seconds timeout)
-{
+bool LifecycleServiceClient::change_state(const uint8_t transition, const seconds timeout) {
   if (!change_state_.wait_for_service(timeout)) {
     throw std::runtime_error("change_state service is not available!");
   }
@@ -74,9 +59,7 @@ bool LifecycleServiceClient::change_state(
   return response.get();
 }
 
-bool LifecycleServiceClient::change_state(
-  std::uint8_t transition)
-{
+bool LifecycleServiceClient::change_state(std::uint8_t transition) {
   if (!change_state_.wait_for_service(5s)) {
     throw std::runtime_error("change_state service is not available!");
   }
@@ -87,9 +70,7 @@ bool LifecycleServiceClient::change_state(
   return change_state_.invoke(request, response);
 }
 
-uint8_t LifecycleServiceClient::get_state(
-  const seconds timeout)
-{
+uint8_t LifecycleServiceClient::get_state(const seconds timeout) {
   if (!get_state_.wait_for_service(timeout)) {
     throw std::runtime_error("get_state service is not available!");
   }

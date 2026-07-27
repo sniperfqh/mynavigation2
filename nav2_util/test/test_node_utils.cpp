@@ -35,42 +35,36 @@ public:
 };
 RclCppFixture g_rclcppfixture;
 
-TEST(SanitizeNodeName, SanitizeNodeName)
-{
+TEST(SanitizeNodeName, SanitizeNodeName) {
   ASSERT_EQ(sanitize_node_name("bar"), "bar");
   ASSERT_EQ(sanitize_node_name("/foo/bar"), "_foo_bar");
 }
 
-TEST(TimeToString, IsLengthCorrect)
-{
+TEST(TimeToString, IsLengthCorrect) {
   ASSERT_EQ(time_to_string(0).length(), 0u);
   ASSERT_EQ(time_to_string(1).length(), 1u);
   ASSERT_EQ(time_to_string(10).length(), 10u);
   ASSERT_EQ(time_to_string(20)[0], '0');
 }
 
-TEST(TimeToString, TimeToStringDifferent)
-{
+TEST(TimeToString, TimeToStringDifferent) {
   auto time1 = time_to_string(8);
   auto time2 = time_to_string(8);
   ASSERT_NE(time1, time2);
 }
 
-TEST(GenerateInternalNodeName, GenerateNodeName)
-{
+TEST(GenerateInternalNodeName, GenerateNodeName) {
   auto defaultName = generate_internal_node_name();
   ASSERT_EQ(defaultName[0], '_');
   ASSERT_EQ(defaultName.length(), 9u);
 }
 
-TEST(AddNamespaces, AddNamespaceSlash)
-{
+TEST(AddNamespaces, AddNamespaceSlash) {
   ASSERT_EQ(add_namespaces("hi", "bye"), "hi/bye");
   ASSERT_EQ(add_namespaces("hi/", "bye"), "/hi/bye");
 }
 
-TEST(DeclareParameterIfNotDeclared, DeclareParameterIfNotDeclared)
-{
+TEST(DeclareParameterIfNotDeclared, DeclareParameterIfNotDeclared) {
   auto node = std::make_shared<rclcpp::Node>("test_node");
   std::string param;
 
@@ -86,8 +80,7 @@ TEST(DeclareParameterIfNotDeclared, DeclareParameterIfNotDeclared)
   ASSERT_EQ(param, "fred");
 }
 
-TEST(GetPluginTypeParam, GetPluginTypeParam)
-{
+TEST(GetPluginTypeParam, GetPluginTypeParam) {
   ::testing::FLAGS_gtest_death_test_style = "threadsafe";
   auto node = std::make_shared<rclcpp::Node>("test_node");
   node->declare_parameter("Foo.plugin", "bar");
@@ -95,8 +88,7 @@ TEST(GetPluginTypeParam, GetPluginTypeParam)
   ASSERT_EXIT(get_plugin_type_param(node, "Waldo"), ::testing::ExitedWithCode(255), ".*");
 }
 
-TEST(TestParamCopying, TestParamCopying)
-{
+TEST(TestParamCopying, TestParamCopying) {
   auto node1 = std::make_shared<rclcpp::Node>("test_node1");
   auto node2 = std::make_shared<rclcpp::Node>("test_node2");
 

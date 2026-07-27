@@ -24,8 +24,7 @@ TEST(ValidateMessagesTest, DoubleValueCheck) {
   EXPECT_FALSE(nav2_util::validateMsg(std::numeric_limits<double>::quiet_NaN()));
 }
 
-TEST(ValidateMessagesTest, TimeStampCheck)
-{
+TEST(ValidateMessagesTest, TimeStampCheck) {
   // Test valid time stamp
   builtin_interfaces::msg::Time valid_time_stamp;
   valid_time_stamp.sec = 123;
@@ -38,8 +37,7 @@ TEST(ValidateMessagesTest, TimeStampCheck)
   EXPECT_FALSE(nav2_util::validateMsg(invalid_time_stamp));
 }
 
-TEST(ValidateMessagesTest, HeaderCheck)
-{
+TEST(ValidateMessagesTest, HeaderCheck) {
   // Test valid header with non-empty frame_id
   std_msgs::msg::Header valid_header;
   valid_header.stamp.sec = 123;
@@ -58,8 +56,7 @@ TEST(ValidateMessagesTest, HeaderCheck)
   EXPECT_FALSE(nav2_util::validateMsg(invalid_header));
 }
 
-TEST(ValidateMessagesTest, PointCheck)
-{
+TEST(ValidateMessagesTest, PointCheck) {
   // Test valid Point message
   geometry_msgs::msg::Point valid_point;
   valid_point.x = 1.0;
@@ -84,8 +81,7 @@ TEST(ValidateMessagesTest, PointCheck)
   EXPECT_FALSE(nav2_util::validateMsg(invalid_point));
 }
 
-TEST(ValidateMessagesTest, QuaternionCheck)
-{
+TEST(ValidateMessagesTest, QuaternionCheck) {
   // Test valid Quaternion message
   geometry_msgs::msg::Quaternion valid_quaternion;
   valid_quaternion.x = 0.0;
@@ -124,8 +120,7 @@ TEST(ValidateMessagesTest, QuaternionCheck)
   EXPECT_FALSE(nav2_util::validateMsg(invalid_quaternion));
 }
 
-TEST(ValidateMessagesTest, PoseCheck)
-{
+TEST(ValidateMessagesTest, PoseCheck) {
   // Test valid Pose message
   geometry_msgs::msg::Pose valid_pose;
   valid_pose.position.x = 1.0;

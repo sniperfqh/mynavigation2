@@ -5,8 +5,7 @@
 namespace nav2_regulated_modules
 {
 
-void RegulatedNavigator::sendFollowPath(const nav_msgs::msg::Path & path)
-{
+void RegulatedNavigator::sendFollowPath(const nav_msgs::msg::Path & path) {
   if (path.poses.empty() || task_.type == TaskType::NONE) {
     handlePlanningFailure("控制路径为空");
     return;
@@ -28,9 +27,7 @@ void RegulatedNavigator::sendFollowPath(const nav_msgs::msg::Path & path)
         }
       }
     };
-  options.feedback_callback = [this, generation, sequence](
-    auto, const std::shared_ptr<const FollowPath::Feedback> feedback)
-    {
+  options.feedback_callback = [this, generation, sequence](auto, const std::shared_ptr<const FollowPath::Feedback> feedback) {
       if (isCurrentFollow(generation, sequence)) {
         task_.distance_remaining = feedback->distance_to_goal;
         current_speed_ = feedback->speed;
@@ -48,14 +45,11 @@ void RegulatedNavigator::sendFollowPath(const nav_msgs::msg::Path & path)
   follow_client_->async_send_goal(goal, options);
 }
 
-bool RegulatedNavigator::isCurrentFollow(
-  const uint64_t generation, const uint64_t sequence) const
-{
+bool RegulatedNavigator::isCurrentFollow(const uint64_t generation, const uint64_t sequence) const {
   return generation == task_.generation && sequence == follow_sequence_;
 }
 
-void RegulatedNavigator::stopRobot()
-{
+void RegulatedNavigator::stopRobot() {
   // 中文注释：连续发布三次零速度，降低异步取消期间最后一帧非零速度残留的风险。
   if (!stop_cmd_pub_) {return;}
   geometry_msgs::msg::Twist stop;

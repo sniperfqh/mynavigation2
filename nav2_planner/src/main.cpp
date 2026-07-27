@@ -18,8 +18,7 @@
 #include "nav2_planner/planner_server.hpp"
 #include "rclcpp/rclcpp.hpp"
 
-int main(int argc, char ** argv)
-{
+int main(int argc, char ** argv) {
   rclcpp::init(argc, argv);
   SpdlogWrapper::init("nav2_planner", "planner_server"); // 模块名 + 日志文件名
   auto node = std::make_shared<nav2_planner::PlannerServer>();

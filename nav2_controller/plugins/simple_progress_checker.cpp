@@ -29,19 +29,14 @@ using std::placeholders::_1;
 
 namespace nav2_controller
 {
-void SimpleProgressChecker::initialize(
-  const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
-  const std::string & plugin_name)
-{
+void SimpleProgressChecker::initialize(const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent, const std::string & plugin_name) {
   plugin_name_ = plugin_name;
   auto node = parent.lock();
 
   clock_ = node->get_clock();
 
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name + ".required_movement_radius", rclcpp::ParameterValue(0.5));
-  nav2_util::declare_parameter_if_not_declared(
-    node, plugin_name + ".movement_time_allowance", rclcpp::ParameterValue(10.0));
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name + ".required_movement_radius", rclcpp::ParameterValue(0.5));
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name + ".movement_time_allowance", rclcpp::ParameterValue(10.0));
   // Scale is set to 0 by default, so if it was not set otherwise, set to 0
   node->get_parameter_or(plugin_name + ".required_movement_radius", radius_, 0.5);
   double time_allowance_param = 0.0;
@@ -49,12 +44,10 @@ void SimpleProgressChecker::initialize(
   time_allowance_ = rclcpp::Duration::from_seconds(time_allowance_param);
 
   // Add callback for dynamic parameters
-  dyn_params_handler_ = node->add_on_set_parameters_callback(
-    std::bind(&SimpleProgressChecker::dynamicParametersCallback, this, _1));
+  dyn_params_handler_ = node->add_on_set_parameters_callback(std::bind(&SimpleProgressChecker::dynamicParametersCallback, this, _1));
 }
 
-bool SimpleProgressChecker::check(geometry_msgs::msg::PoseStamped & current_pose)
-{
+bool SimpleProgressChecker::check(geometry_msgs::msg::PoseStamped & current_pose) {
   // relies on short circuit evaluation to not call is_robot_moved_enough if
   // baseline_pose is not set.
   geometry_msgs::msg::Pose2D current_pose2d;
@@ -67,36 +60,28 @@ bool SimpleProgressChecker::check(geometry_msgs::msg::PoseStamped & current_pose
   return !((clock_->now() - baseline_time_) > time_allowance_);
 }
 
-void SimpleProgressChecker::reset()
-{
+void SimpleProgressChecker::reset() {
   baseline_pose_set_ = false;
 }
 
-void SimpleProgressChecker::resetBaselinePose(const geometry_msgs::msg::Pose2D & pose)
-{
+void SimpleProgressChecker::resetBaselinePose(const geometry_msgs::msg::Pose2D & pose) {
   baseline_pose_ = pose;
   baseline_time_ = clock_->now();
   baseline_pose_set_ = true;
 }
 
-bool SimpleProgressChecker::isRobotMovedEnough(const geometry_msgs::msg::Pose2D & pose)
-{
+bool SimpleProgressChecker::isRobotMovedEnough(const geometry_msgs::msg::Pose2D & pose) {
   return pose_distance(pose, baseline_pose_) > radius_;
 }
 
-double SimpleProgressChecker::pose_distance(
-  const geometry_msgs::msg::Pose2D & pose1,
-  const geometry_msgs::msg::Pose2D & pose2)
-{
+double SimpleProgressChecker::pose_distance(const geometry_msgs::msg::Pose2D & pose1, const geometry_msgs::msg::Pose2D & pose2) {
   double dx = pose1.x - pose2.x;
   double dy = pose1.y - pose2.y;
 
   return std::hypot(dx, dy);
 }
 
-rcl_interfaces::msg::SetParametersResult
-SimpleProgressChecker::dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters)
-{
+rcl_interfaces::msg::SetParametersResult SimpleProgressChecker::dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters) {
   rcl_interfaces::msg::SetParametersResult result;
   for (auto parameter : parameters) {
     const auto & type = parameter.get_type();

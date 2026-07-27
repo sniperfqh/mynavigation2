@@ -24,65 +24,36 @@
 namespace nav2_util
 {
 
-bool getCurrentPose(
-  geometry_msgs::msg::PoseStamped & global_pose,
-  tf2_ros::Buffer & tf_buffer, const std::string global_frame,
-  const std::string robot_frame, const double transform_timeout,
-  const rclcpp::Time stamp)
-{
+bool getCurrentPose(geometry_msgs::msg::PoseStamped & global_pose, tf2_ros::Buffer & tf_buffer, const std::string global_frame, const std::string robot_frame, const double transform_timeout, const rclcpp::Time stamp) {
   tf2::toMsg(tf2::Transform::getIdentity(), global_pose.pose);
   global_pose.header.frame_id = robot_frame;
   global_pose.header.stamp = stamp;
 
-  return transformPoseInTargetFrame(
-    global_pose, global_pose, tf_buffer, global_frame, transform_timeout);
+  return transformPoseInTargetFrame(global_pose, global_pose, tf_buffer, global_frame, transform_timeout);
 }
 
-bool transformPoseInTargetFrame(
-  const geometry_msgs::msg::PoseStamped & input_pose,
-  geometry_msgs::msg::PoseStamped & transformed_pose,
-  tf2_ros::Buffer & tf_buffer, const std::string target_frame,
-  const double transform_timeout)
-{
+bool transformPoseInTargetFrame(const geometry_msgs::msg::PoseStamped & input_pose, geometry_msgs::msg::PoseStamped & transformed_pose, tf2_ros::Buffer & tf_buffer, const std::string target_frame, const double transform_timeout) {
   static rclcpp::Logger logger = rclcpp::get_logger("transformPoseInTargetFrame");
 
   try {
-    transformed_pose = tf_buffer.transform(
-      input_pose, target_frame,
-      tf2::durationFromSec(transform_timeout));
+    transformed_pose = tf_buffer.transform(input_pose, target_frame, tf2::durationFromSec(transform_timeout));
     return true;
   } catch (tf2::LookupException & ex) {
-    RCLCPP_ERROR(
-      logger,
-      "No Transform available Error looking up target frame: %s\n", ex.what());
+    RCLCPP_ERROR(logger, "No Transform available Error looking up target frame: %s\n", ex.what());
   } catch (tf2::ConnectivityException & ex) {
-    RCLCPP_ERROR(
-      logger,
-      "Connectivity Error looking up target frame: %s\n", ex.what());
+    RCLCPP_ERROR(logger, "Connectivity Error looking up target frame: %s\n", ex.what());
   } catch (tf2::ExtrapolationException & ex) {
-    RCLCPP_ERROR(
-      logger,
-      "Extrapolation Error looking up target frame: %s\n", ex.what());
+    RCLCPP_ERROR(logger, "Extrapolation Error looking up target frame: %s\n", ex.what());
   } catch (tf2::TimeoutException & ex) {
-    RCLCPP_ERROR(
-      logger,
-      "Transform timeout with tolerance: %.4f", transform_timeout);
+    RCLCPP_ERROR(logger, "Transform timeout with tolerance: %.4f", transform_timeout);
   } catch (tf2::TransformException & ex) {
-    RCLCPP_ERROR(
-      logger, "Failed to transform from %s to %s",
-      input_pose.header.frame_id.c_str(), target_frame.c_str());
+    RCLCPP_ERROR(logger, "Failed to transform from %s to %s", input_pose.header.frame_id.c_str(), target_frame.c_str());
   }
 
   return false;
 }
 
-bool getTransform(
-  const std::string & source_frame_id,
-  const std::string & target_frame_id,
-  const tf2::Duration & transform_tolerance,
-  const std::shared_ptr<tf2_ros::Buffer> tf_buffer,
-  tf2::Transform & tf2_transform)
-{
+bool getTransform(const std::string & source_frame_id, const std::string & target_frame_id, const tf2::Duration & transform_tolerance, const std::shared_ptr<tf2_ros::Buffer> tf_buffer, tf2::Transform & tf2_transform) {
   geometry_msgs::msg::TransformStamped transform;
   tf2_transform.setIdentity();  // initialize by identical transform
 
@@ -93,14 +64,9 @@ bool getTransform(
 
   try {
     // Obtaining the transform to get data from source to target frame
-    transform = tf_buffer->lookupTransform(
-      target_frame_id, source_frame_id,
-      tf2::TimePointZero, transform_tolerance);
+    transform = tf_buffer->lookupTransform(target_frame_id, source_frame_id, tf2::TimePointZero, transform_tolerance);
   } catch (tf2::TransformException & e) {
-    RCLCPP_ERROR(
-      rclcpp::get_logger("getTransform"),
-      "Failed to get \"%s\"->\"%s\" frame transform: %s",
-      source_frame_id.c_str(), target_frame_id.c_str(), e.what());
+    RCLCPP_ERROR(rclcpp::get_logger("getTransform"), "Failed to get \"%s\"->\"%s\" frame transform: %s", source_frame_id.c_str(), target_frame_id.c_str(), e.what());
     return false;
   }
 
@@ -109,31 +75,16 @@ bool getTransform(
   return true;
 }
 
-bool getTransform(
-  const std::string & source_frame_id,
-  const rclcpp::Time & source_time,
-  const std::string & target_frame_id,
-  const rclcpp::Time & target_time,
-  const std::string & fixed_frame_id,
-  const tf2::Duration & transform_tolerance,
-  const std::shared_ptr<tf2_ros::Buffer> tf_buffer,
-  tf2::Transform & tf2_transform)
-{
+bool getTransform(const std::string & source_frame_id, const rclcpp::Time & source_time, const std::string & target_frame_id, const rclcpp::Time & target_time, const std::string & fixed_frame_id, const tf2::Duration & transform_tolerance, const std::shared_ptr<tf2_ros::Buffer> tf_buffer, tf2::Transform & tf2_transform) {
   geometry_msgs::msg::TransformStamped transform;
   tf2_transform.setIdentity();  // initialize by identical transform
 
   try {
     // Obtaining the transform to get data from source to target frame.
     // This also considers the time shift between source and target.
-    transform = tf_buffer->lookupTransform(
-      target_frame_id, target_time,
-      source_frame_id, source_time,
-      fixed_frame_id, transform_tolerance);
+    transform = tf_buffer->lookupTransform(target_frame_id, target_time, source_frame_id, source_time, fixed_frame_id, transform_tolerance);
   } catch (tf2::TransformException & ex) {
-    RCLCPP_ERROR(
-      rclcpp::get_logger("getTransform"),
-      "Failed to get \"%s\"->\"%s\" frame transform: %s",
-      source_frame_id.c_str(), target_frame_id.c_str(), ex.what());
+    RCLCPP_ERROR(rclcpp::get_logger("getTransform"), "Failed to get \"%s\"->\"%s\" frame transform: %s", source_frame_id.c_str(), target_frame_id.c_str(), ex.what());
     return false;
   }
 
@@ -142,8 +93,7 @@ bool getTransform(
   return true;
 }
 
-bool validateTwist(const geometry_msgs::msg::Twist & msg)
-{
+bool validateTwist(const geometry_msgs::msg::Twist & msg) {
   if (std::isinf(msg.linear.x) || std::isnan(msg.linear.x)) {
     return false;
   }

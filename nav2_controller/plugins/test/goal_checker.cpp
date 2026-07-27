@@ -45,13 +45,7 @@
 using nav2_controller::SimpleGoalChecker;
 using nav2_controller::StoppedGoalChecker;
 
-void checkMacro(
-  nav2_core::GoalChecker & gc,
-  double x0, double y0, double theta0,
-  double x1, double y1, double theta1,
-  double xv, double yv, double thetav,
-  bool expected_result)
-{
+void checkMacro(nav2_core::GoalChecker & gc, double x0, double y0, double theta0, double x1, double y1, double theta1, double xv, double yv, double thetav, bool expected_result) {
   gc.reset();
   geometry_msgs::msg::Pose2D pose0, pose1;
   pose0.x = x0;
@@ -65,79 +59,53 @@ void checkMacro(
   v.y = yv;
   v.theta = thetav;
   if (expected_result) {
-    EXPECT_TRUE(
-      gc.isGoalReached(
-        nav_2d_utils::pose2DToPose(pose0),
-        nav_2d_utils::pose2DToPose(pose1), nav_2d_utils::twist2Dto3D(v)));
+    EXPECT_TRUE(gc.isGoalReached(nav_2d_utils::pose2DToPose(pose0), nav_2d_utils::pose2DToPose(pose1), nav_2d_utils::twist2Dto3D(v)));
   } else {
-    EXPECT_FALSE(
-      gc.isGoalReached(
-        nav_2d_utils::pose2DToPose(pose0),
-        nav_2d_utils::pose2DToPose(pose1), nav_2d_utils::twist2Dto3D(v)));
+    EXPECT_FALSE(gc.isGoalReached(nav_2d_utils::pose2DToPose(pose0), nav_2d_utils::pose2DToPose(pose1), nav_2d_utils::twist2Dto3D(v)));
   }
 }
 
-void sameResult(
-  nav2_core::GoalChecker & gc0, nav2_core::GoalChecker & gc1,
-  double x0, double y0, double theta0,
-  double x1, double y1, double theta1,
-  double xv, double yv, double thetav,
-  bool expected_result)
-{
+void sameResult(nav2_core::GoalChecker & gc0, nav2_core::GoalChecker & gc1, double x0, double y0, double theta0, double x1, double y1, double theta1, double xv, double yv, double thetav, bool expected_result) {
   checkMacro(gc0, x0, y0, theta0, x1, y1, theta1, xv, yv, thetav, expected_result);
   checkMacro(gc1, x0, y0, theta0, x1, y1, theta1, xv, yv, thetav, expected_result);
 }
 
-void trueFalse(
-  nav2_core::GoalChecker & gc0, nav2_core::GoalChecker & gc1,
-  double x0, double y0, double theta0,
-  double x1, double y1, double theta1,
-  double xv, double yv, double thetav)
-{
+void trueFalse(nav2_core::GoalChecker & gc0, nav2_core::GoalChecker & gc1, double x0, double y0, double theta0, double x1, double y1, double theta1, double xv, double yv, double thetav) {
   checkMacro(gc0, x0, y0, theta0, x1, y1, theta1, xv, yv, thetav, true);
   checkMacro(gc1, x0, y0, theta0, x1, y1, theta1, xv, yv, thetav, false);
 }
 class TestLifecycleNode : public nav2_util::LifecycleNode
 {
 public:
-  explicit TestLifecycleNode(const std::string & name)
-  : nav2_util::LifecycleNode(name)
-  {
+  explicit TestLifecycleNode(const std::string & name) : nav2_util::LifecycleNode(name) {
   }
 
-  nav2_util::CallbackReturn on_configure(const rclcpp_lifecycle::State &)
-  {
+  nav2_util::CallbackReturn on_configure(const rclcpp_lifecycle::State &) {
     return nav2_util::CallbackReturn::SUCCESS;
   }
 
-  nav2_util::CallbackReturn on_activate(const rclcpp_lifecycle::State &)
-  {
+  nav2_util::CallbackReturn on_activate(const rclcpp_lifecycle::State &) {
     return nav2_util::CallbackReturn::SUCCESS;
   }
 
-  nav2_util::CallbackReturn on_deactivate(const rclcpp_lifecycle::State &)
-  {
+  nav2_util::CallbackReturn on_deactivate(const rclcpp_lifecycle::State &) {
     return nav2_util::CallbackReturn::SUCCESS;
   }
 
-  nav2_util::CallbackReturn on_cleanup(const rclcpp_lifecycle::State &)
-  {
+  nav2_util::CallbackReturn on_cleanup(const rclcpp_lifecycle::State &) {
     return nav2_util::CallbackReturn::SUCCESS;
   }
 
-  nav2_util::CallbackReturn onShutdown(const rclcpp_lifecycle::State &)
-  {
+  nav2_util::CallbackReturn onShutdown(const rclcpp_lifecycle::State &) {
     return nav2_util::CallbackReturn::SUCCESS;
   }
 
-  nav2_util::CallbackReturn onError(const rclcpp_lifecycle::State &)
-  {
+  nav2_util::CallbackReturn onError(const rclcpp_lifecycle::State &) {
     return nav2_util::CallbackReturn::SUCCESS;
   }
 };
 
-TEST(VelocityIterator, goal_checker_reset)
-{
+TEST(VelocityIterator, goal_checker_reset) {
   auto x = std::make_shared<TestLifecycleNode>("goal_checker");
 
   nav2_core::GoalChecker * gc = new SimpleGoalChecker;
@@ -146,8 +114,7 @@ TEST(VelocityIterator, goal_checker_reset)
   EXPECT_TRUE(true);
 }
 
-TEST(VelocityIterator, stopped_goal_checker_reset)
-{
+TEST(VelocityIterator, stopped_goal_checker_reset) {
   auto x = std::make_shared<TestLifecycleNode>("stopped_goal_checker");
 
   nav2_core::GoalChecker * sgc = new StoppedGoalChecker;
@@ -156,8 +123,7 @@ TEST(VelocityIterator, stopped_goal_checker_reset)
   EXPECT_TRUE(true);
 }
 
-TEST(VelocityIterator, two_checks)
-{
+TEST(VelocityIterator, two_checks) {
   auto x = std::make_shared<TestLifecycleNode>("goal_checker");
 
   SimpleGoalChecker gc;
@@ -177,8 +143,7 @@ TEST(VelocityIterator, two_checks)
   trueFalse(gc, sgc, 0, 0, 0, 0, 0, 0, 0, 0, 1);
 }
 
-TEST(StoppedGoalChecker, get_tol_and_dynamic_params)
-{
+TEST(StoppedGoalChecker, get_tol_and_dynamic_params) {
   auto x = std::make_shared<TestLifecycleNode>("goal_checker");
 
   SimpleGoalChecker gc;
@@ -197,32 +162,19 @@ TEST(StoppedGoalChecker, get_tol_and_dynamic_params)
   EXPECT_EQ(vel_tol.angular.z, 0.25);
 
   // Test Stopped goal checker's dynamic parameters
-  auto rec_param = std::make_shared<rclcpp::AsyncParametersClient>(
-    x->get_node_base_interface(), x->get_node_topics_interface(),
-    x->get_node_graph_interface(),
-    x->get_node_services_interface());
+  auto rec_param = std::make_shared<rclcpp::AsyncParametersClient>(x->get_node_base_interface(), x->get_node_topics_interface(), x->get_node_graph_interface(), x->get_node_services_interface());
 
-  auto results = rec_param->set_parameters_atomically(
-    {rclcpp::Parameter("test.rot_stopped_velocity", 100.0),
-      rclcpp::Parameter("test.trans_stopped_velocity", 100.0)});
+  auto results = rec_param->set_parameters_atomically({rclcpp::Parameter("test.rot_stopped_velocity", 100.0), rclcpp::Parameter("test.trans_stopped_velocity", 100.0)});
 
-  rclcpp::spin_until_future_complete(
-    x->get_node_base_interface(),
-    results);
+  rclcpp::spin_until_future_complete(x->get_node_base_interface(), results);
 
   EXPECT_EQ(x->get_parameter("test.rot_stopped_velocity").as_double(), 100.0);
   EXPECT_EQ(x->get_parameter("test.trans_stopped_velocity").as_double(), 100.0);
 
   // Test normal goal checker's dynamic parameters
-  results = rec_param->set_parameters_atomically(
-    {rclcpp::Parameter("test2.xy_goal_tolerance", 200.0),
-      rclcpp::Parameter("test2.yaw_goal_tolerance", 200.0),
-      rclcpp::Parameter("test2.stateful", true),
-      rclcpp::Parameter("test2.symmetric_yaw_tolerance", true)});
+  results = rec_param->set_parameters_atomically({rclcpp::Parameter("test2.xy_goal_tolerance", 200.0), rclcpp::Parameter("test2.yaw_goal_tolerance", 200.0), rclcpp::Parameter("test2.stateful", true), rclcpp::Parameter("test2.symmetric_yaw_tolerance", true)});
 
-  rclcpp::spin_until_future_complete(
-    x->get_node_base_interface(),
-    results);
+  rclcpp::spin_until_future_complete(x->get_node_base_interface(), results);
 
   EXPECT_EQ(x->get_parameter("test2.xy_goal_tolerance").as_double(), 200.0);
   EXPECT_EQ(x->get_parameter("test2.yaw_goal_tolerance").as_double(), 200.0);
@@ -240,8 +192,7 @@ TEST(StoppedGoalChecker, get_tol_and_dynamic_params)
   EXPECT_EQ(pose_tol.position.y, 200.0);
 }
 
-TEST(StoppedGoalChecker, is_reached)
-{
+TEST(StoppedGoalChecker, is_reached) {
   auto x = std::make_shared<TestLifecycleNode>("goal_checker");
 
   SimpleGoalChecker gc;
@@ -321,23 +272,15 @@ TEST(StoppedGoalChecker, is_reached)
   EXPECT_FALSE(sgc.isGoalReached(current_pose, goal_pose, velocity));
   EXPECT_FALSE(gc.isGoalReached(current_pose, goal_pose, velocity));
 
-  auto rec_param = std::make_shared<rclcpp::AsyncParametersClient>(
-    x->get_node_base_interface(), x->get_node_topics_interface(),
-    x->get_node_graph_interface(),
-    x->get_node_services_interface());
-  auto results = rec_param->set_parameters_atomically(
-    {rclcpp::Parameter("test2.symmetric_yaw_tolerance", true),
-      rclcpp::Parameter("test.symmetric_yaw_tolerance", true)});
-  rclcpp::spin_until_future_complete(
-    x->get_node_base_interface(),
-    results);
+  auto rec_param = std::make_shared<rclcpp::AsyncParametersClient>(x->get_node_base_interface(), x->get_node_topics_interface(), x->get_node_graph_interface(), x->get_node_services_interface());
+  auto results = rec_param->set_parameters_atomically({rclcpp::Parameter("test2.symmetric_yaw_tolerance", true), rclcpp::Parameter("test.symmetric_yaw_tolerance", true)});
+  rclcpp::spin_until_future_complete(x->get_node_base_interface(), results);
   velocity.angular.z = 0.0;
   EXPECT_TRUE(sgc.isGoalReached(current_pose, goal_pose, velocity));
   EXPECT_TRUE(gc.isGoalReached(current_pose, goal_pose, velocity));
 }
 
-int main(int argc, char ** argv)
-{
+int main(int argc, char ** argv) {
   rclcpp::init(argc, argv);
   testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
