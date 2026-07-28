@@ -1,20 +1,26 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
+<!-- 中文注释：定义 myagv_keyboard_control 的 ROS 2 包元数据、依赖和构建类型。 -->
 <package format="3">
+  <!-- 中文注释：包名必须与 CMake project 名称和 Launch 中的 package 字段一致。 -->
   <name>myagv_keyboard_control</name>
   <version>0.1.0</version>
   <description>Keyboard control node publishing the MYAGV chassis ControlRes command.</description>
   <maintainer email="zpy@example.com">zpy</maintainer>
   <license>Apache-2.0</license>
 
+  <!-- 中文注释：ament_cmake 负责配置、编译、安装和生成 ROS 2 包索引。 -->
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <!-- 中文注释：节点运行时依赖自定义底盘消息和 rclcpp 节点、参数、定时器接口。 -->
   <depend>byd_custom_msgs</depend>
   <depend>rclcpp</depend>
 
+  <!-- 中文注释：Python Launch 文件需要 launch 与 launch_ros 运行依赖。 -->
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
 
+  <!-- 中文注释：向 ROS 2 工具链声明本包采用 ament_cmake 构建。 -->
   <export>
     <build_type>ament_cmake</build_type>
   </export>

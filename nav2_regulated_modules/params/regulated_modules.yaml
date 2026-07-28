@@ -1,3 +1,5 @@
+# 中文注释：本文件集中配置规划、规控、控制、平滑、地图和双代价地图节点。
+# 中文注释：多数参数行已直接标注作用、单位和数据流；修改后需从统一 Launch 重新加载。
 planner_server:  # 中文参数：全局规划服务器节点，负责加载规划插件并提供路径计算 Action。
   ros__parameters:  # 中文参数：以下内容全部属于 planner_server 的 ROS 2 参数。
     expected_planner_frequency: 20.0  # 中文参数：期望规划循环频率为 20 Hz，实际频率过低时输出告警。
@@ -99,7 +101,9 @@ regulated_navigator:  # 中文参数：无行为树的自定义规控编排节�
     # 中文注释：定位由外部自研节点直接提供动态 map -> base_link。
     global_frame: "map"  # 中文参数：全局规划、反馈和定位查询统一使用 map 坐标系。
     robot_base_frame: "base_link"  # 中文参数：机器人本体坐标系；外部自研定位必须发布 map→base_link。
+    operation_mode: "autonomous"  # 中文参数：启动模式为 remote、autonomous 或 fixed_path，默认保持原自主链。
     goal_topic: "goal_pose"  # 中文参数：兼容简单目标输入的 PoseStamped Topic 名称。
+    fixed_path_topic: "/fixed_path"  # 中文参数：固定路径模式接收完整 nav_msgs/Path 的 Topic。
     navigate_to_pose_action: "navigate_to_pose"  # 中文参数：对外提供标准单点导航 Action 名称。
     navigate_through_poses_action: "navigate_through_poses"  # 中文参数：对外提供标准多点连续导航 Action 名称。
     compute_path_to_pose_action: "compute_path_to_pose"  # 中文参数：调用 Planner Server 单点规划 Action 的名称。

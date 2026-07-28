@@ -5,6 +5,7 @@
 namespace nav2_regulated_modules
 {
 
+// 中文注释：把当前路径封装为 FollowPath Goal，并用任务代次和序号过滤过期反馈／结果。
 void RegulatedNavigator::sendFollowPath(const nav_msgs::msg::Path & path) {
   if (path.poses.empty() || task_.type == TaskType::NONE) {
     handlePlanningFailure("控制路径为空");
@@ -45,10 +46,12 @@ void RegulatedNavigator::sendFollowPath(const nav_msgs::msg::Path & path) {
   follow_client_->async_send_goal(goal, options);
 }
 
+// 中文注释：只有外层任务代次和 FollowPath 序号同时匹配时，异步回调才允许修改状态。
 bool RegulatedNavigator::isCurrentFollow(const uint64_t generation, const uint64_t sequence) const {
   return generation == task_.generation && sequence == follow_sequence_;
 }
 
+// 中文注释：向控制链入口连续发送零速度，覆盖取消过程中可能残留的非零命令。
 void RegulatedNavigator::stopRobot() {
   // 中文注释：连续发布三次零速度，降低异步取消期间最后一帧非零速度残留的风险。
   if (!stop_cmd_pub_) {return;}

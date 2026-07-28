@@ -1,12 +1,15 @@
 # mynavigation2
 
-本仓库是 `nav2_demo` 项目的 Nav2 源码真源。当前主要运行入口是：
+本仓库是 `nav2_demo` 项目的 Nav2 源码真源。当前有两个主要运行入口：
 
 ```text
-myagv_test_bringup/launch/entry.launch.py
+myagv_test_bringup/launch/entry.launch.py                    标准 BT 自主导航
+nav2_regulated_modules/launch/regulated_modules.launch.py   遥控／自主规划／固定路径三模式
 ```
 
-该入口面向实车或板端运行：Nav2 不启动 AMCL，不启动自定义 `locationpub` / `laserpub`，定位和雷达数据由外部系统提供。
+两个入口都面向实车或板端运行，不启动 AMCL 或自定义 `laserpub`，定位、雷达和里程计由外部系统
+提供。需要人工接管、自研状态机自主规划或直接跟踪上游完整路径时，使用
+`nav2_regulated_modules` 的统一三模式入口。
 
 ## 安装依赖
 
@@ -117,7 +120,6 @@ use_simulator:=True 且 headless:=False 时启动 gzclient
 当前保留为注释、不启动：
 
 ```text
-locationpub_cmd
 laserpub_cmd
 robot_state_publisher_cmd
 joint_state_publisher_cmd
@@ -155,7 +157,7 @@ RViz 中 `RobotModel` 已关闭，主要通过 TF 坐标系、地图、路径、
 
 4. 激光雷达
    c200 lidar driver
-     -> /c200_lidar_node1/scan
+     -> /c200_lidar_node/scan
      -> global_costmap / local_costmap obstacle layer
 
 5. 导航目标
@@ -264,7 +266,7 @@ ros2 run tf2_ros tf2_echo map base_link
 检查雷达：
 
 ```bash
-ros2 topic echo /c200_lidar_node1/scan --once
+ros2 topic echo /c200_lidar_node/scan --once
 ```
 
 检查地图：
@@ -288,7 +290,7 @@ ros2 lifecycle nodes
 判断标准：
 
 - `map -> base_link` 能持续查到。
-- `/c200_lidar_node1/scan` 有数据。
+- `/c200_lidar_node/scan` 有数据。
 - 激光 `frame_id` 能接入 TF 树。
 - `/map` 正常发布。
 - 导航目标发送后 `/cmd_vel` 有输出。
@@ -361,40 +363,41 @@ ros2 action send_goal /navigate_through_poses nav2_msgs/action/NavigateThroughPo
 `behavior_tree: ''` 表示使用 `bt_navigator` 对应导航类型的默认行为树；`--feedback`
 用于在终端持续显示剩余距离、导航时间和恢复次数等反馈。
 
-## 8. nav2_regulated_modules 启动说明
+## 8. nav2_regulated_modules 三模式选择与运行
 
-`nav2_regulated_modules` 是不使用行为树的自研规控导航入口。它保留 Map Server、Global／Local
-Costmap、Planner Server、Smoother Server、Controller Server、Velocity Smoother 和 Lifecycle
-管理，但不启动以下节点：
+`nav2_regulated_modules` 不使用行为树，通过启动参数 `operation_mode` 在三种互斥模式中选择一种。
+模式只能在启动时确定，不支持运行中热切换。切换模式时必须先停止旧 Launch，再启动新模式，避免旧
+Action、速度命令或 Topic 发布者残留。
 
-- `bt_navigator`
-- `behavior_server`
-- `waypoint_follower`
-- AMCL
+### 8.1 模式对照
 
-自研 `regulated_navigator` 直接编排：
+| `operation_mode` | 上游输入 | 实际数据流 | 适用场景 |
+| --- | --- | --- | --- |
+| `remote` | 交互式终端键盘 | 键盘 → `myagv_keyboard_control` → `/control_to_uart` | 人工接管、底盘方向和串口联调 |
+| `autonomous` | `/goal_pose`、`NavigateToPose`、`NavigateThroughPoses` | Planner → Smoother → FollowPath → Velocity Smoother → `controlpub` | 自主规划并实时导航 |
+| `fixed_path` | `/fixed_path`，类型为 `nav_msgs/msg/Path` | Path 校验／坐标变换 → FollowPath → Velocity Smoother → `controlpub` | 上游已经生成完整可跟踪路径 |
 
-```text
-NavigateToPose／NavigateThroughPoses／goal_pose
-  → ComputePathToPose／ComputePathThroughPoses
-  → SmoothPath
-  → FollowPath
-  → /cmd_vel_nav
-  → velocity_smoother
-  → /cmd_vel
-  → controlpub
-  → /control_to_uart
-```
+三种模式都保证 `/control_to_uart` 只有一个发布源：
 
-### 8.1 启动前提
+- `remote` 只启动 `myagv_keyboard_control`，不启动地图、规划、控制、速度平滑、RViz 和
+  `controlpub`。
+- `autonomous` 和 `fixed_path` 不启动 `myagv_keyboard_control`，由 `controlpub` 把
+  `/cmd_vel` 转换为 `/control_to_uart`。
+- `fixed_path` 为保持统一 Lifecycle 节点集合仍会启动 Planner Server 和 Smoother Server，但
+  `regulated_navigator` 不会向它们发送规划或路径平滑 Goal。
 
-启动前必须确保：
+### 8.2 运行前提与公共环境
 
-- 已在 `nav2_ws/` 完成所需包的构建。
-- 外部定位持续发布动态 `map -> base_link`。
-- 激光雷达发布 `/c200_lidar_node1/scan`，消息类型为 `sensor_msgs/msg/LaserScan`。
-- 激光消息的 `frame_id` 能接入 `base_link`；当前 `laserpub` 自测节点直接使用 `base_link`。
-- 真实底盘控制节点能够接收 `/control_to_uart`。
+`remote` 只需要可交互终端、键盘控制包和底盘通信链，不依赖地图、雷达、里程计或定位 TF。
+
+`autonomous` 和 `fixed_path` 启动前必须确保：
+
+- 外部定位能够持续提供 `map -> base_link` TF。
+- 雷达发布 `/c200_lidar_node/scan`，类型为 `sensor_msgs/msg/LaserScan`，其 `frame_id` 能通过
+  TF 接入 `base_link`。
+- 里程计发布 `/odometry`，类型为 `nav_msgs/msg/Odometry`，供 Controller Server 和
+  CLOSED_LOOP Velocity Smoother 使用。
+- 底盘控制节点能够接收 `/control_to_uart`。
 
 每个终端先加载环境：
 
@@ -406,86 +409,96 @@ export ROS_LOG_DIR=/tmp/nav2_logs
 export SPDLOG_WRAPPER_LOG_DIR=/tmp/nav2_logs
 ```
 
-`ROS_LOG_DIR` 和 `SPDLOG_WRAPPER_LOG_DIR` 指向可写目录，避免默认日志目录权限不足导致节点退出。
+`ROS_LOG_DIR` 和 `SPDLOG_WRAPPER_LOG_DIR` 必须指向可写目录。
 
-### 8.2 生产环境启动
+### 8.3 Launch 参数
 
-生产环境先启动自研定位、雷达驱动和底盘通信，再启动规控导航：
-
-```bash
-ros2 launch nav2_regulated_modules regulated_modules.launch.py
-```
-
-启动文件默认使用：
-
-- 地图：`nav2_regulated_modules/maps/out.yaml`。
-- 参数：`nav2_regulated_modules/params/regulated_modules.yaml`。
-- RViz：默认启动。
-- 时间源：系统时间，`use_sim_time:=false`。
-- 进程模式：非组合模式，`use_composition:=False`。
-- Lifecycle：自动激活，`autostart:=true`。
-
-使用外部地图和参数文件：
+统一入口：
 
 ```bash
 ros2 launch nav2_regulated_modules regulated_modules.launch.py \
-  map:=/absolute/path/to/map.yaml \
-  params_file:=/absolute/path/to/regulated_modules.yaml \
-  use_rviz:=True \
-  use_sim_time:=false
+  operation_mode:=autonomous
 ```
 
-无界面启动：
+常用启动参数：
+
+| 参数 | 默认值 | 说明 |
+| --- | --- | --- |
+| `operation_mode` | `autonomous` | 只能取 `remote`、`autonomous`、`fixed_path` |
+| `map` | 包内 `maps/out.yaml` | 地图 YAML 绝对路径；只影响导航模式 |
+| `params_file` | 包内 `params/regulated_modules.yaml` | Planner、Controller、Smoother、Navigator 和 Costmap 参数 |
+| `use_sim_time` | `false` | 是否使用 `/clock` |
+| `use_rviz` | `True` | 是否启动 RViz；遥控模式始终不启动 RViz |
+| `rviz_config_file` | 包内 `rviz/nav2_default_view.rviz` | RViz 配置文件 |
+| `autostart` | `true` | 是否由 Lifecycle Manager 自动激活节点 |
+| `use_composition` | `False` | 是否把标准 Nav2 组件加载到已有组件容器 |
+| `container_name` | `nav2_regulated_container` | 组合模式使用的外部组件容器名称 |
+| `use_respawn` | `False` | 非组合模式下节点异常退出后是否重启 |
+| `log_level` | `info` | ROS 日志等级 |
+| `namespace` | 空 | 顶层命名空间 |
+| `use_namespace` | `False` | 是否启用顶层命名空间 |
+| `keyboard_input_device` | 当前 Shell 的 `/dev/pts/*` 或 `/dev/tty` | 遥控模式读取的终端设备 |
+
+`operation_mode` 的命令行值会覆盖 YAML 中 `regulated_navigator.operation_mode`。默认保持
+`use_composition:=False`；启用组合模式前必须先准备与 `container_name` 一致的组件容器。
+
+### 8.4 遥控模式
+
+必须从能够接收键盘输入的交互式终端启动：
 
 ```bash
-ros2 launch nav2_regulated_modules regulated_modules.launch.py use_rviz:=False
+ros2 launch nav2_regulated_modules regulated_modules.launch.py \
+  operation_mode:=remote
 ```
 
-
-### 8.3 启动后检查
-
-检查核心 Lifecycle 节点：
+Launch 会自动把启动 Shell 的真实终端设备传给键盘节点。自动识别失败时显式指定：
 
 ```bash
-ros2 lifecycle get /map_server
-ros2 lifecycle get /planner_server
-ros2 lifecycle get /controller_server
-ros2 lifecycle get /smoother_server
-ros2 lifecycle get /velocity_smoother
-ros2 lifecycle get /regulated_navigator
+tty
+ros2 launch nav2_regulated_modules regulated_modules.launch.py \
+  operation_mode:=remote \
+  keyboard_input_device:=/dev/pts/N
 ```
 
-正常情况下均应返回：
+统一三模式 Launch 只传入 `input_device` 和 `output_topic`，不会加载
+`myagv_keyboard_control/config/keyboard_control.yaml`。因此该入口使用键盘节点内置的速度和平滑
+默认值；需要自定义遥控参数时，使用第 10 节的独立 Launch 或 `ros2 run --ros-args -p`。
+
+### 8.5 自主规划模式
+
+启动完整自研自主链：
+
+```bash
+ros2 launch nav2_regulated_modules regulated_modules.launch.py \
+  operation_mode:=autonomous \
+  use_sim_time:=false \
+  use_rviz:=True
+```
+
+无图形环境：
+
+```bash
+ros2 launch nav2_regulated_modules regulated_modules.launch.py \
+  operation_mode:=autonomous \
+  use_rviz:=False
+```
+
+数据流：
 
 ```text
-active [3]
+/goal_pose／NavigateToPose／NavigateThroughPoses
+  -> regulated_navigator
+  -> ComputePathToPose／ComputePathThroughPoses
+  -> SmoothPath
+  -> FollowPath
+  -> /cmd_vel_nav
+  -> velocity_smoother
+  -> /cmd_vel
+  -> controlpub
+  -> /control_to_uart
 ```
 
-检查定位、激光、地图和动作接口：
-
-```bash
-ros2 run tf2_ros tf2_echo map base_link
-ros2 topic echo /c200_lidar_node1/scan --once
-ros2 topic echo /map --once
-ros2 action list -t
-```
-
-动作列表至少应包含：
-
-```text
-/compute_path_to_pose
-/compute_path_through_poses
-/smooth_path
-/follow_path
-/navigate_to_pose
-/navigate_through_poses
-```
-
-ROS 图中不应存在 `/bt_navigator`、`/behavior_server` 和 `/waypoint_follower`。
-
-### 8.4 发送自测目标
-
-向固定 TF 当前位姿发送目标，可以验证单点 Action 的完整成功链路：
+发送标准单点目标：
 
 ```bash
 ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose "{
@@ -500,25 +513,114 @@ ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose "{
 }" --feedback
 ```
 
-这里的 `behavior_tree: ''` 表示不请求行为树。`regulated_navigator` 为兼容标准 Nav2 Action 消息
-保留该字段，但会拒绝任何非空行为树 XML。
+`behavior_tree` 必须为空；该入口不加载外部行为树 XML。RViz 的 `2D Goal Pose` 也可以通过
+`/goal_pose` 进入相同的规划、平滑和控制链。
 
-也可以使用 RViz 的 `2D Goal Pose`，它通过 `/goal_pose` 发送
-`geometry_msgs/msg/PoseStamped`。Topic 入口没有外层 Action 结果，但规划、平滑和控制链与单点
-Action 相同。
+自主链的关键参数位于 `params/regulated_modules.yaml`：
 
-### 8.5 停止顺序
+| 参数路径 | 默认值 | 作用 |
+| --- | --- | --- |
+| `planner_server.selected_planner` | `GridBasedAstar` | Planner Server 最终采用的规划插件；非空时覆盖 Action 中的 `planner_id` |
+| `regulated_navigator.planner_id` | `GridBasedAstar` | `regulated_navigator` 写入规划 Action Goal 的插件 ID |
+| `regulated_navigator.controller_id` | `DWB` | FollowPath 使用的控制器插件 ID |
+| `regulated_navigator.smoother_id` | `simple_smoother` | SmoothPath 使用的平滑器插件 ID |
+| `regulated_navigator.use_smoother` | `true` | 是否执行规划后路径平滑 |
+| `regulated_navigator.replan_frequency` | `1.0` | 控制期间周期重规划频率，单位 Hz |
+| `regulated_navigator.feedback_frequency` | `5.0` | 外层导航 Action 反馈频率，单位 Hz |
+| `regulated_navigator.max_recovery_rounds` | `2` | 清理双 Costmap 后重新规划的最大轮数 |
+| `velocity_smoother.feedback` | `CLOSED_LOOP` | 使用 `/odometry` 实测速度作为平滑起点 |
+| `velocity_smoother.max_velocity` | `[0.26, 0.0, 1.0]` | X、Y、Theta 三轴最大速度 |
+| `velocity_smoother.max_accel` | `[2.5, 0.0, 3.2]` | X、Y、Theta 三轴最大加速度 |
+| `velocity_smoother.max_decel` | `[-2.5, 0.0, -3.2]` | X、Y、Theta 三轴最大减速度 |
 
-测试完成后，在各终端按 `Ctrl+C`，建议按以下顺序停止：
+切换全局规划器时，应同时确认 `planner_server.planner_plugins` 已加载目标插件，并让
+`planner_server.selected_planner` 与 `regulated_navigator.planner_id` 保持一致。切换控制器时，
+目标 ID 必须存在于 `controller_server.controller_plugins`。这些参数由节点配置阶段读取，修改
+YAML 后应重新启动 Launch。
 
-```text
-regulated_modules.launch.py
-laserpub 或真实雷达驱动
-map2baseTF 或自研定位
-底盘通信节点
+当前已加载的规划器 ID 为 `GridBased`、`GridBasedAstar`、`Smac2D`、`SmacHybrid`、
+`SmacLattice` 和 `ThetaStar`；控制器 ID 为 `DWB`、`RPP`、`MPPI`、
+`GracefulController` 和 `RotationShimController`。
+
+### 8.6 固定路径模式
+
+启动路径直跟模式：
+
+```bash
+ros2 launch nav2_regulated_modules regulated_modules.launch.py \
+  operation_mode:=fixed_path \
+  use_sim_time:=false \
+  use_rviz:=True
 ```
 
-停止规控 Launch 时，Lifecycle 会先停用 `regulated_navigator`，取消下游 Action 并发布零速度。
+发布一条最小接口测试路径：
+
+```bash
+ros2 topic pub --once /fixed_path nav_msgs/msg/Path \
+  "{header: {frame_id: map}, poses: [
+    {pose: {position: {x: 0.0, y: 0.0, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}},
+    {pose: {position: {x: 1.0, y: 0.0, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}
+  ]}"
+```
+
+输入要求：
+
+- Topic 默认是 `/fixed_path`，可通过 `regulated_navigator.fixed_path_topic` 修改。
+- 消息必须是已经可跟踪的完整路径，而不是等待本节点规划的离散航点。
+- Path 至少包含两个 Pose，顶层 `header.frame_id` 不能为空，坐标必须为有限值，四元数必须有效。
+- Pose 未设置 `header.frame_id` 时继承 Path 坐标系；节点会把所有 Pose 转换到 `global_frame`
+  后再发送 FollowPath。
+- 上游负责路径点密度、姿态、避障、可行性以及与机器人运动学约束的一致性。
+
+运行中再次发布 `/fixed_path` 会以新的 FollowPath Goal 更新 Controller Server 当前路径，不需要
+重启控制器。定位恢复时只重发已保存路径，不会回落到自主规划。该模式会拒绝
+`NavigateToPose`、`NavigateThroughPoses` 和 `/goal_pose` 自主目标。
+
+固定路径仍使用以下控制参数：
+
+- `regulated_navigator.controller_id` 和 `goal_checker_id`。
+- `controller_server` 对应控制器插件参数。
+- `velocity_smoother` 的速度、加减速度和 `/odometry` 闭环参数。
+
+它不使用 `planner_id`、`use_smoother` 或 `replan_frequency` 执行规划。
+
+### 8.7 启动后检查与停止
+
+自主或固定路径模式检查：
+
+```bash
+ros2 lifecycle get /map_server
+ros2 lifecycle get /planner_server
+ros2 lifecycle get /controller_server
+ros2 lifecycle get /smoother_server
+ros2 lifecycle get /velocity_smoother
+ros2 lifecycle get /regulated_navigator
+ros2 param get /regulated_navigator operation_mode
+ros2 topic info /control_to_uart --verbose
+```
+
+固定路径模式额外检查：
+
+```bash
+ros2 topic info /fixed_path --verbose
+```
+
+遥控模式检查：
+
+```bash
+ros2 node list
+ros2 topic info /control_to_uart --verbose
+```
+
+预期结果：
+
+- 自主和固定路径模式的 Lifecycle 节点均为 `active [3]`。
+- `remote` 中 `/control_to_uart` 只有 `myagv_keyboard_control` 发布。
+- `autonomous` 和 `fixed_path` 中 `/control_to_uart` 只有 `controlpub` 发布。
+- `fixed_path` 中 `/fixed_path` 有一个 `regulated_navigator` 订阅者。
+
+测试完成后先停止 `regulated_modules.launch.py`，再停止雷达、定位和底盘通信节点。导航模式停止
+时，Lifecycle 会先停用 `regulated_navigator`，取消下游 Action 并发布零速度。
 
 
 ## 9. 外部贡献：Fork＋Pull Request
@@ -678,68 +780,131 @@ git push
 ## 10. myagv_keyboard_control 键盘控制
 
 `myagv_keyboard_control` 通过交互式终端读取方向键或 `WASD`，以固定周期直接发布
-`byd_custom_msgs/msg/ControlRes` 到 `/control_to_uart`。该节点绕过 `/cmd_vel` 和
-`controlpub`，适合底盘方向、速度符号和串口控制链的独立联调。
+`byd_custom_msgs/msg/ControlRes` 到 `/control_to_uart`。按键只更新目标速度，节点依据独立的线
+速度和角速度加减速限制生成连续输出。该节点绕过 `/cmd_vel` 和 `controlpub`，适合人工接管、
+底盘速度符号检查和串口控制链联调。
 
-### 10.1 运行前提
+### 10.1 平滑控制行为
 
-运行前必须停止 `controlpub` 或其他 `/control_to_uart` 发布者，避免多个节点同时向底盘发送冲突
-指令：
+| 按键 | 目标动作 | `v` | `w` |
+| --- | --- | ---: | ---: |
+| `W` 或 `↑` | 平滑加速前进 | `→ +linear_speed` | `0.0` |
+| `S` 或 `↓` | 平滑加速后退 | `→ -linear_speed` | `0.0` |
+| `A` 或 `←` | 平滑加速原地左转 | `0.0` | `→ +angular_speed` |
+| `D` 或 `→` | 平滑加速原地右转 | `0.0` | `→ -angular_speed` |
+| `Space` 或 `X` | 按减速度限制平滑停车 | `→ 0.0` | `→ 0.0` |
+| `Q` | 立即清零、发布停车指令并退出 | `0.0` | `0.0` |
 
-```bash
-ros2 topic info /control_to_uart --verbose
-```
+前进／后退反向、左转／右转反向以及直行／原地转向切换都会先减速到零，再向新目标平滑加速，
+不会跨过零点跳变，也不会在直行与原地转向切换期间同时输出明显的线速度和角速度。
 
-节点需要直接读取交互式终端，必须在能够接收键盘输入的 Shell 中运行。
+终端无法直接报告按键松开事件。方向键超过 `command_timeout` 没有再次输入时，节点把它视为已经
+松键，将目标速度置零并按减速度限制平滑停车。`Space`／`X` 用于正常平滑停车；`Q` 用于立即
+清零、发布停车指令并退出。
 
-### 10.2 推荐启动方式
+### 10.2 三种启动方式
 
-从工作空间加载 ROS 2 和本项目环境：
+先加载工作空间：
 
 ```bash
 cd /home/byd/Documents/zpy_ws/project/nav2_demo/nav2_ws
 source /opt/ros/humble/setup.bash
 source install/setup.bash
-ros2 run myagv_keyboard_control myagv_keyboard_control_node
 ```
 
-默认以 `50 Hz` 发布控制指令，线速度绝对值为 `0.2 m/s`，角速度绝对值为 `0.5 rad/s`，失键
-`0.5 s` 后自动恢复为停车指令。
+方式一，推荐使用统一入口进入互斥遥控模式：
 
-### 10.3 按键映射
+```bash
+ros2 launch nav2_regulated_modules regulated_modules.launch.py \
+  operation_mode:=remote
+```
 
-| 按键 | 功能 | `v` | `w` |
-| --- | --- | ---: | ---: |
-| `W` 或 `↑` | 前进 | `+linear_speed` | `0.0` |
-| `S` 或 `↓` | 后退 | `-linear_speed` | `0.0` |
-| `A` 或 `←` | 原地左转 | `0.0` | `+angular_speed` |
-| `D` 或 `→` | 原地右转 | `0.0` | `-angular_speed` |
-| `Space` 或 `X` | 停车 | `0.0` | `0.0` |
-| `Q` | 发布停车指令并退出 | `0.0` | `0.0` |
+该方式自动关闭自动导航输出链，但使用键盘节点内置参数，不加载键盘 YAML。
 
-`v_lift` 和 `w_rotation` 始终发布为 `0.0`。
+方式二，使用键盘包独立 Launch。该入口加载
+`myagv_keyboard_control/config/keyboard_control.yaml`：
 
-### 10.4 覆盖控制参数
+```bash
+ros2 launch myagv_keyboard_control keyboard_control.launch.py
+```
 
-可以在启动时覆盖默认速度、发布频率和失键停车时间：
+方式三，直接运行并用命令行覆盖参数：
 
 ```bash
 ros2 run myagv_keyboard_control myagv_keyboard_control_node --ros-args \
+  -p input_device:=/dev/tty \
   -p publish_rate:=50.0 \
-  -p linear_speed:=0.1 \
-  -p angular_speed:=0.3 \
-  -p command_timeout:=0.8
+  -p linear_speed:=0.15 \
+  -p angular_speed:=0.4 \
+  -p linear_accel_limit:=0.3 \
+  -p linear_decel_limit:=0.6 \
+  -p angular_accel_limit:=0.8 \
+  -p angular_decel_limit:=1.6 \
+  -p command_timeout:=0.6
 ```
 
-可用参数：
+三种方式都必须在能够接收键盘输入的交互式 Shell 中启动。
+
+### 10.3 参数说明
 
 | 参数 | 默认值 | 说明 |
 | --- | ---: | --- |
+| `input_device` | `/dev/tty` | 键盘输入终端；Launch 通常覆盖为启动 Shell 的 `/dev/pts/*` |
 | `output_topic` | `/control_to_uart` | 最终底盘控制 Topic |
 | `publish_rate` | `50.0` | 周期发布频率，单位 Hz |
 | `linear_speed` | `0.2` | 前进和后退速度绝对值，单位 m/s |
 | `angular_speed` | `0.5` | 左右转角速度绝对值，单位 rad/s |
-| `command_timeout` | `0.5` | 最后一次方向输入后的停车超时，`0.0` 表示关闭超时 |
+| `linear_accel_limit` | `0.4` | 线速度加速限制，单位 m/s²，必须大于零 |
+| `linear_decel_limit` | `0.8` | 线速度减速限制绝对值，单位 m/s²，必须大于零 |
+| `angular_accel_limit` | `1.0` | 角速度加速限制，单位 rad/s²，必须大于零 |
+| `angular_decel_limit` | `2.0` | 角速度减速限制绝对值，单位 rad/s²，必须大于零 |
+| `command_timeout` | `0.5` | 最后一次方向输入后的松键判定超时，单位 s；`0.0` 表示关闭超时停车 |
+
+参数约束：
+
+- `publish_rate` 和四个加减速度限制必须大于零。
+- 目标线速度、目标角速度和 `command_timeout` 必须为有限非负数。
+- 参数在节点启动时读取，当前没有运行期动态参数回调；不要依赖启动后的
+  `ros2 param set` 改变实际控制行为。
+- 按住方向键时，终端依靠系统键盘重复事件持续刷新命令。`command_timeout` 应大于实际按键重复
+  间隔，否则持续按键期间也可能反复进入减速。
+
+### 10.4 参数调节方法
+
+默认 `50 Hz` 下：
+
+```text
+线速度加速时间 = linear_speed / linear_accel_limit = 0.2 / 0.4 = 0.5 s
+线速度停车时间 = linear_speed / linear_decel_limit = 0.2 / 0.8 = 0.25 s
+角速度加速时间 = angular_speed / angular_accel_limit = 0.5 / 1.0 = 0.5 s
+角速度停车时间 = angular_speed / angular_decel_limit = 0.5 / 2.0 = 0.25 s
+```
+
+调参原则：
+
+- 起步冲击大：降低 `linear_accel_limit` 和 `angular_accel_limit`。
+- 松键停车过猛：降低 `linear_decel_limit` 和 `angular_decel_limit`。
+- 停车距离过长：适度提高减速度限制，但必须结合底盘负载和轮地附着验证。
+- 松键后停车太晚：降低 `command_timeout`，同时保证它仍大于键盘重复间隔。
+- 控制输出不连续：先检查 `publish_rate` 是否稳定，再检查终端输入是否持续刷新。
+
+长期参数写入：
+
+```yaml
+# myagv_keyboard_control/config/keyboard_control.yaml
+myagv_keyboard_control:
+  ros__parameters:
+    publish_rate: 50.0
+    linear_speed: 0.15
+    angular_speed: 0.4
+    linear_accel_limit: 0.3
+    linear_decel_limit: 0.6
+    angular_accel_limit: 0.8
+    angular_decel_limit: 1.6
+    command_timeout: 0.6
+```
+
+该 YAML 只由键盘包独立 Launch 加载。统一三模式入口的遥控分支目前使用节点内置值。
 
 ### 10.5 检查输出
 
@@ -759,7 +924,19 @@ Type:  byd_custom_msgs/msg/ControlRes
 Rate:  50 Hz
 ```
 
+`v_lift` 和 `w_rotation` 应始终为 `0.0`。切换方向或松键后，观察 `v`、`w` 是否按斜坡逐步过零，
+而不是一步跳变。
+
 ### 10.6 实车安全要求
+
+运行前检查 `/control_to_uart` 的发布者，必须确保只有当前控制链：
+
+```bash
+ros2 topic info /control_to_uart --verbose
+```
+
+不要同时运行 `controlpub` 和独立键盘节点。两者都会发布 `/control_to_uart`，同时运行会造成底盘
+指令竞争。使用 `operation_mode:=remote` 时，统一 Launch 已通过互斥分支避免这个问题。
 
 首次测试应架空驱动轮或断开动力执行机构，先检查前进、后退和左右转的速度符号，再连接真实底盘。
 终端失去焦点、SSH 中断或节点异常退出后，不能只依赖软件自动停车；底盘控制器还应具备独立的通信
@@ -767,19 +944,28 @@ Rate:  50 Hz
 
 结束控制时按 `Q`，节点会先发布停车指令再退出。不要直接关闭终端代替正常停车流程。
 
-### 10.7 ros2 launch 当前限制
+### 10.7 终端设备排障
 
-当前不推荐使用：
+Launch 已支持读取启动 Shell 的真实 `/dev/pts/*`，不再受旧版“子进程标准输入不是终端”的限制。
+如果自动识别失败，先查询当前终端：
 
 ```bash
-ros2 launch myagv_keyboard_control keyboard_control.launch.py
+tty
 ```
 
-`launch_ros` 启动的子进程没有继承交互式标准输入，`emulate_tty=True` 只处理标准输出和标准错误，
-不会把键盘输入连接给节点，因此当前实现会报：
+再显式传入设备：
 
-```text
-stdin is not a terminal
+```bash
+ros2 launch myagv_keyboard_control keyboard_control.launch.py \
+  input_device:=/dev/pts/N
 ```
 
-在节点完成 `/dev/tty` 兼容修复前，必须使用 `ros2 run` 从当前交互式 Shell 启动。
+或在统一三模式入口中使用：
+
+```bash
+ros2 launch nav2_regulated_modules regulated_modules.launch.py \
+  operation_mode:=remote \
+  keyboard_input_device:=/dev/pts/N
+```
+
+设备必须属于当前交互式终端并具有读取权限。节点退出时会恢复原终端属性。

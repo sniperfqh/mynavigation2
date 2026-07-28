@@ -9,12 +9,18 @@
 namespace nav2_regulated_modules
 {
 
+// 中文注释：在任务启动前等待规划、可选平滑和控制 Action Server 全部可用。
 bool RegulatedNavigator::dependenciesReady() {
   const auto timeout = std::chrono::duration<double>(server_timeout_);
   return compute_pose_client_->wait_for_action_server(timeout) && compute_poses_client_->wait_for_action_server(timeout) && (!planning_module_.useSmoother() || smooth_client_->wait_for_action_server(timeout)) && follow_client_->wait_for_action_server(timeout);
 }
 
+// 中文注释：仅自主模式可发起首次或周期规划，并按任务类型选择单点／多点 Planner Action。
 void RegulatedNavigator::startPlanning(const bool replanning) {
+  if (operation_mode_ != NavigationMode::AUTONOMOUS) {
+    RCLCPP_ERROR(get_logger(), "非 autonomous 模式禁止进入全局规划");
+    return;
+  }
   if (!active_ || task_.type == TaskType::NONE || planning_active_) {
     return;
   }
@@ -89,10 +95,12 @@ void RegulatedNavigator::startPlanning(const bool replanning) {
   }
 }
 
+// 中文注释：任务代次和规划序号共同防止旧规划结果覆盖新目标。
 bool RegulatedNavigator::isCurrentPlan(const uint64_t generation, const uint64_t sequence) const {
   return generation == task_.generation && sequence == plan_sequence_;
 }
 
+// 中文注释：规划成功后按配置选择直接控制或调用 Smoother，平滑失败时回退原始路径。
 void RegulatedNavigator::onPathReady(const nav_msgs::msg::Path & path) {
   task_.consecutive_planning_failures = 0;
   pending_raw_path_ = path;
@@ -134,6 +142,7 @@ void RegulatedNavigator::onPathReady(const nav_msgs::msg::Path & path) {
   smooth_client_->async_send_goal(goal, options);
 }
 
+// 中文注释：累计规划失败；周期更新失败且旧控制仍有效时继续旧路径，否则进入恢复。
 void RegulatedNavigator::handlePlanningFailure(const std::string & reason) {
   task_.last_error = reason;
   ++task_.consecutive_planning_failures;

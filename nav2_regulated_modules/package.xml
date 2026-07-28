@@ -1,14 +1,17 @@
 <?xml version="1.0"?>
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
+  <!-- 中文注释：本清单描述无行为树规控编排包的身份、构建依赖与运行期插件依赖。 -->
   <name>nav2_regulated_modules</name>
   <version>0.1.0</version>
   <description>Standalone planning and control bringup package without simulation assets.</description>
   <maintainer email="zpy@example.com">zpy</maintainer>
   <license>Apache-2.0</license>
 
+  <!-- 中文注释：使用 ament_cmake 构建 C++ 生命周期节点。 -->
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <!-- 中文注释：编译期依赖覆盖消息、Action、Lifecycle、Nav2 工具和 TF 变换。 -->
   <depend>geometry_msgs</depend>
   <depend>nav2_msgs</depend>
   <depend>nav_msgs</depend>
@@ -20,6 +23,7 @@
   <depend>tf2_ros</depend>
   <depend>tf2_geometry_msgs</depend>
 
+  <!-- 中文注释：运行期依赖覆盖 Launch、Nav2 服务器、规划控制插件和底盘输出节点。 -->
   <exec_depend>launch</exec_depend>
   <exec_depend>launch_ros</exec_depend>
   <exec_depend>nav2_common</exec_depend>
@@ -42,7 +46,9 @@
   <exec_depend>dwb_critics</exec_depend>
   <exec_depend>dwb_plugins</exec_depend>
   <exec_depend>controlpub</exec_depend>
+  <exec_depend>myagv_keyboard_control</exec_depend>
 
+  <!-- 中文注释：向 ROS 2 索引声明本包采用 ament_cmake 构建类型。 -->
   <export>
     <build_type>ament_cmake</build_type>
   </export>

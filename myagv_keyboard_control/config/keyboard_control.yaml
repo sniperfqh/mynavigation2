@@ -1,7 +1,23 @@
+# 中文注释：键盘遥控节点默认参数；独立 keyboard_control.launch.py 会加载本文件。
 myagv_keyboard_control:
   ros__parameters:
+    # 中文参数：读取键盘的终端设备；Launch 会优先覆盖为启动 Shell 的真实 /dev/pts/*。
+    input_device: /dev/tty
+    # 中文参数：直接向底盘发布 ControlRes 的 Topic，不能与 controlpub 同时占用。
     output_topic: /control_to_uart
+    # 中文参数：读取按键、更新速度斜坡并发布指令的周期频率，单位 Hz。
     publish_rate: 50.0
+    # 中文参数：前进和后退的目标线速度绝对值，单位 m/s。
     linear_speed: 0.2
+    # 中文参数：原地左转和右转的目标角速度绝对值，单位 rad/s。
     angular_speed: 0.5
-    command_timeout: 0.5
+    # 中文参数：线速度由零增大时的最大变化率，单位 m/s²。
+    linear_accel_limit: 0.4
+    # 中文参数：线速度减小或换向过零时的最大变化率绝对值，单位 m/s²。
+    linear_decel_limit: 0.8
+    # 中文参数：角速度由零增大时的最大变化率，单位 rad/s²。
+    angular_accel_limit: 1.0
+    # 中文参数：角速度减小或换向过零时的最大变化率绝对值，单位 rad/s²。
+    angular_decel_limit: 2.0
+    # 中文参数：最后一次方向键输入超过该时长后，将目标速度置零并平滑停车，单位 s。
+    command_timeout: 0.5  # 最后一次方向键输入超时后，将目标速度置零并按减速度限制平滑停车。

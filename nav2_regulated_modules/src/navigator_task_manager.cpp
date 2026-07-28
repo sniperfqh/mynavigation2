@@ -6,6 +6,7 @@
 namespace nav2_regulated_modules
 {
 
+// 中文注释：取消全部活动子 Action；可选递增序号，使已经在途的异步回调立即失效。
 void RegulatedNavigator::cancelSubGoals(const bool invalidate_callbacks) {
   if (invalidate_callbacks) {
     ++plan_sequence_;
@@ -30,6 +31,7 @@ void RegulatedNavigator::cancelSubGoals(const bool invalidate_callbacks) {
   }
 }
 
+// 中文注释：响应外部取消或 Lifecycle 停用，停车并按 Action 状态返回 canceled／aborted。
 void RegulatedNavigator::cancelTask(const std::string & reason) {
   if (task_.type == TaskType::NONE) {return;}
   task_.state = NavigationState::CANCELING;
@@ -58,6 +60,7 @@ void RegulatedNavigator::cancelTask(const std::string & reason) {
   resetTask();
 }
 
+// 中文注释：新目标到达时中止旧外层 Goal、取消子 Goal、停车并复位任务状态。
 void RegulatedNavigator::preemptCurrentTask() {
   if (task_.type == TaskType::NONE) {return;}
   ++task_generation_;
@@ -76,6 +79,7 @@ void RegulatedNavigator::preemptCurrentTask() {
   resetTask();
 }
 
+// 中文注释：控制器成功到达终点后完成活动外层 Action，并复位内部任务。
 void RegulatedNavigator::succeedTask() {
   task_.state = NavigationState::SUCCEEDED;
   if (active_pose_goal_) {
@@ -90,6 +94,7 @@ void RegulatedNavigator::succeedTask() {
   resetTask();
 }
 
+// 中文注释：不可恢复失败时取消子 Goal、终止外层 Action、记录原因并复位。
 void RegulatedNavigator::failTask(const std::string & reason) {
   task_.state = NavigationState::FAILED;
   cancelSubGoals(true);
@@ -105,6 +110,7 @@ void RegulatedNavigator::failTask(const std::string & reason) {
   resetTask();
 }
 
+// 中文注释：恢复空闲快照，同时保留最新 generation 以继续隔离旧异步回调。
 void RegulatedNavigator::resetTask() {
   task_ = NavigationTask();
   task_.generation = task_generation_;

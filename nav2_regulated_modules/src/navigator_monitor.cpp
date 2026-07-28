@@ -13,6 +13,7 @@ using namespace std::chrono_literals;
 namespace nav2_regulated_modules
 {
 
+// 中文注释：进入有限次数恢复：取消当前子 Goal、停车、异步清理双代价地图并设置等待截止时刻。
 void RegulatedNavigator::startRecovery(const std::string & reason) {
   if (task_.type == TaskType::NONE) {return;}
   if (task_.recovery_count >= max_recovery_rounds_) {
@@ -36,6 +37,7 @@ void RegulatedNavigator::startRecovery(const std::string & reason) {
   recovery_ready_time_ = now() + rclcpp::Duration::from_seconds(costmap_wait_duration_);
 }
 
+// 中文注释：周期驱动取消、清图等待、定位健康、进展检测、路点更新和自主重规划。
 void RegulatedNavigator::monitorTask() {
   if (!active_ || task_.type == TaskType::NONE) {return;}
   if (cancel_requested_) {
@@ -45,7 +47,7 @@ void RegulatedNavigator::monitorTask() {
   // 中文注释：代价地图清理后非阻塞等待更新，再从当前位置重新规划。
   if (task_.state == NavigationState::CLEARING_COSTMAP) {
     if (now() >= recovery_ready_time_) {
-      startPlanning(false);
+      resumeCurrentTask();
     }
     return;
   }
@@ -75,7 +77,7 @@ void RegulatedNavigator::monitorTask() {
     if ((now() - localization_stable_since_).seconds() >= localization_stable_duration_) {
       RCLCPP_INFO(get_logger(), "自研定位连续稳定，重新规划当前任务");
       task_.state = NavigationState::PLANNING;
-      startPlanning(false);
+      resumeCurrentTask();
     }
     return;
   }
@@ -88,7 +90,7 @@ void RegulatedNavigator::monitorTask() {
       cancelSubGoals(true);
       stopRobot();
       last_pose_ = current_pose;
-      startPlanning(false);
+      resumeCurrentTask();
       return;
     }
   }
@@ -112,13 +114,15 @@ void RegulatedNavigator::monitorTask() {
   }
 
   updatePassedGoals(current_pose);
-  if (task_.state == NavigationState::CONTROLLING && !planning_active_ &&
+  if (operation_mode_ == NavigationMode::AUTONOMOUS &&
+    task_.state == NavigationState::CONTROLLING && !planning_active_ &&
     (now() - task_.last_replan_time).seconds() >= planning_module_.replanPeriod())
   {
     startPlanning(true);
   }
 }
 
+// 中文注释：从 TF 查询 global_frame 到 robot_base_frame 的最新位姿，成功时刷新定位心跳。
 bool RegulatedNavigator::lookupCurrentPose(geometry_msgs::msg::PoseStamped & pose) {
   try {
     const auto transform = tf_buffer_->lookupTransform(global_frame_, robot_base_frame_, tf2::TimePointZero, 50ms);
@@ -134,6 +138,7 @@ bool RegulatedNavigator::lookupCurrentPose(geometry_msgs::msg::PoseStamped & pos
   }
 }
 
+// 中文注释：多点导航中按距离移除已经通过的前置目标，始终保留最终目标。
 void RegulatedNavigator::updatePassedGoals(const geometry_msgs::msg::PoseStamped & current_pose) {
   if (task_.type != TaskType::THROUGH_POSES || task_.goals.size() <= 1) {return;}
   while (task_.goals.size() > 1 &&

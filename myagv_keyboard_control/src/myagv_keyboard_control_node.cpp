@@ -1,3 +1,5 @@
+// 中文注释：实现终端键盘读取、目标速度状态机、加减速斜坡和 MYAGV 底盘指令周期发布。
+#include <algorithm>
 #include <cerrno>
 #include <chrono>
 #include <cctype>
@@ -11,74 +13,109 @@
 #include <termios.h>
 #include <unistd.h>
 
+// 中文注释：ControlRes 是底盘最终控制消息，rclcpp 提供节点、参数、日志、定时器和发布器接口。
 #include "byd_custom_msgs/msg/control_res.hpp"
 #include "rclcpp/rclcpp.hpp"
 
+// 中文注释：匿名命名空间限制终端工具、运动枚举和速度算法只在本编译单元内可见。
 namespace
 {
 
+// 中文注释：以 RAII 方式打开并配置终端，析构时恢复原始属性和文件状态标志。
 class TerminalMode
 {
 public:
-  TerminalMode()
-  {
-    if (!isatty(STDIN_FILENO)) {
-      throw std::runtime_error("stdin is not a terminal");
+  // 中文注释：优先打开参数指定设备；失败且标准输入为终端时，复制标准输入描述符作为回退。
+  explicit TerminalMode(const std::string & input_device) {
+    input_fd_ = open(input_device.c_str(), O_RDONLY | O_NOCTTY);
+    if (input_fd_ == -1 && isatty(STDIN_FILENO)) {
+      input_fd_ = dup(STDIN_FILENO);
+    }
+    // 中文注释：没有可读终端时立即失败，避免节点运行却永远收不到安全控制按键。
+    if (input_fd_ == -1) {
+      throw std::runtime_error("failed to open input device '" + input_device + "' and stdin is not a terminal");
     }
 
-    if (tcgetattr(STDIN_FILENO, &original_termios_) == -1) {
+    // 中文注释：保存终端原始属性，后续退出时必须完整恢复。
+    if (tcgetattr(input_fd_, &original_termios_) == -1) {
+      close(input_fd_);
+      input_fd_ = -1;
       throw std::runtime_error("failed to read terminal attributes");
     }
 
-    original_flags_ = fcntl(STDIN_FILENO, F_GETFL, 0);
+    // 中文注释：保存原文件状态标志，以便在析构时撤销非阻塞模式。
+    original_flags_ = fcntl(input_fd_, F_GETFL, 0);
     if (original_flags_ == -1) {
+      close(input_fd_);
+      input_fd_ = -1;
       throw std::runtime_error("failed to read terminal flags");
     }
 
+    // 中文注释：关闭规范行缓冲和回显，使单个按键无需回车即可被节点读取。
     termios raw = original_termios_;
     raw.c_lflag &= static_cast<tcflag_t>(~(ICANON | ECHO));
+    // 中文注释：VMIN／VTIME 均为零，read() 在没有字符时不会阻塞定时器线程。
     raw.c_cc[VMIN] = 0;
     raw.c_cc[VTIME] = 0;
 
-    if (tcsetattr(STDIN_FILENO, TCSANOW, &raw) == -1) {
+    // 中文注释：应用原始输入模式；失败时关闭文件描述符并终止节点构造。
+    if (tcsetattr(input_fd_, TCSANOW, &raw) == -1) {
+      close(input_fd_);
+      input_fd_ = -1;
       throw std::runtime_error("failed to configure terminal attributes");
     }
     termios_changed_ = true;
 
-    if (fcntl(STDIN_FILENO, F_SETFL, original_flags_ | O_NONBLOCK) == -1) {
+    // 中文注释：叠加 O_NONBLOCK，保证一个控制周期内只消费当前已经到达的按键字节。
+    if (fcntl(input_fd_, F_SETFL, original_flags_ | O_NONBLOCK) == -1) {
       restore();
+      close(input_fd_);
+      input_fd_ = -1;
       throw std::runtime_error("failed to configure non-blocking terminal input");
     }
     flags_changed_ = true;
   }
 
-  ~TerminalMode()
-  {
+  // 中文注释：先恢复终端状态，再关闭本对象持有的描述符，避免污染用户 Shell。
+  ~TerminalMode() {
     restore();
+    if (input_fd_ != -1) {
+      close(input_fd_);
+      input_fd_ = -1;
+    }
   }
 
+  // 中文注释：终端描述符具有唯一所有权，禁止复制对象导致重复恢复或重复关闭。
   TerminalMode(const TerminalMode &) = delete;
   TerminalMode & operator=(const TerminalMode &) = delete;
 
+  // 中文注释：向键盘读取循环提供已经配置为非阻塞模式的终端描述符。
+  int inputFd() const {
+    return input_fd_;
+  }
+
 private:
-  void restore()
-  {
+  // 中文注释：按实际完成的配置步骤逆向恢复；可被构造失败路径和析构安全重复调用。
+  void restore() {
     if (flags_changed_) {
-      (void)fcntl(STDIN_FILENO, F_SETFL, original_flags_);
+      (void)fcntl(input_fd_, F_SETFL, original_flags_);
       flags_changed_ = false;
     }
     if (termios_changed_) {
-      (void)tcsetattr(STDIN_FILENO, TCSANOW, &original_termios_);
+      (void)tcsetattr(input_fd_, TCSANOW, &original_termios_);
       termios_changed_ = false;
     }
   }
 
+  // 中文注释：保存终端描述符、原始 termios、原文件标志和两类配置是否已经生效。
+  int input_fd_{-1};
   termios original_termios_{};
   int original_flags_{0};
   bool termios_changed_{false};
   bool flags_changed_{false};
 };
 
+// 中文注释：运动状态只表达停止、直行和原地旋转，差速底盘不同时输出线速度与角速度目标。
 enum class Motion
 {
   STOP,
@@ -88,100 +125,154 @@ enum class Motion
   RIGHT
 };
 
-}  // namespace
+// 中文注释：速度绝对值低于该阈值时按零处理，避免浮点残差阻塞模式切换。
+constexpr double kVelocityEpsilon = 1e-9;
 
+// 中文注释：在一个 dt 周期内把 current 向 target 推进，并根据增速或减速选择不同变化率。
+double approachVelocity(const double current, const double target, const double acceleration_limit, const double deceleration_limit, const double dt) {
+  // 中文注释：已经到达目标时直接返回目标值，消除长期累积的浮点微小误差。
+  if (std::abs(target - current) <= kVelocityEpsilon) {
+    return target;
+  }
+
+  // 中文注释：换向和速度幅值下降均使用减速度限制，只有同方向增大幅值才使用加速度限制。
+  const bool changing_direction = current * target < 0.0;
+  const bool increasing_magnitude = std::abs(target) > std::abs(current);
+  const double rate_limit = changing_direction || !increasing_magnitude ? deceleration_limit : acceleration_limit;
+  const double max_delta = rate_limit * dt;
+  // 中文注释：分别限制向上和向下变化量，并用 min／max 防止单周期越过目标。
+  if (target > current) {
+    return std::min(current + max_delta, target);
+  }
+  return std::max(current - max_delta, target);
+}
+
+}  // namespace
+// 中文注释：匿名命名空间结束，下面定义对 ROS 2 暴露的节点类。
+
+// 中文注释：键盘遥控主节点负责参数校验、按键解析、速度平滑和 ControlRes 发布。
 class MyAgvKeyboardControl : public rclcpp::Node
 {
 public:
-  MyAgvKeyboardControl()
-  : Node("myagv_keyboard_control")
-  {
+  // 中文注释：声明全部启动参数，创建终端、发布器和固定频率 Wall Timer。
+  MyAgvKeyboardControl() : Node("myagv_keyboard_control") {
+    // 中文注释：输入输出参数确定终端数据源和底盘控制 Topic。
+    const auto input_device = declare_parameter<std::string>("input_device", "/dev/tty");
     const auto output_topic = declare_parameter<std::string>("output_topic", "/control_to_uart");
+    // 中文注释：速度、斜坡和松键超时参数在启动时读取，当前不支持运行期动态更新。
     publish_rate_ = declare_parameter<double>("publish_rate", 50.0);
     linear_speed_ = declare_parameter<double>("linear_speed", 0.2);
     angular_speed_ = declare_parameter<double>("angular_speed", 0.5);
+    linear_accel_limit_ = declare_parameter<double>("linear_accel_limit", 0.4);
+    linear_decel_limit_ = declare_parameter<double>("linear_decel_limit", 0.8);
+    angular_accel_limit_ = declare_parameter<double>("angular_accel_limit", 1.0);
+    angular_decel_limit_ = declare_parameter<double>("angular_decel_limit", 2.0);
     command_timeout_ = declare_parameter<double>("command_timeout", 0.5);
 
+    // 中文注释：在创建定时器和硬件输出接口前拒绝非法数值，避免除零或失控速度。
     validateParameters();
 
+    // 中文注释：打开真实终端并创建深度为 10 的底盘控制发布器。
+    terminal_mode_ = std::make_unique<TerminalMode>(input_device);
     publisher_ = create_publisher<byd_custom_msgs::msg::ControlRes>(output_topic, 10);
+    // 中文注释：初始化方向键时间和速度积分时间，首个周期不会得到异常大的 dt。
     last_direction_key_ = std::chrono::steady_clock::now();
+    last_update_time_ = last_direction_key_;
 
-    const auto period = std::chrono::duration_cast<std::chrono::nanoseconds>(
-      std::chrono::duration<double>(1.0 / publish_rate_));
+    // 中文注释：由发布频率计算 Wall Timer 周期，每次回调依次读取、超时、平滑并发布。
+    const auto period = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(1.0 / publish_rate_));
     timer_ = create_wall_timer(period, std::bind(&MyAgvKeyboardControl::timerCallback, this));
 
-    RCLCPP_INFO(
-      get_logger(),
-      "Publishing byd_custom_msgs/msg/ControlRes to %s at %.1f Hz",
-      output_topic.c_str(), publish_rate_);
-    RCLCPP_INFO(
-      get_logger(),
-      "Controls: W/Up forward, S/Down reverse, A/Left turn left, D/Right turn right, "
-      "Space/X stop, Q quit");
-    RCLCPP_INFO(
-      get_logger(),
-      "Speeds: linear %.3f m/s, angular %.3f rad/s, command timeout %.3f s",
-      linear_speed_, angular_speed_, command_timeout_);
+    // 中文注释：启动日志打印接口、按键、目标速度和加减速限制，便于联调确认参数是否生效。
+    RCLCPP_INFO(get_logger(), "Publishing byd_custom_msgs/msg/ControlRes to %s at %.1f Hz", output_topic.c_str(), publish_rate_);
+    RCLCPP_INFO(get_logger(), "Controls: W/Up forward, S/Down reverse, A/Left turn left, D/Right turn right, " "Space/X stop, Q quit");
+    RCLCPP_INFO(get_logger(), "Speeds: linear %.3f m/s, angular %.3f rad/s, command timeout %.3f s", linear_speed_, angular_speed_, command_timeout_);
+    RCLCPP_INFO(get_logger(), "Rate limits: linear accel/decel %.3f/%.3f m/s^2, angular accel/decel " "%.3f/%.3f rad/s^2", linear_accel_limit_, linear_decel_limit_, angular_accel_limit_, angular_decel_limit_);
   }
 
-  void stop()
-  {
-    setMotion(Motion::STOP, false);
+  // 中文注释：提供安全收口入口，立即清零当前值和目标值并发布一帧停车指令。
+  void stop() {
+    hardStop();
     publishCommand();
   }
 
 private:
-  void validateParameters() const
-  {
+  // 中文注释：校验所有数值参数的有限性和取值范围，失败时通过异常终止节点启动。
+  void validateParameters() const {
+    // 中文注释：发布频率必须为正，否则无法计算有效定时器周期。
     if (!std::isfinite(publish_rate_) || publish_rate_ <= 0.0) {
       throw std::invalid_argument("publish_rate must be greater than zero");
     }
+    // 中文注释：目标速度允许为零，但不能为负数、无穷大或 NaN；方向由运动状态决定。
     if (!std::isfinite(linear_speed_) || linear_speed_ < 0.0) {
       throw std::invalid_argument("linear_speed must be finite and non-negative");
     }
     if (!std::isfinite(angular_speed_) || angular_speed_ < 0.0) {
       throw std::invalid_argument("angular_speed must be finite and non-negative");
     }
+    // 中文注释：四个变化率必须严格为正，确保速度能够从任意状态收敛到目标。
+    if (!std::isfinite(linear_accel_limit_) || linear_accel_limit_ <= 0.0) {
+      throw std::invalid_argument("linear_accel_limit must be finite and greater than zero");
+    }
+    if (!std::isfinite(linear_decel_limit_) || linear_decel_limit_ <= 0.0) {
+      throw std::invalid_argument("linear_decel_limit must be finite and greater than zero");
+    }
+    if (!std::isfinite(angular_accel_limit_) || angular_accel_limit_ <= 0.0) {
+      throw std::invalid_argument("angular_accel_limit must be finite and greater than zero");
+    }
+    if (!std::isfinite(angular_decel_limit_) || angular_decel_limit_ <= 0.0) {
+      throw std::invalid_argument("angular_decel_limit must be finite and greater than zero");
+    }
+    // 中文注释：超时允许为零，零表示关闭松键自动停车，其余值必须为有限非负数。
     if (!std::isfinite(command_timeout_) || command_timeout_ < 0.0) {
       throw std::invalid_argument("command_timeout must be finite and non-negative");
     }
   }
 
-  void timerCallback()
-  {
+  // 中文注释：单个控制周期的数据流为“读键盘→判定松键超时→计算 dt→平滑速度→发布”。
+  void timerCallback() {
     readKeyboard();
-    applyCommandTimeout();
+    const auto now = std::chrono::steady_clock::now();
+    applyCommandTimeout(now);
+    // 中文注释：使用稳态时钟计算真实周期，并把异常延迟限制到最多两个标称周期。
+    const double elapsed = std::chrono::duration<double>(now - last_update_time_).count();
+    last_update_time_ = now;
+    const double dt = std::clamp(elapsed, 0.0, 2.0 / publish_rate_);
+    updateSmoothedCommand(dt);
     publishCommand();
   }
 
-  void readKeyboard()
-  {
+  // 中文注释：在非阻塞终端上一次性读取所有已到达字节，并把每个字节交给按键状态机。
+  void readKeyboard() {
     char key = 0;
     while (true) {
-      const ssize_t bytes_read = read(STDIN_FILENO, &key, 1);
+      const ssize_t bytes_read = read(terminal_mode_->inputFd(), &key, 1);
+      // 中文注释：成功读取一个字节后继续循环，避免方向键转义序列跨多个控制周期处理。
       if (bytes_read == 1) {
         processKey(key);
         continue;
       }
+      // 中文注释：系统调用被信号中断时立即重试，不把 EINTR 当作终端故障。
       if (bytes_read == -1 && errno == EINTR) {
         continue;
       }
+      // 中文注释：EAGAIN／EWOULDBLOCK 只表示当前没有新字符，其他错误按两秒节流记录。
       if (bytes_read == -1 && errno != EAGAIN && errno != EWOULDBLOCK) {
-        RCLCPP_ERROR_THROTTLE(
-          get_logger(), *get_clock(), 2000, "Failed to read keyboard input: %s", strerror(errno));
+        RCLCPP_ERROR_THROTTLE(get_logger(), *get_clock(), 2000, "Failed to read keyboard input: %s", strerror(errno));
       }
       break;
     }
   }
 
-  void processKey(char key)
-  {
+  // 中文注释：解析普通 WASD、停车／退出键以及方向键的 ESC [ A/B/C/D 三字节序列。
+  void processKey(char key) {
+    // 中文注释：收到 ESC 后等待左方括号，非标准序列直接复位。
     if (escape_state_ == 1) {
       escape_state_ = key == '[' ? 2 : 0;
       return;
     }
 
+    // 中文注释：方向键末字节 A/B/C/D 分别映射为前进、后退、右转和左转。
     if (escape_state_ == 2) {
       escape_state_ = 0;
       switch (key) {
@@ -202,11 +293,13 @@ private:
       }
     }
 
+    // 中文注释：ESC 是方向键转义序列起点，本字节不直接改变运动目标。
     if (key == '\x1b') {
       escape_state_ = 1;
       return;
     }
 
+    // 中文注释：普通字符统一转为小写，使 WASD 和 wasd 行为一致。
     const char normalized = static_cast<char>(std::tolower(static_cast<unsigned char>(key)));
     switch (normalized) {
       case 'w':
@@ -223,10 +316,12 @@ private:
         break;
       case 'x':
       case ' ':
+        // 中文注释：Space／X 只把目标切到零，实际速度仍按减速度限制平滑下降。
         setMotion(Motion::STOP, true);
         break;
       case 'q':
-        setMotion(Motion::STOP, true);
+        // 中文注释：Q 是显式紧急退出入口，绕过斜坡立即清零、发布停车并关闭 ROS。
+        hardStop();
         publishCommand();
         RCLCPP_INFO(get_logger(), "Quit requested; published stop command");
         rclcpp::shutdown();
@@ -236,63 +331,99 @@ private:
     }
   }
 
-  void commandMotion(Motion motion)
-  {
+  // 中文注释：方向键输入同时刷新松键超时时间，并更新期望运动状态。
+  void commandMotion(Motion motion) {
     last_direction_key_ = std::chrono::steady_clock::now();
     setMotion(motion, true);
   }
 
-  void setMotion(Motion motion, bool log_change)
-  {
+  // 中文注释：把离散运动状态转换为互斥的线速度和角速度目标。
+  void setMotion(Motion motion, bool log_change) {
+    // 中文注释：重复键只刷新 commandMotion() 中的时间，不重复打印目标变化日志。
     if (motion_ == motion) {
       return;
     }
 
     motion_ = motion;
+    // 中文注释：直行目标只设置 v，原地转向目标只设置 w，停止目标两轴均为零。
     switch (motion_) {
       case Motion::FORWARD:
-        current_v_ = linear_speed_;
-        current_w_ = 0.0;
+        target_v_ = linear_speed_;
+        target_w_ = 0.0;
         break;
       case Motion::REVERSE:
-        current_v_ = -linear_speed_;
-        current_w_ = 0.0;
+        target_v_ = -linear_speed_;
+        target_w_ = 0.0;
         break;
       case Motion::LEFT:
-        current_v_ = 0.0;
-        current_w_ = angular_speed_;
+        target_v_ = 0.0;
+        target_w_ = angular_speed_;
         break;
       case Motion::RIGHT:
-        current_v_ = 0.0;
-        current_w_ = -angular_speed_;
+        target_v_ = 0.0;
+        target_w_ = -angular_speed_;
         break;
       case Motion::STOP:
-        current_v_ = 0.0;
-        current_w_ = 0.0;
+        target_v_ = 0.0;
+        target_w_ = 0.0;
         break;
     }
 
+    // 中文注释：人工切换记录目标值；超时触发停车时可关闭重复日志。
     if (log_change) {
-      RCLCPP_INFO(get_logger(), "Command changed: v=%.3f, w=%.3f", current_v_, current_w_);
+      RCLCPP_INFO(get_logger(), "Target changed: v=%.3f, w=%.3f", target_v_, target_w_);
     }
   }
 
-  void applyCommandTimeout()
-  {
+  // 中文注释：同时清零状态、目标和当前输出，用于 Q 退出及显式安全收口。
+  void hardStop() {
+    motion_ = Motion::STOP;
+    target_v_ = 0.0;
+    target_w_ = 0.0;
+    current_v_ = 0.0;
+    current_w_ = 0.0;
+  }
+
+  // 中文注释：判断当前输出是否必须先回零，覆盖同轴反向和直行／原地转向互切。
+  bool transitionRequiresStop() const {
+    const bool linear_sign_change = current_v_ * target_v_ < 0.0;
+    const bool angular_sign_change = current_w_ * target_w_ < 0.0;
+    const bool linear_to_angular = std::abs(current_v_) > kVelocityEpsilon && std::abs(target_w_) > kVelocityEpsilon;
+    const bool angular_to_linear = std::abs(current_w_) > kVelocityEpsilon && std::abs(target_v_) > kVelocityEpsilon;
+    return linear_sign_change || angular_sign_change || linear_to_angular || angular_to_linear;
+  }
+
+  // 中文注释：根据当前周期 dt 更新实际输出；需要过零时暂时把两轴有效目标都设为零。
+  void updateSmoothedCommand(const double dt) {
+    double effective_target_v = target_v_;
+    double effective_target_w = target_w_;
+    if (transitionRequiresStop()) {
+      effective_target_v = 0.0;
+      effective_target_w = 0.0;
+    }
+
+    // 中文注释：线速度与角速度分别应用各自的加速和减速限制。
+    current_v_ = approachVelocity(current_v_, effective_target_v, linear_accel_limit_, linear_decel_limit_, dt);
+    current_w_ = approachVelocity(current_w_, effective_target_w, angular_accel_limit_, angular_decel_limit_, dt);
+  }
+
+  // 中文注释：把“长时间未收到方向键”解释为松键，并仅把目标切零以触发平滑停车。
+  void applyCommandTimeout(const std::chrono::steady_clock::time_point now) {
+    // 中文注释：已经停止或配置为零超时时，不执行自动停车判定。
     if (motion_ == Motion::STOP || command_timeout_ == 0.0) {
       return;
     }
 
-    const auto elapsed = std::chrono::duration<double>(
-      std::chrono::steady_clock::now() - last_direction_key_).count();
+    const auto elapsed = std::chrono::duration<double>(now - last_direction_key_).count();
+    // 中文注释：超时只触发一次状态变化，后续周期继续把当前速度平滑推进到零。
     if (elapsed > command_timeout_) {
       setMotion(Motion::STOP, false);
-      RCLCPP_WARN(get_logger(), "Keyboard command timed out; stopping chassis");
+      RCLCPP_WARN(get_logger(), "Keyboard command timed out; smoothly decelerating chassis");
     }
   }
 
-  void publishCommand()
-  {
+  // 中文注释：把当前平滑后的 v／w 写入底盘消息，升降和旋转机构通道固定清零。
+  void publishCommand() {
     byd_custom_msgs::msg::ControlRes msg;
     msg.v = current_v_;
     msg.w = current_w_;
@@ -301,35 +432,50 @@ private:
     publisher_->publish(msg);
   }
 
-  TerminalMode terminal_mode_;
+  // 中文注释：ROS 资源与终端资源的生命周期均由智能指针管理。
+  std::unique_ptr<TerminalMode> terminal_mode_;
   rclcpp::Publisher<byd_custom_msgs::msg::ControlRes>::SharedPtr publisher_;
   rclcpp::TimerBase::SharedPtr timer_;
 
+  // 中文注释：启动参数缓存；节点运行期间控制循环直接读取这些成员。
   double publish_rate_{50.0};
   double linear_speed_{0.2};
   double angular_speed_{0.5};
+  double linear_accel_limit_{0.4};
+  double linear_decel_limit_{0.8};
+  double angular_accel_limit_{1.0};
+  double angular_decel_limit_{2.0};
   double command_timeout_{0.5};
+  // 中文注释：target_* 是按键期望值，current_* 是经过斜坡限制后实际发布的值。
+  double target_v_{0.0};
+  double target_w_{0.0};
   double current_v_{0.0};
   double current_w_{0.0};
+  // 中文注释：保存离散运动状态、方向键转义序列阶段和两个稳态时钟时间点。
   Motion motion_{Motion::STOP};
   int escape_state_{0};
   std::chrono::steady_clock::time_point last_direction_key_{};
+  std::chrono::steady_clock::time_point last_update_time_{};
 };
 
-int main(int argc, char ** argv)
-{
+// 中文注释：初始化并运行键盘节点；正常分支负责停车，异常分支负责记录故障并返回非零退出码。
+int main(int argc, char ** argv) {
   rclcpp::init(argc, argv);
   try {
+    // 中文注释：节点构造失败时进入 catch；构造成功后由单线程执行器处理定时器。
     auto node = std::make_shared<MyAgvKeyboardControl>();
     rclcpp::spin(node);
+    // 中文注释：执行器在 ROS 仍有效时返回，额外发布一帧立即停车指令。
     if (rclcpp::ok()) {
       node->stop();
     }
   } catch (const std::exception & error) {
+    // 中文注释：终端或参数初始化异常返回非零退出码，便于 Launch 和运维系统识别失败。
     RCLCPP_FATAL(rclcpp::get_logger("myagv_keyboard_control"), "%s", error.what());
     rclcpp::shutdown();
     return 1;
   }
+  // 中文注释：正常路径释放 ROS 2 全局资源并返回成功。
   rclcpp::shutdown();
   return 0;
 }

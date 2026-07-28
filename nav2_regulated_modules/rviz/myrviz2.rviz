@@ -1,3 +1,6 @@
+# 中文注释：轻量 RViz 配置，面向地图、代价地图、路径和交互目标的快速观察。
+# 中文注释：本文件由 RViz YAML 序列化格式保存；修改 Topic 时需同步实际 Launch 重映射。
+# 中文注释：Panels 定义侧边工具面板，Visualization Manager 定义显示项，Window Geometry 保存界面布局。
 Panels:
   - Class: rviz_common/Displays
     Help Height: 78

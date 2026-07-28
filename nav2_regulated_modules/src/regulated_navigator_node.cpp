@@ -3,6 +3,7 @@
 #include "nav2_regulated_modules/regulated_navigator.hpp"
 #include "rclcpp/rclcpp.hpp"
 
+// 中文注释：进程入口初始化 ROS 2，创建 Lifecycle 导航器并交给多线程执行器运行。
 int main(int argc, char ** argv) {
   rclcpp::init(argc, argv);
   auto node = std::make_shared<nav2_regulated_modules::RegulatedNavigator>();

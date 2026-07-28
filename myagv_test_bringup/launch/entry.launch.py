@@ -232,22 +232,6 @@ def generate_launch_description():
         cwd=[launch_dir], output='screen')
 
     # ------------------------- 已停用的实车辅助节点 -------------------------
-    # locationpub 原计划发布 map->odom 定位 TF。当前定位系统自行提供 TF，
-    # 因此保持停用，避免同一 TF 边出现多个发布者。
-    # locationpub_cmd = Node(
-    #     package='locationpub',
-    #     executable='locationpub',
-    #     name='locationpub',
-    #     output='screen',
-    #     parameters=[{'use_sim_time': use_sim_time},
-    #                 {'parent_frame': 'map'},
-    #                 {'child_frame': 'odom'},
-    #                 {'x': 0.569},
-    #                 {'y': 0.541},
-    #                 {'z': 0.0},
-    #                 {'yaw': 0.0},
-    #                 {'tf_time_offset': 0.2},
-    #                 {'publish_rate': 30.0}])
 
     # laserpub 原计划生成或重整 LaserScan。当前实车雷达驱动直接提供扫描数据，
     # 因此不在入口中额外发布，避免与真实雷达话题冲突。
@@ -402,7 +386,6 @@ def generate_launch_description():
     ld.add_action(start_gazebo_client_cmd)
     # ld.add_action(start_gazebo_spawner_cmd)
 
-    # ld.add_action(locationpub_cmd)
     # ld.add_action(laserpub_cmd)
     # ld.add_action(map2base_tf_cmd)
     # ld.add_action(static_robot_to_base_link_cmd)
