@@ -59,7 +59,7 @@ enum class TaskType
   THROUGH_POSES,
   // 中文注释：来自 goal_pose Topic 的兼容单点任务。
   TOPIC_GOAL,
-  // 中文注释：来自 fixed_path Topic 的完整路径任务。
+  // 中文注释：来自 FollowFixedPath Action 的完整路径任务。
   FIXED_PATH
 };
 
@@ -86,7 +86,7 @@ struct NavigationTask
   int recovery_count{0};
   int consecutive_planning_failures{0};
   // 中文注释：FollowPath 反馈的剩余距离，供外层导航反馈使用。
-  float distance_remaining{0.0F};
+  double distance_remaining{0.0};
   // 中文注释：保存最近失败原因，便于恢复和日志诊断。
   std::string last_error;
 };

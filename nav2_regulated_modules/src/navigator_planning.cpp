@@ -18,7 +18,7 @@ bool RegulatedNavigator::dependenciesReady() {
 // 中文注释：仅自主模式可发起首次或周期规划，并按任务类型选择单点／多点 Planner Action。
 void RegulatedNavigator::startPlanning(const bool replanning) {
   if (operation_mode_ != NavigationMode::AUTONOMOUS) {
-    RCLCPP_ERROR(get_logger(), "非 autonomous 模式禁止进入全局规划");
+    LOG_ERROR("非 autonomous 模式禁止进入全局规划");
     return;
   }
   if (!active_ || task_.type == TaskType::NONE || planning_active_) {
@@ -35,6 +35,12 @@ void RegulatedNavigator::startPlanning(const bool replanning) {
   task_.last_replan_time = now();
   const auto generation = task_.generation;
   const auto sequence = ++plan_sequence_;
+  const char * task_type = task_.type == TaskType::THROUGH_POSES ? "through_poses" : task_.type == TaskType::TO_POSE ? "to_pose" : "topic_goal";
+  if (replanning) {
+    LOG_DEBUG("发起周期重规划，generation={}，plan_sequence={}，task_type={}，planner_id={}", generation, sequence, task_type, planning_module_.plannerId());
+  } else {
+    LOG_INFO("发起任务规划，generation={}，plan_sequence={}，task_type={}，planner_id={}", generation, sequence, task_type, planning_module_.plannerId());
+  }
 
   if (task_.type == TaskType::THROUGH_POSES) {
     ComputePathThroughPoses::Goal goal;
@@ -104,6 +110,11 @@ bool RegulatedNavigator::isCurrentPlan(const uint64_t generation, const uint64_t
 void RegulatedNavigator::onPathReady(const nav_msgs::msg::Path & path) {
   task_.consecutive_planning_failures = 0;
   pending_raw_path_ = path;
+  if (updating_path_) {
+    LOG_DEBUG("周期规划成功，generation={}，路径点数={}，use_smoother={}", task_.generation, path.poses.size(), planning_module_.useSmoother());
+  } else {
+    LOG_INFO("任务规划成功，generation={}，路径点数={}，use_smoother={}", task_.generation, path.poses.size(), planning_module_.useSmoother());
+  }
   if (!planning_module_.useSmoother()) {
     sendFollowPath(path);
     return;
@@ -117,12 +128,13 @@ void RegulatedNavigator::onPathReady(const nav_msgs::msg::Path & path) {
   goal.smoother_id = planning_module_.smootherId();
   goal.max_smoothing_duration = navigation_utils::durationFromSeconds(smoothing_duration_);
   goal.check_for_collisions = check_smoother_collisions_;
+  LOG_DEBUG("发起路径平滑，generation={}，plan_sequence={}，smoother_id={}，原始路径点数={}", generation, sequence, planning_module_.smootherId(), path.poses.size());
   auto options = rclcpp_action::Client<SmoothPath>::SendGoalOptions();
   options.goal_response_callback = [this, generation, sequence](auto handle) {
       if (isCurrentPlan(generation, sequence)) {
         active_smooth_goal_ = handle;
         if (!handle) {
-          RCLCPP_WARN(get_logger(), "平滑 Goal 被拒绝，回退使用原始路径");
+          LOG_WARN("平滑 Goal 被拒绝，回退使用原始路径");
           sendFollowPath(pending_raw_path_);
         }
       }
@@ -133,9 +145,10 @@ void RegulatedNavigator::onPathReady(const nav_msgs::msg::Path & path) {
       if (result.code == rclcpp_action::ResultCode::SUCCEEDED && result.result &&
         !result.result->path.poses.empty())
       {
+        LOG_DEBUG("路径平滑成功，generation={}，plan_sequence={}，路径点数={} -> {}", generation, sequence, pending_raw_path_.poses.size(), result.result->path.poses.size());
         sendFollowPath(result.result->path);
       } else {
-        RCLCPP_WARN(get_logger(), "路径平滑失败，回退使用原始规划路径");
+        LOG_WARN("路径平滑失败，回退使用原始规划路径");
         sendFollowPath(pending_raw_path_);
       }
     };
@@ -150,7 +163,7 @@ void RegulatedNavigator::handlePlanningFailure(const std::string & reason) {
     task_.consecutive_planning_failures < planning_module_.maxFailures())
   {
     task_.state = NavigationState::CONTROLLING;
-    RCLCPP_WARN(get_logger(), "%s，继续跟随旧路径", reason.c_str());
+    LOG_WARN("{}，继续跟随旧路径", reason);
     return;
   }
   startRecovery(reason);

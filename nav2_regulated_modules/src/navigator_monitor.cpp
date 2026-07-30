@@ -23,6 +23,7 @@ void RegulatedNavigator::startRecovery(const std::string & reason) {
   task_.state = NavigationState::CLEARING_COSTMAP;
   task_.last_error = reason;
   ++task_.recovery_count;
+  LOG_WARN("进入导航恢复，generation={}，round={}/{}，reason={}", task_.generation, task_.recovery_count, max_recovery_rounds_, reason);
   cancelSubGoals(true);
   stopRobot();
 
@@ -56,7 +57,7 @@ void RegulatedNavigator::monitorTask() {
     if ((now() - last_valid_tf_time_).seconds() > localization_timeout_ &&
       task_.state != NavigationState::LOCALIZATION_LOST)
     {
-      RCLCPP_ERROR(get_logger(), "自研定位 map->base_link 超时，取消控制并停车");
+      LOG_ERROR("自研定位 map->base_link 超时，取消控制并停车");
       cancelSubGoals(true);
       stopRobot();
       task_.state = NavigationState::LOCALIZATION_LOST;
@@ -75,7 +76,7 @@ void RegulatedNavigator::monitorTask() {
       localization_stable_since_ = now();
     }
     if ((now() - localization_stable_since_).seconds() >= localization_stable_duration_) {
-      RCLCPP_INFO(get_logger(), "自研定位连续稳定，重新规划当前任务");
+      LOG_INFO("自研定位连续稳定，重新规划当前任务");
       task_.state = NavigationState::PLANNING;
       resumeCurrentTask();
     }
@@ -86,7 +87,7 @@ void RegulatedNavigator::monitorTask() {
     const double translation_jump = navigation_utils::poseDistance(current_pose, last_pose_);
     const double rotation_jump = std::abs(navigation_utils::normalizeAngle(navigation_utils::yawFromPose(current_pose) - navigation_utils::yawFromPose(last_pose_)));
     if (translation_jump > max_translation_jump_ || rotation_jump > max_rotation_jump_) {
-      RCLCPP_WARN(get_logger(), "检测到定位跳变，废弃旧路径并重新规划");
+      LOG_WARN("检测到定位跳变，废弃旧路径并重新规划");
       cancelSubGoals(true);
       stopRobot();
       last_pose_ = current_pose;
@@ -141,10 +142,14 @@ bool RegulatedNavigator::lookupCurrentPose(geometry_msgs::msg::PoseStamped & pos
 // 中文注释：多点导航中按距离移除已经通过的前置目标，始终保留最终目标。
 void RegulatedNavigator::updatePassedGoals(const geometry_msgs::msg::PoseStamped & current_pose) {
   if (task_.type != TaskType::THROUGH_POSES || task_.goals.size() <= 1) {return;}
+  const auto previous_count = task_.goals.size();
   while (task_.goals.size() > 1 &&
     navigation_utils::poseDistance(current_pose, task_.goals.front()) <= passed_goal_radius_)
   {
     task_.goals.erase(task_.goals.begin());
+  }
+  if (task_.goals.size() != previous_count) {
+    LOG_INFO("多点导航已通过前置目标，generation={}，剩余目标数={}", task_.generation, task_.goals.size());
   }
 }
 

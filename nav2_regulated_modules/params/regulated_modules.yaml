@@ -103,7 +103,7 @@ regulated_navigator:  # 中文参数：无行为树的自定义规控编排节�
     robot_base_frame: "base_link"  # 中文参数：机器人本体坐标系；外部自研定位必须发布 map→base_link。
     operation_mode: "autonomous"  # 中文参数：启动模式为 remote、autonomous 或 fixed_path，默认保持原自主链。
     goal_topic: "goal_pose"  # 中文参数：兼容简单目标输入的 PoseStamped Topic 名称。
-    fixed_path_topic: "/fixed_path"  # 中文参数：固定路径模式接收完整 nav_msgs/Path 的 Topic。
+    fixed_path_action: "follow_fixed_path"  # 中文参数：固定路径模式对外提供 FollowFixedPath 业务 Action。
     navigate_to_pose_action: "navigate_to_pose"  # 中文参数：对外提供标准单点导航 Action 名称。
     navigate_through_poses_action: "navigate_through_poses"  # 中文参数：对外提供标准多点连续导航 Action 名称。
     compute_path_to_pose_action: "compute_path_to_pose"  # 中文参数：调用 Planner Server 单点规划 Action 的名称。

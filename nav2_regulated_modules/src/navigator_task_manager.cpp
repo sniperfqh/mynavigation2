@@ -8,6 +8,10 @@ namespace nav2_regulated_modules
 
 // 中文注释：取消全部活动子 Action；可选递增序号，使已经在途的异步回调立即失效。
 void RegulatedNavigator::cancelSubGoals(const bool invalidate_callbacks) {
+  const bool had_compute_pose = active_compute_pose_goal_ != nullptr;
+  const bool had_compute_poses = active_compute_poses_goal_ != nullptr;
+  const bool had_smooth = active_smooth_goal_ != nullptr;
+  const bool had_follow = active_follow_goal_ != nullptr;
   if (invalidate_callbacks) {
     ++plan_sequence_;
     ++follow_sequence_;
@@ -29,11 +33,15 @@ void RegulatedNavigator::cancelSubGoals(const bool invalidate_callbacks) {
     follow_client_->async_cancel_goal(active_follow_goal_);
     active_follow_goal_.reset();
   }
+  if (had_compute_pose || had_compute_poses || had_smooth || had_follow) {
+    LOG_DEBUG("取消子 Goal，compute_pose={}，compute_poses={}，smooth={}，follow={}，invalidate_callbacks={}", had_compute_pose, had_compute_poses, had_smooth, had_follow, invalidate_callbacks);
+  }
 }
 
 // 中文注释：响应外部取消或 Lifecycle 停用，停车并按 Action 状态返回 canceled／aborted。
 void RegulatedNavigator::cancelTask(const std::string & reason) {
   if (task_.type == TaskType::NONE) {return;}
+  const auto generation = task_.generation;
   task_.state = NavigationState::CANCELING;
   ++task_generation_;
   cancelSubGoals(true);
@@ -56,13 +64,26 @@ void RegulatedNavigator::cancelTask(const std::string & reason) {
     }
     active_poses_goal_.reset();
   }
-  RCLCPP_WARN(get_logger(), "导航任务已取消：%s", reason.c_str());
+  if (active_fixed_path_goal_) {
+    auto fixed_path_result = std::make_shared<FollowFixedPath::Result>();
+    fixed_path_result->success = false;
+    if (active_fixed_path_goal_->is_canceling()) {
+      active_fixed_path_goal_->canceled(fixed_path_result);
+    } else {
+      active_fixed_path_goal_->abort(fixed_path_result);
+    }
+    active_fixed_path_goal_.reset();
+  }
+  LOG_WARN("导航任务已取消：{}", reason);
+  LOG_INFO("导航任务取消收口完成，generation={}，reason={}", generation, reason);
   resetTask();
 }
 
 // 中文注释：新目标到达时中止旧外层 Goal、取消子 Goal、停车并复位任务状态。
 void RegulatedNavigator::preemptCurrentTask() {
   if (task_.type == TaskType::NONE) {return;}
+  const auto generation = task_.generation;
+  const char * task_type = task_.type == TaskType::TO_POSE ? "to_pose" : task_.type == TaskType::THROUGH_POSES ? "through_poses" : task_.type == TaskType::TOPIC_GOAL ? "topic_goal" : "fixed_path";
   ++task_generation_;
   cancelSubGoals(true);
   stopRobot();
@@ -76,11 +97,20 @@ void RegulatedNavigator::preemptCurrentTask() {
     active_poses_goal_->abort(poses_result);
     active_poses_goal_.reset();
   }
+  if (active_fixed_path_goal_) {
+    auto fixed_path_result = std::make_shared<FollowFixedPath::Result>();
+    fixed_path_result->success = false;
+    active_fixed_path_goal_->abort(fixed_path_result);
+    active_fixed_path_goal_.reset();
+  }
+  LOG_INFO("旧导航任务被新任务抢占，generation={}，task_type={}", generation, task_type);
   resetTask();
 }
 
 // 中文注释：控制器成功到达终点后完成活动外层 Action，并复位内部任务。
 void RegulatedNavigator::succeedTask() {
+  const auto generation = task_.generation;
+  const auto elapsed = (now() - task_.start_time).seconds();
   task_.state = NavigationState::SUCCEEDED;
   if (active_pose_goal_) {
     active_pose_goal_->succeed(std::make_shared<NavigateToPose::Result>());
@@ -90,12 +120,19 @@ void RegulatedNavigator::succeedTask() {
     active_poses_goal_->succeed(std::make_shared<NavigateThroughPoses::Result>());
     active_poses_goal_.reset();
   }
-  RCLCPP_INFO(get_logger(), "导航任务执行成功");
+  if (active_fixed_path_goal_) {
+    auto fixed_path_result = std::make_shared<FollowFixedPath::Result>();
+    fixed_path_result->success = true;
+    active_fixed_path_goal_->succeed(fixed_path_result);
+    active_fixed_path_goal_.reset();
+  }
+  LOG_INFO("导航任务执行成功，generation={}，耗时={:.3f}s，恢复次数={}", generation, elapsed, task_.recovery_count);
   resetTask();
 }
 
 // 中文注释：不可恢复失败时取消子 Goal、终止外层 Action、记录原因并复位。
 void RegulatedNavigator::failTask(const std::string & reason) {
+  const auto generation = task_.generation;
   task_.state = NavigationState::FAILED;
   cancelSubGoals(true);
   if (active_pose_goal_) {
@@ -106,7 +143,13 @@ void RegulatedNavigator::failTask(const std::string & reason) {
     active_poses_goal_->abort(std::make_shared<NavigateThroughPoses::Result>());
     active_poses_goal_.reset();
   }
-  RCLCPP_ERROR(get_logger(), "导航任务失败：%s", reason.c_str());
+  if (active_fixed_path_goal_) {
+    auto fixed_path_result = std::make_shared<FollowFixedPath::Result>();
+    fixed_path_result->success = false;
+    active_fixed_path_goal_->abort(fixed_path_result);
+    active_fixed_path_goal_.reset();
+  }
+  LOG_ERROR("导航任务失败，generation={}，恢复次数={}，reason={}", generation, task_.recovery_count, reason);
   resetTask();
 }
 
@@ -119,6 +162,7 @@ void RegulatedNavigator::resetTask() {
   has_last_pose_ = false;
   current_speed_ = 0.0;
   cancel_requested_ = false;
+  active_fixed_path_goal_.reset();
 }
 
 }  // namespace nav2_regulated_modules

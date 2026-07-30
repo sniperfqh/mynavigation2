@@ -9,6 +9,7 @@ endif()
 
 # 中文注释：这些依赖分别提供 ROS 2 节点、Action、Lifecycle、Nav2 接口、消息和 TF 变换能力。
 find_package(ament_cmake REQUIRED)
+find_package(rosidl_default_generators REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
@@ -19,6 +20,13 @@ find_package(nav_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
+find_package(spdlog_wrapper REQUIRED)
+
+# 中文注释：生成固定路径业务 Action；外层接口只暴露完整 Path、剩余距离和成功标志。
+rosidl_generate_interfaces(${PROJECT_NAME}
+  "action/FollowFixedPath.action"
+  DEPENDENCIES nav_msgs
+)
 
 # 中文注释：独立规控节点只编排现有 Nav2 服务器，不链接行为树运行库。
 add_executable(regulated_navigator_node
@@ -49,7 +57,10 @@ ament_target_dependencies(regulated_navigator_node
   tf2
   tf2_ros
   tf2_geometry_msgs
+  spdlog_wrapper
 )
+rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
+target_link_libraries(regulated_navigator_node "${cpp_typesupport_target}")
 
 # 中文注释：安装可执行文件供 ros2 run 调用，并安装头文件及运行所需配置资源。
 install(TARGETS regulated_navigator_node
@@ -61,6 +72,7 @@ install(DIRECTORY
 )
 
 install(DIRECTORY
+  action
   launch
   maps
   params

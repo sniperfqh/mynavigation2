@@ -1,15 +1,32 @@
 # mynavigation2
 
-本仓库是 `nav2_demo` 项目的 Nav2 源码真源。当前有两个主要运行入口：
+本仓库是 `nav2_demo` 项目的 Nav2 源码真源。当前推荐使用
+`nav2_regulated_modules` 的统一入口，并在启动时选择互斥运行模式：
 
 ```text
-myagv_test_bringup/launch/entry.launch.py                    标准 BT 自主导航
-nav2_regulated_modules/launch/regulated_modules.launch.py   遥控／自主规划／固定路径三模式
+nav2_regulated_modules/launch/regulated_modules.launch.py
+  remote       人工键盘遥控
+  autonomous   无行为树的自主规划、平滑与控制
+  fixed_path   直接跟踪上游发布的完整路径
 ```
 
-两个入口都面向实车或板端运行，不启动 AMCL 或自定义 `laserpub`，定位、雷达和里程计由外部系统
-提供。需要人工接管、自研状态机自主规划或直接跟踪上游完整路径时，使用
-`nav2_regulated_modules` 的统一三模式入口。
+`myagv_test_bringup/launch/entry.launch.py` 继续保留为标准 BT Nav2 兼容入口。两个导航入口都面向
+实车或板端运行，不启动 AMCL、`map2base_tf`、静态 `odom -> base_link` 或自定义
+`laserpub`；定位、机器人 TF、雷达和里程计必须由外部系统提供。
+
+快速启动推荐入口：
+
+```bash
+cd /home/byd/Documents/zpy_ws/project/nav2_demo/nav2_ws
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+
+ros2 launch nav2_regulated_modules regulated_modules.launch.py \
+  operation_mode:=autonomous
+```
+
+将 `operation_mode` 改为 `remote` 或 `fixed_path` 即可进入另外两种模式。模式不能在运行中热
+切换；必须先停止旧 Launch，再启动新模式。
 
 ## 安装依赖
 
@@ -40,7 +57,6 @@ source /opt/ros/humble/setup.bash
 export MAKEFLAGS="-j4"
 colcon build --symlink-install --parallel-workers 1 --cmake-args -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
 colcon build --symlink-install --parallel-workers 1 --packages-select myagv_test_bringup --cmake-args -DBUILD_TESTING=OFF
-限制核编译的数量
 ```
 
 编译 `myagv_test_bringup` 及工作空间内它依赖的包：
@@ -63,13 +79,26 @@ colcon build --symlink-install --packages-select myagv_test_bringup \
   --cmake-args -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
 ```
 
+只重新编译推荐入口及其仓库内依赖时：
+
+```bash
+cd /home/byd/Documents/zpy_ws/project/nav2_demo/nav2_ws
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+colcon build --symlink-install \
+  --packages-up-to nav2_regulated_modules \
+  --cmake-args -DBUILD_TESTING=OFF -DCMAKE_BUILD_TYPE=Release
+```
+
 编译完成后，在当前终端加载新的 install 空间：
 
 ```bash
 source install/setup.bash
 ```
 
-## 1. 启动命令
+## 1. 标准 BT 兼容入口
+
+本节仅说明保留的 `myagv_test_bringup` 入口。新功能和实车三模式运行请直接阅读第 8 节。
 
 推荐从 install 空间启动：
 
@@ -98,7 +127,7 @@ use_simulator:=False
 robot_name:=odom
 ```
 
-## 2. entry.launch.py 实际启动内容
+## 2. 标准 BT 入口实际启动内容
 
 当前 `entry.launch.py` 有效启动的主要节点和 launch：
 
@@ -107,7 +136,7 @@ map_server
 lifecycle_manager_localization
 navigation_launch.py
 rviz_launch.py
-tf2_ros static_transform_publisher: odom -> base_link
+controlpub
 ```
 
 可选启动：
@@ -121,6 +150,8 @@ use_simulator:=True 且 headless:=False 时启动 gzclient
 
 ```text
 laserpub_cmd
+map2base_tf_cmd
+static_robot_to_base_link_cmd
 robot_state_publisher_cmd
 joint_state_publisher_cmd
 robot_description_publisher.py
@@ -147,45 +178,45 @@ RViz 中 `RobotModel` 已关闭，主要通过 TF 坐标系、地图、路径、
      -> map_server
      -> /map
 
-2. 自研定位
+2. 外部定位与机器人 TF
    localization system
-     -> TF map -> odom
+     -> TF map -> base_link
+   或
+     -> TF map -> odom -> base_link
 
-3. 本体坐标
-   entry.launch.py
-     -> TF odom -> base_link
-
-4. 激光雷达
+3. 激光雷达
    c200 lidar driver
      -> /c200_lidar_node/scan
      -> global_costmap / local_costmap obstacle layer
 
-5. 导航目标
+4. 导航目标
    RViz Nav2 Goal 或上层系统
      -> /navigate_to_pose action
      -> bt_navigator
 
-6. 全局规划
+5. 全局规划
    planner_server
      -> global_costmap + /map + TF
      -> nav_msgs/Path
 
-7. 路径平滑
+6. 路径平滑
    smoother_server
      -> smoothed path
 
-8. 局部控制
+7. 局部控制
    controller_server
      -> local_costmap + path + TF
      -> /cmd_vel_nav
 
-9. 速度平滑
+8. 速度平滑
    velocity_smoother
      -> /cmd_vel
 
-10. 底盘执行
-    chassis driver
-      -> robot motion
+9. 底盘输出
+   controlpub
+     -> /control_to_uart
+     -> chassis driver
+     -> robot motion
 ```
 
 ## 4. Nav2 节点链路
@@ -231,7 +262,7 @@ RotationShimController
 ```yaml
 bt_navigator:
   ros__parameters:
-    selected_controller: "RPP"
+    selected_controller: "DWB"
 ```
 
 切换控制器时，只改 `selected_controller`，取值必须来自：
@@ -249,8 +280,8 @@ controller_server:
 
 建议：
 
-- `RPP`：当前默认控制器，适合实车低速路径跟踪。
-- `DWB`：适合传统采样轨迹和 critic 调试。
+- `DWB`：当前默认控制器，适合传统采样轨迹和 critic 调试。
+- `RPP`：适合实车低速路径跟踪。
 - `MPPI`：计算量更大，适合局部轨迹优化实验。
 - `RotationShimController`：适合先对齐路径方向再跟踪。
 - `GracefulController`：适合验证平滑几何控制。
@@ -325,8 +356,6 @@ ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose "{
   behavior_tree: ''
 }" --feedback
 ```
-63.481, -12.4484, 0
-
 ### 7.2 多点 Action 导航
 
 向 `/navigate_through_poses` 一次发送一组 `PoseStamped` 目标，机器人按数组顺序导航：
@@ -363,7 +392,7 @@ ros2 action send_goal /navigate_through_poses nav2_msgs/action/NavigateThroughPo
 `behavior_tree: ''` 表示使用 `bt_navigator` 对应导航类型的默认行为树；`--feedback`
 用于在终端持续显示剩余距离、导航时间和恢复次数等反馈。
 
-## 8. nav2_regulated_modules 三模式选择与运行
+## 8. 推荐入口：nav2_regulated_modules 三模式运行
 
 `nav2_regulated_modules` 不使用行为树，通过启动参数 `operation_mode` 在三种互斥模式中选择一种。
 模式只能在启动时确定，不支持运行中热切换。切换模式时必须先停止旧 Launch，再启动新模式，避免旧
@@ -375,7 +404,7 @@ Action、速度命令或 Topic 发布者残留。
 | --- | --- | --- | --- |
 | `remote` | 交互式终端键盘 | 键盘 → `myagv_keyboard_control` → `/control_to_uart` | 人工接管、底盘方向和串口联调 |
 | `autonomous` | `/goal_pose`、`NavigateToPose`、`NavigateThroughPoses` | Planner → Smoother → FollowPath → Velocity Smoother → `controlpub` | 自主规划并实时导航 |
-| `fixed_path` | `/fixed_path`，类型为 `nav_msgs/msg/Path` | Path 校验／坐标变换 → FollowPath → Velocity Smoother → `controlpub` | 上游已经生成完整可跟踪路径 |
+| `fixed_path` | `/follow_fixed_path`，类型为 `nav2_regulated_modules/action/FollowFixedPath` | 业务 Action → Path 校验／坐标变换 → FollowPath → Velocity Smoother → `controlpub` | 上游已经生成完整可跟踪路径 |
 
 三种模式都保证 `/control_to_uart` 只有一个发布源：
 
@@ -544,36 +573,47 @@ YAML 后应重新启动 Launch。
 
 ### 8.6 固定路径模式
 
-启动路径直跟模式：
+终端一启动固定路径模式：
 
 ```bash
+cd /home/byd/Documents/zpy_ws/project/nav2_demo/nav2_ws
+source /opt/ros/humble/setup.bash
+source install/setup.bash
 ros2 launch nav2_regulated_modules regulated_modules.launch.py \
   operation_mode:=fixed_path \
   use_sim_time:=false \
   use_rviz:=True
 ```
 
-发布一条最小接口测试路径：
+终端二发送一条最小接口测试路径，并持续显示剩余距离反馈和最终结果：
 
 ```bash
-ros2 topic pub --once /fixed_path nav_msgs/msg/Path \
-  "{header: {frame_id: map}, poses: [
+cd /home/byd/Documents/zpy_ws/project/nav2_demo/nav2_ws
+source /opt/ros/humble/setup.bash
+source install/setup.bash
+ros2 action send_goal /follow_fixed_path \
+  nav2_regulated_modules/action/FollowFixedPath \
+  "{path: {header: {frame_id: map}, poses: [
     {pose: {position: {x: 0.0, y: 0.0, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}},
     {pose: {position: {x: 1.0, y: 0.0, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}
-  ]}"
+  ]}}" --feedback
 ```
 
 输入要求：
 
-- Topic 默认是 `/fixed_path`，可通过 `regulated_navigator.fixed_path_topic` 修改。
+- Action 默认是 `/follow_fixed_path`，可通过 `regulated_navigator.fixed_path_action` 修改。
+- Goal 输入为 `nav_msgs/msg/Path path`，Feedback 为 `float64 distance_remaining`，Result 为
+  `bool success`。
 - 消息必须是已经可跟踪的完整路径，而不是等待本节点规划的离散航点。
 - Path 至少包含两个 Pose，顶层 `header.frame_id` 不能为空，坐标必须为有限值，四元数必须有效。
 - Pose 未设置 `header.frame_id` 时继承 Path 坐标系；节点会把所有 Pose 转换到 `global_frame`
   后再发送 FollowPath。
 - 上游负责路径点密度、姿态、避障、可行性以及与机器人运动学约束的一致性。
 
-运行中再次发布 `/fixed_path` 会以新的 FollowPath Goal 更新 Controller Server 当前路径，不需要
-重启控制器。定位恢复时只重发已保存路径，不会回落到自主规划。该模式会拒绝
+运行中发送新的 `/follow_fixed_path` Goal 会先校验并转换新 Path，再取消旧 FollowPath、终止旧
+外层 Goal，并启动新任务，不需要重启控制器。客户端取消时返回 `CANCELED` 和 `success=false`；
+控制器到达终点时返回 `SUCCEEDED` 和 `success=true`。定位恢复时只重发已保存路径，不会回落到
+自主规划。该模式会拒绝
 `NavigateToPose`、`NavigateThroughPoses` 和 `/goal_pose` 自主目标。
 
 固定路径仍使用以下控制参数：
@@ -602,7 +642,8 @@ ros2 topic info /control_to_uart --verbose
 固定路径模式额外检查：
 
 ```bash
-ros2 topic info /fixed_path --verbose
+ros2 action info /follow_fixed_path
+ros2 interface show nav2_regulated_modules/action/FollowFixedPath
 ```
 
 遥控模式检查：
@@ -617,7 +658,8 @@ ros2 topic info /control_to_uart --verbose
 - 自主和固定路径模式的 Lifecycle 节点均为 `active [3]`。
 - `remote` 中 `/control_to_uart` 只有 `myagv_keyboard_control` 发布。
 - `autonomous` 和 `fixed_path` 中 `/control_to_uart` 只有 `controlpub` 发布。
-- `fixed_path` 中 `/fixed_path` 有一个 `regulated_navigator` 订阅者。
+- `fixed_path` 中 `/follow_fixed_path` 有一个 `regulated_navigator` Action Server，并且不再存在
+  `/fixed_path` Topic 订阅入口。
 
 测试完成后先停止 `regulated_modules.launch.py`，再停止雷达、定位和底盘通信节点。导航模式停止
 时，Lifecycle 会先停用 `regulated_navigator`，取消下游 Action 并发布零速度。

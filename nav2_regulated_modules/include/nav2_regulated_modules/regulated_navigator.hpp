@@ -15,6 +15,7 @@
 #include "nav2_msgs/action/navigate_to_pose.hpp"
 #include "nav2_msgs/action/smooth_path.hpp"
 #include "nav2_msgs/srv/clear_entire_costmap.hpp"
+#include "nav2_regulated_modules/action/follow_fixed_path.hpp"
 #include "nav2_regulated_modules/control_module.hpp"
 #include "nav2_regulated_modules/navigation_state.hpp"
 #include "nav2_regulated_modules/planning_module.hpp"
@@ -22,6 +23,7 @@
 #include "nav_msgs/msg/path.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
+#include "spdlog_wrapper.hpp"
 #include "tf2_ros/buffer.h"
 #include "tf2_ros/transform_listener.h"
 
@@ -39,6 +41,7 @@ public:
   using FollowPath = nav2_msgs::action::FollowPath;
   using NavigateToPose = nav2_msgs::action::NavigateToPose;
   using NavigateThroughPoses = nav2_msgs::action::NavigateThroughPoses;
+  using FollowFixedPath = nav2_regulated_modules::action::FollowFixedPath;
   using ClearCostmap = nav2_msgs::srv::ClearEntireCostmap;
 
   // 中文注释：客户端句柄对应规划、平滑、控制子 Goal，服务端句柄对应对外导航 Goal。
@@ -48,6 +51,7 @@ public:
   using FollowHandle = rclcpp_action::ClientGoalHandle<FollowPath>;
   using NavigatePoseHandle = rclcpp_action::ServerGoalHandle<NavigateToPose>;
   using NavigatePosesHandle = rclcpp_action::ServerGoalHandle<NavigateThroughPoses>;
+  using FixedPathHandle = rclcpp_action::ServerGoalHandle<FollowFixedPath>;
 
   // 中文注释：构造生命周期节点并声明全部参数，不在构造阶段连接外部服务器。
   explicit RegulatedNavigator(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
@@ -84,8 +88,15 @@ private:
   void handlePosesAccepted(const std::shared_ptr<NavigatePosesHandle> goal);
   // 中文注释：把 goal_pose Topic 输入转换为自主单点任务。
   void onTopicGoal(const geometry_msgs::msg::PoseStamped::SharedPtr goal);
-  // 中文注释：固定路径回调校验并归一化完整 Path，再直接更新 FollowPath。
-  void onFixedPath(const nav_msgs::msg::Path::SharedPtr path);
+  // 中文注释：校验固定路径业务 Goal 的模式、激活状态和 Path 基本结构。
+  rclcpp_action::GoalResponse handleFixedPathGoal(
+    const rclcpp_action::GoalUUID & uuid,
+    const std::shared_ptr<const FollowFixedPath::Goal> goal);
+  // 中文注释：记录固定路径业务 Goal 的取消请求，由监控周期统一收口。
+  rclcpp_action::CancelResponse handleFixedPathCancel(
+    const std::shared_ptr<FixedPathHandle> goal);
+  // 中文注释：完成 Path 变换和下游检查后，以新 Action Goal 替换旧任务。
+  void handleFixedPathAccepted(const std::shared_ptr<FixedPathHandle> goal);
   // 中文注释：校验固定路径并统一变换到全局坐标系。
   std::optional<nav_msgs::msg::Path> prepareFixedPath(
     const nav_msgs::msg::Path & path);
@@ -154,7 +165,7 @@ private:
   std::string global_frame_;
   std::string robot_base_frame_;
   std::string goal_topic_;
-  std::string fixed_path_topic_;
+  std::string fixed_path_action_;
   double server_timeout_{5.0};
   double cancel_timeout_{2.0};
   double smoothing_duration_{2.0};
@@ -186,6 +197,7 @@ private:
   rclcpp_action::Client<FollowPath>::SharedPtr follow_client_;
   rclcpp_action::Server<NavigateToPose>::SharedPtr navigate_pose_server_;
   rclcpp_action::Server<NavigateThroughPoses>::SharedPtr navigate_poses_server_;
+  rclcpp_action::Server<FollowFixedPath>::SharedPtr fixed_path_server_;
   rclcpp::Client<ClearCostmap>::SharedPtr clear_local_client_;
   rclcpp::Client<ClearCostmap>::SharedPtr clear_global_client_;
 
@@ -196,10 +208,10 @@ private:
   FollowHandle::SharedPtr active_follow_goal_;
   std::shared_ptr<NavigatePoseHandle> active_pose_goal_;
   std::shared_ptr<NavigatePosesHandle> active_poses_goal_;
+  std::shared_ptr<FixedPathHandle> active_fixed_path_goal_;
 
   // 中文注释：Topic、停车发布器、定时器和 TF 接口构成非 Action 数据流与健康监控链。
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_sub_;
-  rclcpp::Subscription<nav_msgs::msg::Path>::SharedPtr fixed_path_sub_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr stop_cmd_pub_;
   rclcpp::TimerBase::SharedPtr feedback_timer_;
   rclcpp::TimerBase::SharedPtr monitor_timer_;

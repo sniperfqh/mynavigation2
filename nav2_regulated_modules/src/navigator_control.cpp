@@ -15,10 +15,16 @@ void RegulatedNavigator::sendFollowPath(const nav_msgs::msg::Path & path) {
   task_.state = NavigationState::CONTROLLING;
   const auto generation = task_.generation;
   const auto sequence = ++follow_sequence_;
+  const bool replacing_path = active_follow_goal_ != nullptr;
   FollowPath::Goal goal;
   goal.path = path;
   goal.controller_id = control_module_.controllerId();
   goal.goal_checker_id = control_module_.goalCheckerId();
+  if (replacing_path) {
+    LOG_DEBUG("更新 FollowPath，generation={}，follow_sequence={}，路径点数={}，controller_id={}", generation, sequence, path.poses.size(), control_module_.controllerId());
+  } else {
+    LOG_INFO("下发 FollowPath，generation={}，follow_sequence={}，路径点数={}，controller_id={}，goal_checker_id={}", generation, sequence, path.poses.size(), control_module_.controllerId(), control_module_.goalCheckerId());
+  }
   auto options = rclcpp_action::Client<FollowPath>::SendGoalOptions();
   options.goal_response_callback = [this, generation, sequence](auto handle) {
       if (isCurrentFollow(generation, sequence)) {
@@ -28,10 +34,15 @@ void RegulatedNavigator::sendFollowPath(const nav_msgs::msg::Path & path) {
         }
       }
     };
-  options.feedback_callback = [this, generation, sequence](auto, const std::shared_ptr<const FollowPath::Feedback> feedback) {
+  options.feedback_callback = [this, generation, sequence](auto, const std::shared_ptr<const FollowPath::Feedback> controller_feedback) {
       if (isCurrentFollow(generation, sequence)) {
-        task_.distance_remaining = feedback->distance_to_goal;
-        current_speed_ = feedback->speed;
+        task_.distance_remaining = static_cast<double>(controller_feedback->distance_to_goal);
+        current_speed_ = controller_feedback->speed;
+        if (active_fixed_path_goal_) {
+          auto feedback = std::make_shared<FollowFixedPath::Feedback>();
+          feedback->distance_remaining = task_.distance_remaining;
+          active_fixed_path_goal_->publish_feedback(feedback);
+        }
       }
     };
   options.result_callback = [this, generation, sequence](const auto & result) {
@@ -59,6 +70,7 @@ void RegulatedNavigator::stopRobot() {
   stop_cmd_pub_->publish(stop);
   stop_cmd_pub_->publish(stop);
   stop_cmd_pub_->publish(stop);
+  LOG_DEBUG("已向速度链入口连续发布 3 帧零速度");
 }
 
 }  // namespace nav2_regulated_modules

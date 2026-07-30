@@ -16,7 +16,7 @@ RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : na
   declare_parameter("robot_base_frame", "base_link");
   declare_parameter("operation_mode", "autonomous");
   declare_parameter("goal_topic", "goal_pose");
-  declare_parameter("fixed_path_topic", "/fixed_path");
+  declare_parameter("fixed_path_action", "follow_fixed_path");
   declare_parameter("navigate_to_pose_action", "navigate_to_pose");
   declare_parameter("navigate_through_poses_action", "navigate_through_poses");
   declare_parameter("compute_path_to_pose_action", "compute_path_to_pose");
@@ -61,11 +61,11 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   } else if (operation_mode == "fixed_path") {
     operation_mode_ = NavigationMode::FIXED_PATH;
   } else {
-    RCLCPP_ERROR(get_logger(), "不支持的 operation_mode：%s", operation_mode.c_str());
+    LOG_ERROR("不支持的 operation_mode：{}", operation_mode);
     return nav2_util::CallbackReturn::FAILURE;
   }
   goal_topic_ = get_parameter("goal_topic").as_string();
-  fixed_path_topic_ = get_parameter("fixed_path_topic").as_string();
+  fixed_path_action_ = get_parameter("fixed_path_action").as_string();
   server_timeout_ = get_parameter("server_timeout").as_double();
   cancel_timeout_ = get_parameter("cancel_timeout").as_double();
   smoothing_duration_ = get_parameter("max_smoothing_duration").as_double();
@@ -96,8 +96,8 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
 
   goal_sub_ = create_subscription<geometry_msgs::msg::PoseStamped>(goal_topic_, rclcpp::SystemDefaultsQoS(), std::bind(&RegulatedNavigator::onTopicGoal, this, std::placeholders::_1));
   if (operation_mode_ == NavigationMode::FIXED_PATH) {
-    // 中文注释：固定路径每次发布完整 Path，新消息通过 FollowPath 抢占语义替换旧路径。
-    fixed_path_sub_ = create_subscription<nav_msgs::msg::Path>(fixed_path_topic_, rclcpp::QoS(rclcpp::KeepLast(1)).reliable(), std::bind(&RegulatedNavigator::onFixedPath, this, std::placeholders::_1));
+    // 中文注释：业务 Action 提供取消、反馈和结果；新 Goal 通过 replace 语义替换旧路径任务。
+    fixed_path_server_ = rclcpp_action::create_server<FollowFixedPath>(this, fixed_path_action_, std::bind(&RegulatedNavigator::handleFixedPathGoal, this, std::placeholders::_1, std::placeholders::_2), std::bind(&RegulatedNavigator::handleFixedPathCancel, this, std::placeholders::_1), std::bind(&RegulatedNavigator::handleFixedPathAccepted, this, std::placeholders::_1));
   }
   // 中文注释：取消、定位丢失或失败时直接向控制链入口发布零速度，形成停车兜底。
   stop_cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>(get_parameter("stop_cmd_vel_topic").as_string(), rclcpp::SystemDefaultsQoS());
@@ -109,7 +109,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   monitor_timer_ = create_wall_timer(200ms, std::bind(&RegulatedNavigator::monitorTask, this));
 
   configured_ = true;
-  RCLCPP_INFO(get_logger(), "独立规控导航器配置完成，operation_mode=%s", operation_mode.c_str());
+  LOG_INFO("独立规控导航器配置完成，operation_mode={}", operation_mode);
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
@@ -118,7 +118,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_activate(const rclcpp_lifecycle
   // 中文注释：入口最后激活，确保规划、控制和平滑服务器已由 Lifecycle Manager 拉起。
   active_ = true;
   createBond();
-  RCLCPP_INFO(get_logger(), "独立规控导航器已激活");
+  LOG_INFO("独立规控导航器已激活");
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
@@ -128,6 +128,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_deactivate(const rclcpp_lifecyc
   active_ = false;
   cancelTask("节点停用");
   destroyBond();
+  LOG_INFO("独立规控导航器已停用");
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
@@ -136,6 +137,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_cleanup(const rclcpp_lifecycle:
   cancelTask("节点清理");
   navigate_pose_server_.reset();
   navigate_poses_server_.reset();
+  fixed_path_server_.reset();
   compute_pose_client_.reset();
   compute_poses_client_.reset();
   smooth_client_.reset();
@@ -143,19 +145,20 @@ nav2_util::CallbackReturn RegulatedNavigator::on_cleanup(const rclcpp_lifecycle:
   clear_local_client_.reset();
   clear_global_client_.reset();
   goal_sub_.reset();
-  fixed_path_sub_.reset();
   stop_cmd_pub_.reset();
   feedback_timer_.reset();
   monitor_timer_.reset();
   tf_listener_.reset();
   tf_buffer_.reset();
   configured_ = false;
+  LOG_INFO("独立规控导航器已清理");
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
 // 中文注释：进程关闭前再次执行任务取消和停车收口。
 nav2_util::CallbackReturn RegulatedNavigator::on_shutdown(const rclcpp_lifecycle::State &) {
   cancelTask("节点关闭");
+  LOG_INFO("独立规控导航器已关闭");
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
