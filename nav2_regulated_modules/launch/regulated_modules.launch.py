@@ -326,7 +326,7 @@ def generate_launch_description():
         name='myagv_keyboard_control',
         output='screen',
         emulate_tty=True,
-        parameters=[{'input_device': keyboard_input_device,
+        parameters=[configured_params, {'input_device': keyboard_input_device,
                      'output_topic': '/control_to_uart'}])
 
     # 中文注释：自主规划和固定路径共享控制安全链，仅由 regulated_navigator 决定是否调用 Planner。
