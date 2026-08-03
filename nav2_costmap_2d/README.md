@@ -25,3 +25,11 @@ See the [Navigation Plugin list](https://navigation.ros.org/plugins/index.html) 
 ### Overview
 
 Costmap Filters - is a costmap layer-based instrument which provides an ability to apply to map spatial-dependent raster features named as filter-masks. These features are used in plugin algorithms when filling costmaps in order to allow robots to change their trajectory, behavior or speed when a robot enters/leaves an area marked in a filter masks. Examples of costmap filters include keep-out/safety zones where robots will never enter, speed restriction areas, preferred lanes for robots moving in industries and warehouses. More information about design, architecture of the feature and how it works could be found on Nav2 website: https://navigation.ros.org.
+
+## 中文翻译
+
+# Nav2 Costmap 2D
+
+costmap_2d 负责构建环境二维代价地图。代价地图由多个环境数据层组成，可由 Map Server 初始化静态地图，也可以使用局部滚动窗口；各层从传感器观测更新，插件接口负责合并各层，最后按照机器人足迹和膨胀半径生成障碍物代价。
+
+Nav2 版本主要是 ROS 1 Navigation 中 costmap_2d 的 ROS 2 移植，仅做 ROS 2 支持所需的改动。Costmap Filters 是基于地图层的过滤工具，把过滤掩膜中的空间栅格特征应用到代价地图，典型用途包括禁行／安全区域、限速区域和工业仓库优选车道，使机器人进入或离开区域时改变路径、行为或速度。

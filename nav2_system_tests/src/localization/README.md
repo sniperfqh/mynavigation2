@@ -20,3 +20,9 @@ colcon test --packages-select nav2_system_tests
 
 ## Future Plan
 Once rosbag functionality becomes available, this test can be extended to utilize a recorded trajectory with map and scan data to monitor the `amcl_pose` and `transforms` without a need to run Gazebo and map_server.
+
+## 中文翻译
+
+# 定位测试
+
+该测试验证定位节点在地图、激光和机器人运动过程中的输出，重点检查 amcl_pose 和 TF 变换。运行命令会启动对应 Launch 并执行测试；未来可以使用 rosbag 中记录的轨迹、地图和扫描数据，在不启动 Gazebo 与 Map Server 的情况下监控这些结果。

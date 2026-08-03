@@ -166,3 +166,15 @@ The lattice generator is generally based on the generation of the control set as
 6. Steps 1-5 are repeated for all possible start angles between 0 and 90.
 
 7. The resulting control set will only contain trajectories in quadrant 1. To get the final control set we exploit symmetry across the axess and flip the trajectories in different ways.
+
+## 中文翻译
+
+# Lattice Primitive Generator
+
+该工具生成 State Lattice Planner 使用的运动原语。Contents 和 Setup 说明依赖、输入参数、编译和运行方式；Usage 展示如何指定角度离散、运动模型、采样长度和输出目录；输出文件结构说明每个方向和角度下的轨迹文件。
+
+## 工作原理
+
+Angle Discretization 把完整圆周划分为固定数量的朝向 bin。Trajectory Generator 根据运动学模型、最小转弯半径和采样时间生成候选控制轨迹；Lattice Generator 将这些轨迹按起始朝向整理为可供规划器查询的控制集。
+
+生成过程先在第一象限构建控制集，再利用坐标轴对称性翻转和变换轨迹，得到其他象限的控制集。输出文件记录轨迹点、方向、长度和控制参数，参数名称与文件格式必须与 Smac State Lattice Planner 保持一致。

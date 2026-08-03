@@ -897,3 +897,19 @@ partition，手动启动 bridge 或 Gazebo 时必须处于同一个 `IGN_PARTITI
   仅创建 Python 文件还不够，还需要增加入口并重新构建。
 - 本包的示例坐标全部绑定 myworld2／仓库地图。更换地图时必须同步修改初始位姿、目标点、
   业务位置表和可能的机器人 Footprint。
+
+## 中文翻译
+
+# Nav2 Simple Python Commander
+
+Simple Commander 是面向 Python 应用的 Nav2 高层封装。它把 NavigateToPose、NavigateThroughPoses、FollowWaypoints、FollowPath、ComputePath、SmoothPath 和相关 Service 封装成同步风格的客户端 API，使脚本可以用少量代码发送目标、等待结果、取消任务、读取反馈和查询导航状态。
+
+## API 与使用
+
+Commander 提供 BasicNavigator 以及用于 Pose、Path、Waypoint、Route 和反馈处理的辅助类型。典型流程是初始化导航器、等待 Nav2 激活、设置初始 Pose、发送目标、循环调用 isTaskComplete 并读取 feedback，最后通过 getResult 判断成功、失败或取消。原文的 API 表、方法签名和示例代码保留了接口名称与 Python 语法。
+
+Demo 可以自动运行，也可以手动运行。自动方式使用对应 Launch 同时启动机器人仿真、Nav2 和示例节点；手动方式在一个终端启动导航和仿真，在另一个终端启动应用 Demo。Examples 和 Demos 展示单点导航、多点导航、航点任务、路径跟随、路线图和速度控制等用法。
+
+## 工程边界
+
+Simple Commander 只是 Action、Service 和 Topic 的客户端封装，不替代 Planner、Controller、Costmap、定位或底盘控制器。应用应处理 TF、地图、Lifecycle、任务取消和错误终态，并避免在多个节点同时发布最终底盘速度。

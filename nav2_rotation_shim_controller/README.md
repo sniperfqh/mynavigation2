@@ -42,6 +42,16 @@ See its [Configuration Guide Page](https://navigation.ros.org/configuration/pack
 Example fully-described XML with default parameter values:
 
 ```
+
+## 中文翻译
+
+# Nav2 Rotation Shim Controller
+
+Rotation Shim 是位于 Controller Server 与主控制器插件之间的中间控制器。它在收到新路径时检查机器人当前朝向与路径起始方向的差异；差异超过阈值时先原地旋转，接近目标方向后再把路径跟踪交给 primary_controller。交接阶段机器人仍可能旋转，因此可以平滑过渡到 MPPI、RPP、DWB 或 TEB 等主控制器。
+
+该插件适合那些功能专用、调参范围窄或不擅长解决完整局部规划问题的控制器。通过 rotate_to_goal_heading，还可以在达到 Goal Checker 的 XY 容差后重新接管机器人，旋转到目标朝向，直到 Goal Checker 验证完整目标。
+
+配置需要指定 primary_controller，并设置角度阈值、角速度、加速度、闭环或开环旋转、碰撞检查和目标朝向参数。Rotation Shim 实现 nav2_core::Controller，实际路径跟踪仍由内部主控制器完成。
 controller_server:
   ros__parameters:
     use_sim_time: True

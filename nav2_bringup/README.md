@@ -33,6 +33,16 @@ Please refer to below examples.
 ros2 launch nav2_bringup cloned_multi_tb3_simulation_launch.py robots:="robot1={x: 1.0, y: 1.0, yaw: 1.5707}; robot2={x: 1.0, y: 1.0, yaw: 1.5707}"
 ```
 
+## 中文翻译
+
+# nav2_bringup
+
+nav2_bringup 是 Nav2 应用的示例启动包，提供可按地图、机器人、硬件和仿真世界复制修改的默认 Bringup。实际机器人通常创建 robot_name_nav 包，复制本包结构后替换自己的配置和启动资产。
+
+该包支持动态组合，把多个 Nav2 节点放进同一进程；嵌入式用户可通过 use_composition:=False 禁用。Gazebo 需要加载 ROS 初始化和工厂插件，多机器人场景还要在 SDF 插件中正确处理 tf 和 tf_static 重映射。
+
+多机器人仿真有两种方式。cloned 启动文件复制同一机器人 N 次，并从 nav2_multirobot_params_all.yaml 或命令行读取名称和初始位姿；unique 启动文件为两个机器人使用独立名称、位姿和参数文件，需要更多机器人时应修改对应 Launch。
+
 #### Unique
 
 There are two robots including name and intitial pose are hard-coded in the launch script. Two separated unique robots are required params file (`nav2_multirobot_params_1.yaml`, `nav2_multirobot_params_2.yaml`) for each robot to bring up.

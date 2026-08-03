@@ -38,6 +38,8 @@ namespace nav2_collision_monitor
  * @brief Basic polygon shape class.
  * For STOP/SLOWDOWN model it represents zone around the robot
  * while for APPROACH model it represents robot footprint.
+ * 中文：多边形是 Collision Monitor 的通用安全区域抽象，保存动作阈值、可视化发布器和可选动态 Footprint。
+ * 中文：STOP／SLOWDOWN 使用静态顶点，APPROACH 可以从 FootprintSubscriber 每次更新机器人轮廓。
  */
 class Polygon
 {
@@ -65,6 +67,7 @@ public:
    * @brief Shape configuration routine. Obtains ROS-parameters related to shape object
    * and creates polygon lifecycle publisher.
    * @return True in case of everything is configured correctly, or false otherwise
+   * 中文：按 action_type 读取阈值和顶点／Footprint 参数；需要可视化时创建 Lifecycle Publisher。
    */
   bool configure();
   /**
@@ -112,11 +115,13 @@ public:
   /**
    * @brief Gets polygon points
    * @param poly Output polygon points (vertices)
+   * 中文：返回当前机器人坐标系下的顶点副本，供测试、可视化和碰撞预测使用。
    */
   virtual void getPolygon(std::vector<Point> & poly) const;
 
   /**
    * @brief Updates polygon from footprint subscriber (if any)
+   * 中文：APPROACH 多边形从最新 Footprint 消息更新；静态 polygon 和 Circle 不会被修改。
    */
   void updatePolygon();
 
@@ -125,6 +130,7 @@ public:
    * @param points Input array of points to be checked
    * @return Number of points inside polygon. If there are no points,
    * returns zero value.
+   * 中文：逐点调用射线交叉算法统计区域内点数，阈值比较由 CollisionMonitor 决定。
    */
   virtual int getPointsInside(const std::vector<Point> & points) const;
 
@@ -135,6 +141,8 @@ public:
    * @param velocity Simulated robot velocity
    * @return Estimated time before a collision. If there is no collision,
    * return value will be negative.
+   * 中文：从当前 base frame 原点开始按输入速度离散投影机器人，并把障碍点变换到每个预测位姿下；
+   * 中文：返回首次超过 max_points_ 的模拟时刻，静态已碰撞返回 0，无碰撞返回负数。
    */
   double getCollisionTime(
     const std::vector<Point> & collision_points,
@@ -142,6 +150,7 @@ public:
 
   /**
    * @brief Publishes polygon message into a its own topic
+   * 中文：在 base_frame_id_ 下发布 PolygonStamped；仅当 visualize_ 为 true 时执行。
    */
   void publish() const;
 
@@ -149,6 +158,7 @@ protected:
   /**
    * @brief Supporting routine obtaining ROS-parameters common for all shapes
    * @param polygon_pub_topic Output name of polygon publishing topic
+   * 中文：解析 stop／slowdown／approach 动作类型、enabled、max_points、减速比和可视化配置。
    * @return True if all parameters were obtained or false in failure case
    */
   bool getCommonParameters(std::string & polygon_pub_topic);
@@ -158,6 +168,7 @@ protected:
    * @param polygon_pub_topic Output name of polygon publishing topic
    * @param footprint_topic Output name of footprint topic. Empty, if no footprint subscription
    * @return True if all parameters were obtained or false in failure case
+   * 中文：APPROACH 读取 Footprint Topic；其他动作读取 points 数组并构造静态多边形。
    */
   virtual bool getParameters(std::string & polygon_pub_topic, std::string & footprint_topic);
 
@@ -165,6 +176,7 @@ protected:
    * @brief Checks if point is inside polygon
    * @param point Given point to check
    * @return True if given point is inside polygon, otherwise false
+   * 中文：使用水平射线与边界交点奇偶规则判断点内外，边界处理遵循 Shimrat Algorithm 112。
    */
 
   /**
@@ -201,6 +213,7 @@ protected:
   /// @brief Footprint subscriber
   std::unique_ptr<nav2_costmap_2d::FootprintSubscriber> footprint_sub_;
   /// @brief Whether polygon is enabled
+  // 中文：可通过 `<polygon_name>.enabled` 动态切换，禁用后主处理循环跳过该区域。
   bool enabled_;
 
   // Global variables

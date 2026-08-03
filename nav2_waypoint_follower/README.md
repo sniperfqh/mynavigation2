@@ -27,3 +27,13 @@ In the first, the ``nav2_waypoint_follower`` is weakly sufficient to create a pr
 In the second, the ``nav2_waypoint_follower`` is a nice sample application / proof of concept, but you really need your waypoint following / autonomy system on the robot to carry more weight in making a robust solution. In this case, you should use the ``nav2_behavior_tree`` package to create a custom application-level behavior tree using navigation to complete the task. This can include subtrees like checking for the charge status mid-task for returning to dock or handling more than 1 unit of work in a more complex task. Soon, there will be a ``nav2_bt_waypoint_follower`` (name subject to adjustment) that will allow you to create this application more easily. In this school of thought, the waypoint following application is more closely tied to the system autonomy, or in many cases, is the system autonomy.
 
 Neither is better than the other, it highly depends on the tasks your robot(s) are completing, in what type of environment, and with what cloud resources available. Often this distinction is very clear for a given business case.
+
+## 中文翻译
+
+# Nav2 Waypoint Follower
+
+Waypoint Follower 是一个使用导航 Action 完成编排任务的示例应用。它接收一组航点，按请求顺序导航到各个位置，最后一个航点是终点；follow_waypoints Action 返回当前处理索引的反馈，并返回未完成的航点列表。
+
+包中还提供 WaypointTaskExecutor 插件，可在到达航点时等待用户指令、拍照或拾取箱子。stop_on_failure 决定一个航点失败后是否停止整条任务；关闭时会继续下一个航点。
+
+对于“调度器聪明、机器人简单”的架构，Waypoint Follower 可作为机器人端的一次工作单元，完成一组航点后返回中央调度器。对于“机器人自主、调度器简单”的架构，建议使用 nav2_behavior_tree 构建更强的应用级行为树，把充电、回桩和多阶段任务纳入同一自主系统。两种架构取决于任务、环境和云端资源。

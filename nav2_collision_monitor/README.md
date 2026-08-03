@@ -65,3 +65,13 @@ The following notes could be made:
 
  * Due to sheer speed, circle shapes are preferred for the approach behavior models if you can approximately model your robot as circular.
  * More points mean lower performance. Pointclouds could be culled or filtered before the Collision Monitor to improve performance.
+
+## 中文翻译
+
+# Nav2 Collision Monitor
+
+Collision Monitor 是 Nav2 的速度安全监控节点。它订阅 LaserScan、PointCloud2、Range 等传感器数据，把障碍物投影到配置的 Polygon 或 Circle 区域，再依据速度限制、减速或停车规则保护机器人。
+
+节点支持多个传感器 Source、多个几何区域和按优先级组合的行为。常用安全动作包括 STOP 停车、SLOWDOWN 按比例减速、APPROACH 前向预测以及其他速度限制。传感器数据会在机器人坐标系中处理，并通过 cmd_vel 输入与安全后的速度输出形成独立速度门。
+
+参数用于选择源 Topic、数据类型、坐标系、区域顶点、动作优先级、减速比例和停止时间。可启用调试多边形、源数据和状态指标。区域点越多，计算性能越低；在送入 Collision Monitor 前对点云裁剪或滤波可以降低开销。

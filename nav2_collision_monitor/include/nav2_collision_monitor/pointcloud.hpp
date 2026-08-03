@@ -29,6 +29,8 @@ namespace nav2_collision_monitor
 
 /**
  * @brief Implementation for pointcloud source
+ * 中文：PointCloud2 适配器，读取 x/y/z 字段，按高度范围过滤后投影到二维障碍点集合。
+ * 中文：它适合深度相机或立体视觉点云，重点在于把三维数据裁剪为平面安全监控输入。
  */
 class PointCloud : public Source
 {
@@ -62,6 +64,7 @@ public:
   /**
    * @brief Data source configuration routine. Obtains pointcloud related ROS-parameters
    * and creates pointcloud subscriber.
+   * 中文：除 Topic 外读取 min_height 和 max_height，并采用 sensor-data QoS 建立订阅器。
    */
   void configure();
 
@@ -70,6 +73,7 @@ public:
    * @param curr_time Current node time for data interpolation
    * @param data Array where the data from source to be added.
    * Added data is transformed to base_frame_id_ coordinate system at curr_time.
+   * 中文：通过 PointCloud2Iterator 读取 x、y、z，做 TF 变换和高度裁剪后追加 x/y。
    */
   void getData(
     const rclcpp::Time & curr_time,
@@ -94,6 +98,7 @@ protected:
   rclcpp::Subscription<sensor_msgs::msg::PointCloud2>::SharedPtr data_sub_;
 
   // Minimum and maximum height of PointCloud projected to 2D space
+  // 中文：只有变换到机器人坐标系后位于该高度区间的点才参与平面碰撞判断。
   double min_height_, max_height_;
 
   /// @brief Latest data obtained from pointcloud

@@ -5,3 +5,9 @@ The NavfnPlanner is a global planner plugin for the Nav2 Planner server. It impl
 The `global_planner` package from ROS (1) is a refactor on NavFn to make it more easily understandable, but it lacks in run-time performance and introduces suboptimal behaviors. As NavFn has been extremely stable for about 10 years at the time of porting, the maintainers felt no compelling reason to port over another, largely equivalent (but poorer functioning) planner. 
 
 See its [Configuration Guide Page](https://navigation.ros.org/configuration/packages/configuring-navfn.html) for additional parameter descriptions.
+
+## 中文翻译
+
+# Navfn Planner
+
+Navfn Planner 是 Nav2 的传统二维栅格全局规划器，使用代价地图上的势场传播计算从起点到目标点的路径。它支持 Dijkstra 和 A* 风格的搜索选项，并通过 nav2_core::GlobalPlanner 插件接口加载到 Planner Server。参数说明请参阅原文 Configuration Guide。

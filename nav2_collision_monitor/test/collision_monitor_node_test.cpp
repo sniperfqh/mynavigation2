@@ -39,6 +39,8 @@
 
 using namespace std::chrono_literals;
 
+// 中文：本文件做端到端的 CollisionMonitor 节点测试：从传感器消息、TF 和 cmd_vel 输入，
+// 中文：经过 Polygon／Circle 安全规则计算，验证最终 cmd_vel_out 以及 Lifecycle／动态参数行为。
 static constexpr double EPSILON = 1e-5;
 
 static const char BASE_FRAME_ID[]{"base_link"};
@@ -60,6 +62,7 @@ static const double STOP_PUB_TIMEOUT{0.1};
 
 enum PolygonType
 {
+  // 中文：测试用枚举控制 addPolygon() 生成普通多边形、圆形或非法形状。
   POLYGON_UNKNOWN = 0,
   POLYGON = 1,
   CIRCLE = 2
@@ -67,6 +70,7 @@ enum PolygonType
 
 enum SourceType
 {
+  // 中文：测试用枚举控制 addSource() 选择 Scan、PointCloud、Range 或非法源类型。
   SOURCE_UNKNOWN = 0,
   SCAN = 1,
   POINTCLOUD = 2,
@@ -75,6 +79,7 @@ enum SourceType
 
 enum ActionType
 {
+  // 中文：测试动作枚举覆盖生产动作，并额外用 LIMIT 验证未知分支不会被误处理。
   DO_NOTHING = 0,
   STOP = 1,
   SLOWDOWN = 2,
@@ -87,12 +92,14 @@ class CollisionMonitorWrapper : public nav2_collision_monitor::CollisionMonitor
 public:
   void start()
   {
+    // 中文：直接调用 Lifecycle 回调，模拟 Lifecycle Manager 的 configure -> activate 流程。
     ASSERT_EQ(on_configure(get_current_state()), nav2_util::CallbackReturn::SUCCESS);
     ASSERT_EQ(on_activate(get_current_state()), nav2_util::CallbackReturn::SUCCESS);
   }
 
   void stop()
   {
+    // 中文：按 deactivate -> cleanup -> shutdown 顺序收口测试节点资源。
     ASSERT_EQ(on_deactivate(get_current_state()), nav2_util::CallbackReturn::SUCCESS);
     ASSERT_EQ(on_cleanup(get_current_state()), nav2_util::CallbackReturn::SUCCESS);
     ASSERT_EQ(on_shutdown(get_current_state()), nav2_util::CallbackReturn::SUCCESS);
@@ -100,16 +107,19 @@ public:
 
   void configure()
   {
+    // 中文：只配置不激活，用于验证非 active 状态不会发布输出速度。
     ASSERT_EQ(on_configure(get_current_state()), nav2_util::CallbackReturn::SUCCESS);
   }
 
   void cant_configure()
   {
+    // 中文：断言非法参数集合会使 configure 返回 FAILURE。
     ASSERT_EQ(on_configure(get_current_state()), nav2_util::CallbackReturn::FAILURE);
   }
 
   bool correctDataReceived(const double expected_dist, const rclcpp::Time & stamp)
   {
+    // 中文：从各 Source 读取已变换点，检查至少一路数据的首点距离符合传感器输入。
     for (std::shared_ptr<nav2_collision_monitor::Source> source : sources_) {
       std::vector<nav2_collision_monitor::Point> collision_points;
       source->getData(stamp, collision_points);
@@ -186,6 +196,7 @@ protected:
 
 Tester::Tester()
 {
+  // 中文：创建被测 Lifecycle 节点、三类传感器发布器、cmd_vel 双向链路和参数服务客户端。
   cm_ = std::make_shared<CollisionMonitorWrapper>();
 
   footprint_pub_ = cm_->create_publisher<geometry_msgs::msg::PolygonStamped>(
@@ -212,6 +223,7 @@ Tester::Tester()
 
 Tester::~Tester()
 {
+  // 中文：先停止 Topic 交互再释放节点，避免测试结束时异步回调访问已释放消息。
   footprint_pub_.reset();
 
   scan_pub_.reset();
@@ -226,6 +238,7 @@ Tester::~Tester()
 
 void Tester::setCommonParameters()
 {
+  // 中文：写入节点级速度 Topic、Frame、TF 容差、Source 超时和零速发布超时。
   cm_->declare_parameter(
     "cmd_vel_in_topic", rclcpp::ParameterValue(CMD_VEL_IN_TOPIC));
   cm_->set_parameter(
@@ -263,6 +276,7 @@ void Tester::addPolygon(
   const std::string & polygon_name, const PolygonType type,
   const double size, const std::string & at)
 {
+  // 中文：按测试形状和动作类型生成最小参数集合；APPROACH 使用 Footprint Topic 替代 points。
   if (type == POLYGON) {
     cm_->declare_parameter(
       polygon_name + ".type", rclcpp::ParameterValue("polygon"));
@@ -343,6 +357,7 @@ void Tester::addPolygon(
 void Tester::addSource(
   const std::string & source_name, const SourceType type)
 {
+  // 中文：为指定 Source 写入类型、Topic 以及 PointCloud 高度窗口等必要参数。
   if (type == SCAN) {
     cm_->declare_parameter(
       source_name + ".type", rclcpp::ParameterValue("scan"));
@@ -389,6 +404,7 @@ void Tester::setVectors(
   const std::vector<std::string> & polygons,
   const std::vector<std::string> & sources)
 {
+  // 中文：设置节点实际遍历的 polygons 和 observation_sources 名称数组。
   cm_->declare_parameter("polygons", rclcpp::ParameterValue(polygons));
   cm_->set_parameter(rclcpp::Parameter("polygons", polygons));
 
@@ -398,6 +414,7 @@ void Tester::setVectors(
 
 void Tester::sendTransforms(const rclcpp::Time & stamp)
 {
+  // 中文：广播 base_source -> base 和 odom -> base 的 TF 链，并预填未来一秒的时间样本。
   std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster =
     std::make_shared<tf2_ros::TransformBroadcaster>(cm_);
 
@@ -426,6 +443,7 @@ void Tester::sendTransforms(const rclcpp::Time & stamp)
 
 void Tester::publishFootprint(const double radius, const rclcpp::Time & stamp)
 {
+  // 中文：发布方形 Footprint，验证 Polygon APPROACH 的动态轮廓更新。
   std::unique_ptr<geometry_msgs::msg::PolygonStamped> msg =
     std::make_unique<geometry_msgs::msg::PolygonStamped>();
 
@@ -451,6 +469,7 @@ void Tester::publishFootprint(const double radius, const rclcpp::Time & stamp)
 
 void Tester::publishScan(const double dist, const rclcpp::Time & stamp)
 {
+  // 中文：发布 360 条同距离射线，距离参数决定障碍物是否落入安全区域。
   std::unique_ptr<sensor_msgs::msg::LaserScan> msg =
     std::make_unique<sensor_msgs::msg::LaserScan>();
 
@@ -472,6 +491,7 @@ void Tester::publishScan(const double dist, const rclcpp::Time & stamp)
 
 void Tester::publishPointCloud(const double dist, const rclcpp::Time & stamp)
 {
+  // 中文：发布同一距离、略有 y 偏移的两个有效高度点，验证点云二维投影。
   std::unique_ptr<sensor_msgs::msg::PointCloud2> msg =
     std::make_unique<sensor_msgs::msg::PointCloud2>();
   sensor_msgs::PointCloud2Modifier modifier(*msg);
@@ -505,6 +525,7 @@ void Tester::publishPointCloud(const double dist, const rclcpp::Time & stamp)
 
 void Tester::publishRange(const double dist, const rclcpp::Time & stamp)
 {
+  // 中文：发布 Range 扇形量测，验证单点距离在旋转预测中的空间覆盖。
   std::unique_ptr<sensor_msgs::msg::Range> msg =
     std::make_unique<sensor_msgs::msg::Range>();
 
@@ -522,6 +543,7 @@ void Tester::publishRange(const double dist, const rclcpp::Time & stamp)
 
 void Tester::publishCmdVel(const double x, const double y, const double tw)
 {
+  // 中文：清除上一帧输出后发布期望速度，随后由测试等待安全输出或确认没有输出。
   // Reset cmd_vel_out_ before calling CollisionMonitor::process()
   cmd_vel_out_ = nullptr;
 
@@ -540,6 +562,7 @@ bool Tester::waitData(
   const std::chrono::nanoseconds & timeout,
   const rclcpp::Time & stamp)
 {
+  // 中文：在有限超时内轮询所有已配置 Source，确认期望距离的数据已可被 CollisionMonitor 读取。
   rclcpp::Time start_time = cm_->now();
   while (rclcpp::ok() && cm_->now() - start_time <= rclcpp::Duration(timeout)) {
     if (cm_->correctDataReceived(expected_dist, stamp)) {
@@ -553,6 +576,7 @@ bool Tester::waitData(
 
 bool Tester::waitCmdVel(const std::chrono::nanoseconds & timeout)
 {
+  // 中文：等待 cmd_vel_out 回调写入最新消息。
   rclcpp::Time start_time = cm_->now();
   while (rclcpp::ok() && cm_->now() - start_time <= rclcpp::Duration(timeout)) {
     if (cmd_vel_out_) {
@@ -568,6 +592,7 @@ bool Tester::waitFuture(
   rclcpp::Client<rcl_interfaces::srv::SetParameters>::SharedFuture result_future,
   const std::chrono::nanoseconds & timeout)
 {
+  // 中文：等待 SetParameters 服务完成，确保动态 enabled 参数修改已进入节点。
   rclcpp::Time start_time = cm_->now();
   while (rclcpp::ok() && cm_->now() - start_time <= rclcpp::Duration(timeout)) {
     std::future_status status = result_future.wait_for(10ms);
@@ -582,11 +607,13 @@ bool Tester::waitFuture(
 
 void Tester::cmdVelOutCallback(geometry_msgs::msg::Twist::SharedPtr msg)
 {
+  // 中文：保存最近的安全输出速度，测试用例据此断言透传、减速或停车结果。
   cmd_vel_out_ = msg;
 }
 
 TEST_F(Tester, testProcessStopSlowdown)
 {
+  // 中文：验证外层减速区与内层停车区的优先级、比例缩放以及障碍物移开后的恢复。
   rclcpp::Time curr_time = cm_->now();
 
   // Set Collision Monitor parameters.
@@ -645,6 +672,7 @@ TEST_F(Tester, testProcessStopSlowdown)
 
 TEST_F(Tester, testProcessApproach)
 {
+  // 中文：验证平移速度下 APPROACH 按剩余碰撞时间缩放速度，并在进入 Footprint 时停车。
   rclcpp::Time curr_time = cm_->now();
 
   // Set Collision Monitor parameters.
@@ -708,6 +736,7 @@ TEST_F(Tester, testProcessApproach)
 
 TEST_F(Tester, testProcessApproachRotation)
 {
+  // 中文：验证只有角速度时的 APPROACH 预测，确保旋转也会降低至安全角速度或停止。
   rclcpp::Time curr_time = cm_->now();
 
   // Set Collision Monitor parameters.
@@ -773,6 +802,7 @@ TEST_F(Tester, testProcessApproachRotation)
 
 TEST_F(Tester, testCrossOver)
 {
+  // 中文：验证 SLOWDOWN 与 APPROACH 同时存在时，根据当前速度选择更保守动作并允许模式切换。
   rclcpp::Time curr_time = cm_->now();
 
   // Set Collision Monitor parameters.
@@ -831,6 +861,7 @@ TEST_F(Tester, testCrossOver)
 
 TEST_F(Tester, testCeasePublishZeroVel)
 {
+  // 中文：验证机器人停车超过 stop_pub_timeout 后停止重复发布零速度，恢复运动后重新发布。
   rclcpp::Time curr_time = cm_->now();
 
   // Configure stop and approach zones, and basic data source
@@ -893,6 +924,7 @@ TEST_F(Tester, testCeasePublishZeroVel)
 
 TEST_F(Tester, testPolygonNotEnabled)
 {
+  // 中文：通过动态参数禁用 Polygon，确认障碍物仍在区域内时不会继续停车。
   // Set Collision Monitor parameters.
   // Create a STOP polygon
   setCommonParameters();
@@ -942,6 +974,7 @@ TEST_F(Tester, testPolygonNotEnabled)
 
 TEST_F(Tester, testSourceNotEnabled)
 {
+  // 中文：通过动态参数禁用传感器源，确认其数据不再触发已配置安全区域。
   // Set Collision Monitor parameters.
   // Create a STOP polygon
   setCommonParameters();
@@ -991,6 +1024,7 @@ TEST_F(Tester, testSourceNotEnabled)
 
 TEST_F(Tester, testProcessNonActive)
 {
+  // 中文：节点仅 configure 未 activate 时，输入 cmd_vel 不应产生安全输出。
   rclcpp::Time curr_time = cm_->now();
 
   setCommonParameters();
@@ -1015,6 +1049,7 @@ TEST_F(Tester, testProcessNonActive)
 
 TEST_F(Tester, testIncorrectPolygonType)
 {
+  // 中文：未知 Polygon type 必须导致节点配置失败。
   setCommonParameters();
   addPolygon("UnknownShape", POLYGON_UNKNOWN, 1.0, "stop");
   addSource(SCAN_NAME, SCAN);
@@ -1026,6 +1061,7 @@ TEST_F(Tester, testIncorrectPolygonType)
 
 TEST_F(Tester, testIncorrectSourceType)
 {
+  // 中文：未知 Source type 必须导致节点配置失败。
   setCommonParameters();
   addPolygon("Stop", POLYGON, 1.0, "stop");
   addSource("UnknownSource", SOURCE_UNKNOWN);
@@ -1037,6 +1073,7 @@ TEST_F(Tester, testIncorrectSourceType)
 
 TEST_F(Tester, testPolygonsNotSet)
 {
+  // 中文：缺少 polygons 列表时配置失败，避免节点无安全区域却正常运行。
   setCommonParameters();
   addPolygon("Stop", POLYGON, 1.0, "stop");
   addSource(SCAN_NAME, SCAN);
@@ -1047,6 +1084,7 @@ TEST_F(Tester, testPolygonsNotSet)
 
 TEST_F(Tester, testSourcesNotSet)
 {
+  // 中文：缺少 observation_sources 列表时配置失败，避免节点在没有输入数据时误报安全状态。
   setCommonParameters();
   addPolygon("Stop", POLYGON, 1.0, "stop");
   addSource(SCAN_NAME, SCAN);
@@ -1059,6 +1097,7 @@ TEST_F(Tester, testSourcesNotSet)
 
 int main(int argc, char ** argv)
 {
+  // 中文：初始化 GoogleTest 和 rclcpp，运行全部节点集成测试后统一关闭 ROS。
   // Initialize the system
   testing::InitGoogleTest(&argc, argv);
   rclcpp::init(argc, argv);

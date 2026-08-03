@@ -96,3 +96,13 @@ smoother_server:
 注意：
 - 目前不支持对包含多个连续位于同一点姿态的路径（例如来自 Smac 格栅规划器的原地旋转）进行平滑处理。
 - 建议对有界长度的路径使用 Constrained Smoother。可结合 TruncatePathLocal BT 节点提取机器人周围的相关路径段（与 DistanceController 配合以实现周期性）。
+
+## 中文翻译
+
+# Constrained Smoother（约束平滑器）
+
+这是一个供 nav2_smoother 使用的路径平滑插件，源自 nav2_smac_planner 中已弃用的平滑器实现，用于把全局路径推离障碍物，或支持 Reeds-Shepp 运动模型。插件实现 nav2_core::Smoother，由 Smoother Server 通过 Pluginlib 加载。
+
+reversing_enabled 用于检测前进／倒退方向和 cusp；路径下采样、三次贝塞尔上采样、起终点朝向保持、最小转弯半径、平滑权重、Costmap 权重和 cusp 附近的加权参数共同决定优化结果。cost_check_points 使用机器人坐标系下的 x、y、weight 三元组读取非对称足迹代价，启用后通常需要更多迭代。
+
+Ceres 优化器的 max_iterations、gradient_tol、fn_tol 和 param_tol 控制求解过程。包含连续重合 Pose 的路径（例如 Smac 格栅规划器产生的原地旋转）目前不支持。建议只对有界长度的路径使用该插件，可借助 TruncatePathLocal 提取机器人周围的路径片段，并结合 DistanceController 周期调用。
