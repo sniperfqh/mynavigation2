@@ -532,7 +532,7 @@ myagv_keyboard_control:
     # 中文参数：读取按键、更新速度斜坡并发布指令的周期频率，单位 Hz。
     publish_rate: 50.0
     # 中文参数：前进和后退的目标线速度绝对值，单位 m/s。
-    linear_speed: 1.0
+    linear_speed: 0.8
     # 中文参数：原地左转和右转的目标角速度绝对值，单位 rad/s。
     angular_speed: 0.5
     # 中文参数：线速度由零增大时的最大变化率，单位 m/s²。

@@ -115,6 +115,167 @@ private:
   bool flags_changed_{false};
 };
 
+class SCurvePlanner {
+public:
+    /**
+     * @brief 构造函数
+     * @param dt 控制循环的时间步长（秒），例如 0.01 (100Hz)
+     * @param jm 最大加加速度 (m/s^3)
+     * @param am 最大加速度 (m/s^2)
+     * @param sm 最大速度 (m/s)
+     */
+    SCurvePlanner(double dt, double sm, 
+                  double norm_accel_amax, double norm_accel_jmax, 
+                  double norm_decel_amax, double norm_decel_jmax)
+                //   double emrg_amax, double emrg_jmax)
+        : dt_(dt), sm_(sm), 
+          am_(norm_accel_amax), jm_(norm_accel_jmax),
+          norm_accel_amax_(norm_accel_amax), norm_accel_jmax_(norm_accel_jmax), 
+          norm_decel_amax_(norm_decel_amax), norm_decel_jmax_(norm_decel_jmax), 
+          emrg_amax_(8.0), emrg_jmax_(8.0),
+          sc_(0.0), ac_(0.0), jc_(0.0), d_(0.0) {}
+
+    void reset(){
+        sc_ = 0.0;
+        ac_ = 0.0;
+        jc_ = 0.0;
+        d_  = 0.0;
+    }
+
+    /**
+     * @brief 设置目标方向
+     * @param d 前进后退指标：+1(前进), 0(停止), -1(后退)
+     */
+    void setDirection(double d, bool emrgstate = false) {
+        d_ = std::max(-1.0, std::min(1.0, d)); // 确保 d 在 [-1, 0, 1] 之间
+        // 2. 【核心逻辑】换向过零保护
+        // 如果当前速度 sc_ 和目标速度 target_vel 符号相反（说明正在换向）
+        // 并且当前速度绝对值大于极小阈值（说明还没完全停稳）
+        // 则强制将目标速度设为 0，让 S型曲线先完成刹车
+        if (sc_ * d_ < 0.0 && std::abs(sc_) > 1e-6) {
+            d_ = 0.0; 
+        }
+        if(prestate_emrg == true && emrgstate == false){
+            am_ = norm_accel_amax_;   
+            jm_ = norm_accel_jmax_;   
+            prestate_emrg = false;
+        }
+        if(prestate_emrg == false && emrgstate == true){
+            am_ = emrg_amax_;  
+            jm_ = emrg_jmax_;   
+            prestate_emrg = true;
+        }
+    }
+
+    /**
+     * @brief 更新状态（需要在控制循环中周期调用）
+     * @return 返回当前规划出的速度 sc
+     */
+    double update() {
+        double vg = d_ * sm_; // 目标速度
+
+        // 1. 如果已经到达目标状态（速度为0且方向为0，或速度等于目标速度且加速度为0）
+        if (std::abs(sc_ - vg) < 1e-6 ) {
+            sc_ = vg;
+            ac_ = 0.0;
+            jc_ = 0.0;
+            return sc_;
+        }
+        
+        if (std::abs(ac_) < 1e-6) {
+            // 【情况 A】当前加速度为 0
+            // 此时无法通过 v 和 a 的点乘判断，必须根据“速度误差”来决定：
+            // 如果当前速度和目标速度方向一致，且还没达到目标速度 -> 准备起步加速
+            // 否则（方向相反，或需要减速） -> 准备刹车减速
+            bool is_speeding_up = (sc_ * vg >= 0.0) && (std::abs(sc_) < std::abs(vg));
+            
+            if (is_speeding_up) {
+                am_ = norm_accel_amax_;
+                jm_ = norm_accel_jmax_;
+            } else {
+                am_ = norm_decel_amax_;
+                jm_ = norm_decel_jmax_;
+            }
+        } else {
+            // 【情况 B】当前加速度不为 0
+            // 通过速度(sc_)和加速度(ac_)的点乘判断：
+            // 同向 (点乘 > 0) 为加速，反向 (点乘 < 0) 为减速
+            if (sc_ * ac_ >= 0.0) {
+                am_ = norm_accel_amax_;
+                jm_ = norm_accel_jmax_;
+            } else {
+                am_ = norm_decel_amax_;
+                jm_ = norm_decel_jmax_;
+            }
+        }
+
+        // 2. 计算速度误差
+        double vel_err = vg - sc_;
+        double dr = vel_err/(std::abs(vel_err)+1e-9);
+
+        // 3. 决定加加速度 jc 的方向
+        // 如果当前加速度方向与速度误差方向一致，且加速度过大，需要减小加速度
+        // 如果当前加速度方向与速度误差方向相反，或者加速度不够，需要增加加速度
+        
+        if ( dr*ac_>0.0 && std::abs( dr*vel_err - 0.5 * dr*ac_ * std::abs(ac_/jm_) )<= 1e-4) {
+            // 加速阶段或匀速阶段
+            jc_ = -dr*jm_; // 趋近目标，加速度减小
+        } else {
+            // 减加速度阶段（加加速度方向与目标速度方向相反）
+            jc_ =  dr*jm_; // 目标较远，加速度增大
+        }
+
+        // 4. 积分更新（欧拉法）
+        ac_ += jc_ * dt_;
+        
+        // 5. 限制加速度范围
+        ac_ = std::max(-am_, std::min(am_, ac_));
+        if( dr*ac_>0.0 && dr*jc_<0.0){
+          if(dr > 0) ac_ = std::max(ac_, 0.0);
+          if(dr < 0) ac_ = std::min(ac_, 0.0);
+        }
+
+        sc_ += ac_ * dt_;
+
+        // 6. 限制速度范围并处理过零
+        if (dr >= 1e-6) {
+            sc_ = std::min(sc_, vg);
+        } else if (dr <= -1e-6) {
+            sc_ = std::max(sc_, vg);
+        }
+        else{
+          sc_ = vg;
+        }
+        sc_ = std::max(-sm_, std::min(sm_, sc_));
+        return sc_;
+    }
+
+    // 获取当前状态（方便调试）
+    double getVelocity() const { return sc_; }
+    double getAcceleration() const { return ac_; }
+    double getJerk() const { return jc_; }
+
+private:
+    
+    bool prestate_emrg = false;  // 上一状态是否紧急
+    double dt_;   // 时间步长
+    double sm_;   // 最大速度
+    double am_;   // 最大加速度
+    double jm_;   // 最大加加速度
+
+    double norm_accel_amax_;  // 正常加速最大加速度
+    double norm_accel_jmax_;  // 正常加速最大加加速度
+    double norm_decel_amax_;  // 正常减速最大加速度
+    double norm_decel_jmax_;  // 正常减速最大加加速度
+    double emrg_amax_;  // 紧急最大加速度
+    double emrg_jmax_;  // 紧急最大加加速度
+
+    double sc_;   // 当前速度     speed curent
+    double ac_;   // 当前加速度
+    double jc_;   // 当前加加速度
+    double d_;       // 方向指标
+};
+
 // 中文注释：运动状态只表达停止、直行和原地旋转，差速底盘不同时输出线速度与角速度目标。
 enum class Motion
 {
@@ -167,10 +328,20 @@ public:
     linear_decel_limit_ = declare_parameter<double>("linear_decel_limit", 0.8);
     angular_accel_limit_ = declare_parameter<double>("angular_accel_limit", 1.0);
     angular_decel_limit_ = declare_parameter<double>("angular_decel_limit", 2.0);
+    linear_accel_jerk_limit_ = declare_parameter<double>("linear_accel_jerk_limit", 0.4);
+    linear_decel_jerk_limit_ = declare_parameter<double>("linear_decel_jerk_limit", 0.8);
+    angular_accel_jerk_limit_ = declare_parameter<double>("angular_accel_jerk_limit", 1.0);
+    angular_decel_jerk_limit_ = declare_parameter<double>("angular_decel_jerk_limit", 2.0);
     command_timeout_ = declare_parameter<double>("command_timeout", 0.5);
 
     // 中文注释：在创建定时器和硬件输出接口前拒绝非法数值，避免除零或失控速度。
     validateParameters();
+
+    double dt = 1.0/publish_rate_;
+    linear_planner_ = std::make_unique<SCurvePlanner>(dt, 
+      linear_speed_, linear_accel_limit_, linear_accel_jerk_limit_, linear_decel_limit_, linear_decel_jerk_limit_);
+    angular_planner_ = std::make_unique<SCurvePlanner>(dt, 
+      angular_speed_, angular_accel_limit_, angular_accel_jerk_limit_, angular_decel_limit_, angular_decel_jerk_limit_);
 
     // 中文注释：打开真实终端并创建深度为 10 的底盘控制发布器。
     terminal_mode_ = std::make_unique<TerminalMode>(input_device);
@@ -223,6 +394,18 @@ private:
     if (!std::isfinite(angular_decel_limit_) || angular_decel_limit_ <= 0.0) {
       throw std::invalid_argument("angular_decel_limit must be finite and greater than zero");
     }
+    if (!std::isfinite(linear_accel_jerk_limit_) || linear_accel_jerk_limit_ <= 0.0) {
+      throw std::invalid_argument("linear_accel_jerk_limit must be finite and greater than zero");
+    }
+    if (!std::isfinite(linear_decel_jerk_limit_) || linear_decel_jerk_limit_ <= 0.0) {
+      throw std::invalid_argument("linear_decel_jerk_limit must be finite and greater than zero");
+    }
+    if (!std::isfinite(angular_accel_jerk_limit_) || angular_accel_jerk_limit_ <= 0.0) {
+      throw std::invalid_argument("angular_accel_jerk_limit must be finite and greater than zero");
+    }
+    if (!std::isfinite(angular_decel_jerk_limit_) || angular_decel_jerk_limit_ <= 0.0) {
+      throw std::invalid_argument("angular_decel_jerk_limit must be finite and greater than zero");
+    }
     // 中文注释：超时允许为零，零表示关闭松键自动停车，其余值必须为有限非负数。
     if (!std::isfinite(command_timeout_) || command_timeout_ < 0.0) {
       throw std::invalid_argument("command_timeout must be finite and non-negative");
@@ -234,11 +417,18 @@ private:
     readKeyboard();
     const auto now = std::chrono::steady_clock::now();
     applyCommandTimeout(now);
+    
+    // 线性速度规划
     // 中文注释：使用稳态时钟计算真实周期，并把异常延迟限制到最多两个标称周期。
-    const double elapsed = std::chrono::duration<double>(now - last_update_time_).count();
-    last_update_time_ = now;
-    const double dt = std::clamp(elapsed, 0.0, 2.0 / publish_rate_);
-    updateSmoothedCommand(dt);
+    // const double elapsed = std::chrono::duration<double>(now - last_update_time_).count();
+    // last_update_time_ = now;
+    // const double dt = std::clamp(elapsed, 0.0, 2.0 / publish_rate_);
+    // // RCLCPP_INFO(get_logger(), "msg print time: dt=%.3f .", dt);
+    // updateSmoothedCommand(dt);             
+
+    // S型曲线速度规划           
+    current_v_ = linear_planner_->update();           // S型曲线速度规划
+    current_w_ = angular_planner_->update();          // S型曲线速度规划
     publishCommand();
   }
 
@@ -350,22 +540,32 @@ private:
       case Motion::FORWARD:
         target_v_ = linear_speed_;
         target_w_ = 0.0;
+        linear_planner_->setDirection(1.0);
+        angular_planner_->setDirection(0.0);
         break;
       case Motion::REVERSE:
         target_v_ = -linear_speed_;
         target_w_ = 0.0;
+        linear_planner_->setDirection(-1.0);
+        angular_planner_->setDirection(0.0);
         break;
       case Motion::LEFT:
         target_v_ = 0.0;
         target_w_ = angular_speed_;
+        linear_planner_->setDirection(0.0);
+        angular_planner_->setDirection(1.0);
         break;
       case Motion::RIGHT:
         target_v_ = 0.0;
         target_w_ = -angular_speed_;
+        linear_planner_->setDirection(0.0);
+        angular_planner_->setDirection(-1.0);
         break;
       case Motion::STOP:
         target_v_ = 0.0;
         target_w_ = 0.0;
+        linear_planner_->setDirection(0.0);
+        angular_planner_->setDirection(0.0);
         break;
     }
 
@@ -430,6 +630,8 @@ private:
     msg.v_lift = 0.0;
     msg.w_rotation = 0.0;
     publisher_->publish(msg);
+    // RCLCPP_INFO(get_logger(), "msg.v: v=%.3f, msg.w: w=%.3f", current_v_, current_w_);
+    // RCLCPP_INFO(get_logger(), "current : v=%.3f, acc=%.3f, jerk=%0.3f", linear_planner_->getVelocity(), linear_planner_->getAcceleration(), linear_planner_->getJerk());
   }
 
   // 中文注释：ROS 资源与终端资源的生命周期均由智能指针管理。
@@ -445,7 +647,15 @@ private:
   double linear_decel_limit_{0.8};
   double angular_accel_limit_{1.0};
   double angular_decel_limit_{2.0};
+  double linear_accel_jerk_limit_{0.4};
+  double linear_decel_jerk_limit_{0.8};
+  double angular_accel_jerk_limit_{1.0};
+  double angular_decel_jerk_limit_{2.0};
   double command_timeout_{0.5};
+
+  std::unique_ptr<SCurvePlanner> linear_planner_;
+  std::unique_ptr<SCurvePlanner> angular_planner_;
+
   // 中文注释：target_* 是按键期望值，current_* 是经过斜坡限制后实际发布的值。
   double target_v_{0.0};
   double target_w_{0.0};
