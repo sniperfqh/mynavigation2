@@ -19,10 +19,12 @@
 #include "Eigen/Core"
 
 #define EPSILON 0.0001
+// 中文：统一使用一个很小的正数处理零长度线段、半径和数值比较，避免优化过程除零。
 
 /**
  * Compatibility with different ceres::isinf() and ceres::IsInfinite() API
  * used in Ceres Solver 2.1.0+ and 2.0.0- versions respectively
+ * 中文：根据 Ceres 版本选择无穷值判断 API，保证同一套几何代码兼容新旧 Ceres。
  */
 #if defined(USE_OLD_CERES_API)
   #define CERES_ISINF(x) ceres::IsInfinite(x)
@@ -40,40 +42,37 @@ namespace nav2_constrained_smoother
  * @param pt_next Last point of the arc
  * @param is_cusp True if pt is a cusp point
  * @result position of the center or Vector2(inf, inf) for straight lines and 180 deg turns
+ * 中文：通过三点相邻线段的垂直平分线求圆心；直线、退化弧线或 180 度转向返回无穷点。
  */
 template<typename T>
-inline Eigen::Matrix<T, 2, 1> arcCenter(
-  Eigen::Matrix<T, 2, 1> pt_prev,
-  Eigen::Matrix<T, 2, 1> pt,
-  Eigen::Matrix<T, 2, 1> pt_next,
-  bool is_cusp)
-{
+inline Eigen::Matrix<T, 2, 1> arcCenter( Eigen::Matrix<T, 2, 1> pt_prev, Eigen::Matrix<T, 2, 1> pt, Eigen::Matrix<T, 2, 1> pt_next, bool is_cusp) {
   Eigen::Matrix<T, 2, 1> d1 = pt - pt_prev;
   Eigen::Matrix<T, 2, 1> d2 = pt_next - pt;
 
   if (is_cusp) {
+    // 中文：cusp 代表运动方向反转，先翻转后段向量，使几何圆弧按照连续运动方向计算。
     d2 = -d2;
     pt_next = pt + d2;
   }
 
   T det = d1[0] * d2[1] - d1[1] * d2[0];
   if (ceres::abs(det) < (T)1e-4) {  // straight line
-    return Eigen::Matrix<T, 2, 1>(
-      (T)std::numeric_limits<double>::infinity(), (T)std::numeric_limits<double>::infinity());
+    // 中文：两段近似共线时垂直平分线没有稳定交点，用无穷圆心通知调用方走直线分支。
+    return Eigen::Matrix<T, 2, 1>( (T)std::numeric_limits<double>::infinity(), (T)std::numeric_limits<double>::infinity());
   }
 
   // circle center is at the intersection of mirror axes of the segments:
   // http://paulbourke.net/geometry/circlesphere/
   // line intersection:
   // https://en.wikipedia.org/wiki/Line%E2%80%93line_intersection#Intersection%20of%20two%20lines
+  // 中文：先求两段中点和法向量，再使用两条垂直平分线的交点计算圆心。
   Eigen::Matrix<T, 2, 1> mid1 = (pt_prev + pt) / (T)2;
   Eigen::Matrix<T, 2, 1> mid2 = (pt + pt_next) / (T)2;
   Eigen::Matrix<T, 2, 1> n1(-d1[1], d1[0]);
   Eigen::Matrix<T, 2, 1> n2(-d2[1], d2[0]);
   T det1 = (mid1[0] + n1[0]) * mid1[1] - (mid1[1] + n1[1]) * mid1[0];
   T det2 = (mid2[0] + n2[0]) * mid2[1] - (mid2[1] + n2[1]) * mid2[0];
-  Eigen::Matrix<T, 2, 1> center((det1 * n2[0] - det2 * n1[0]) / det,
-    (det1 * n2[1] - det2 * n1[1]) / det);
+  Eigen::Matrix<T, 2, 1> center((det1 * n2[0] - det2 * n1[0]) / det, (det1 * n2[1] - det2 * n1[1]) / det);
   return center;
 }
 
@@ -87,16 +86,14 @@ inline Eigen::Matrix<T, 2, 1> arcCenter(
  * @result Tangential line direction.
  * Note: the sign of tangentDir is undefined here, should be assigned in post-process
  * depending on movement direction. Also, for speed reasons, direction vector is not normalized.
+ * 中文：返回圆弧在中间点处的切向量；方向正负不在此函数决定，调用方根据前进／倒退方向修正。
+ * 中文：为减少重复计算，结果只保证方向正确，不保证单位长度。
  */
 template<typename T>
-inline Eigen::Matrix<T, 2, 1> tangentDir(
-  Eigen::Matrix<T, 2, 1> pt_prev,
-  Eigen::Matrix<T, 2, 1> pt,
-  Eigen::Matrix<T, 2, 1> pt_next,
-  bool is_cusp)
-{
+inline Eigen::Matrix<T, 2, 1> tangentDir( Eigen::Matrix<T, 2, 1> pt_prev, Eigen::Matrix<T, 2, 1> pt, Eigen::Matrix<T, 2, 1> pt_next, bool is_cusp) {
   Eigen::Matrix<T, 2, 1> center = arcCenter(pt_prev, pt, pt_next, is_cusp);
   if (CERES_ISINF(center[0])) {  // straight line
+    // 中文：直线没有有限圆心，使用首尾点连线作为切向量；cusp 时先翻转后段方向。
     Eigen::Matrix<T, 2, 1> d1 = pt - pt_prev;
     Eigen::Matrix<T, 2, 1> d2 = pt_next - pt;
 
@@ -107,6 +104,7 @@ inline Eigen::Matrix<T, 2, 1> tangentDir(
 
     Eigen::Matrix<T, 2, 1> result(pt_next[0] - pt_prev[0], pt_next[1] - pt_prev[1]);
     if (result[0] == 0.0 && result[1] == 0.0) {  // a very rare edge situation
+      // 中文：首尾点重合时退化为前一段的法向量，避免返回零向量。
       return Eigen::Matrix<T, 2, 1>(d1[1], -d1[0]);
     }
     return result;
@@ -114,6 +112,7 @@ inline Eigen::Matrix<T, 2, 1> tangentDir(
 
   // tangent is prependicular to (pt - center)
   // Note: not determining + or - direction here, this should be handled at the caller side
+  // 中文：圆弧切线与圆心到中间点的半径垂直，正负方向继续交给调用方判断。
   return Eigen::Matrix<T, 2, 1>(center[1] - pt[1], pt[0] - center[0]);
 }
 

@@ -1,6 +1,8 @@
 <class_libraries>
+  <!-- 中文：Pluginlib 通过该库路径加载共享库，并按类名创建 Smoother 实例。 -->
   <library path="nav2_constrained_smoother">
     <class name="nav2_constrained_smoother/ConstrainedSmoother" type="nav2_constrained_smoother::ConstrainedSmoother" base_class_type="nav2_core::Smoother">
+      <!-- 中文：该插件使用 Ceres 同时优化平滑性、曲率、原路径距离和障碍物代价。 -->
       <description>Increases smoothness and distance from obstacles of a path using Ceres solver optimization</description>
     </class>
   </library>
