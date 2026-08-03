@@ -461,21 +461,20 @@ private:
 // 中文注释：初始化并运行键盘节点；正常分支负责停车，异常分支负责记录故障并返回非零退出码。
 int main(int argc, char ** argv) {
   rclcpp::init(argc, argv);
+  int exit_code = 0; // 记录退出码
   try {
     // 中文注释：节点构造失败时进入 catch；构造成功后由单线程执行器处理定时器。
     auto node = std::make_shared<MyAgvKeyboardControl>();
     rclcpp::spin(node);
     // 中文注释：执行器在 ROS 仍有效时返回，额外发布一帧立即停车指令。
-    if (rclcpp::ok()) {
-      node->stop();
-    }
+    RCLCPP_WARN(node->get_logger(), "Node shutting down, publishing final STOP command...");
+    node->stop();
   } catch (const std::exception & error) {
     // 中文注释：终端或参数初始化异常返回非零退出码，便于 Launch 和运维系统识别失败。
     RCLCPP_FATAL(rclcpp::get_logger("myagv_keyboard_control"), "%s", error.what());
-    rclcpp::shutdown();
-    return 1;
+    exit_code = 1;
   }
   // 中文注释：正常路径释放 ROS 2 全局资源并返回成功。
   rclcpp::shutdown();
-  return 0;
+  return exit_code;
 }
