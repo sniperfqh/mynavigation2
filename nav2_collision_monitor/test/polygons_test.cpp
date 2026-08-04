@@ -46,10 +46,8 @@ static const char FOOTPRINT_TOPIC[]{"footprint"};
 static const char POLYGON_PUB_TOPIC[]{"polygon"};
 static const char POLYGON_NAME[]{"TestPolygon"};
 static const char CIRCLE_NAME[]{"TestCircle"};
-static const std::vector<double> SQUARE_POLYGON {
-  0.5, 0.5, 0.5, -0.5, -0.5, -0.5, -0.5, 0.5};
-static const std::vector<double> ARBITRARY_POLYGON {
-  1.0, 1.0, 1.0, 0.0, 2.0, 0.0, 2.0, -1.0, -1.0, -1.0, -1.0, 1.0};
+static const std::vector<double> SQUARE_POLYGON {0.5, 0.5, 0.5, -0.5, -0.5, -0.5, -0.5, 0.5};
+static const std::vector<double> ARBITRARY_POLYGON {1.0, 1.0, 1.0, 0.0, 2.0, 0.0, 2.0, -1.0, -1.0, -1.0, -1.0, 1.0};
 static const double CIRCLE_RADIUS{0.5};
 static const int MAX_POINTS{1};
 static const double SLOWDOWN_RATIO{0.7};
@@ -61,27 +59,19 @@ class TestNode : public nav2_util::LifecycleNode
 {
 public:
   // 中文：测试节点同时发布 Footprint，并订阅 Polygon 的可视化输出。
-  TestNode()
-  : nav2_util::LifecycleNode("test_node"), polygon_received_(nullptr)
-  {
-    polygon_sub_ = this->create_subscription<geometry_msgs::msg::PolygonStamped>(
-      POLYGON_PUB_TOPIC, rclcpp::SystemDefaultsQoS(),
-      std::bind(&TestNode::polygonCallback, this, std::placeholders::_1));
+  TestNode() : nav2_util::LifecycleNode("test_node"), polygon_received_(nullptr) {
+    polygon_sub_ = this->create_subscription<geometry_msgs::msg::PolygonStamped>(POLYGON_PUB_TOPIC, rclcpp::SystemDefaultsQoS(), std::bind(&TestNode::polygonCallback, this, std::placeholders::_1));
   }
 
-  ~TestNode()
-  {
+  ~TestNode() {
     footprint_pub_.reset();
   }
 
-  void publishFootprint()
-  {
+  void publishFootprint() {
     // 中文：发布一个方形机器人轮廓，验证 APPROACH Polygon 能动态读取并替换自身顶点。
-    footprint_pub_ = this->create_publisher<geometry_msgs::msg::PolygonStamped>(
-      FOOTPRINT_TOPIC, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
+    footprint_pub_ = this->create_publisher<geometry_msgs::msg::PolygonStamped>(FOOTPRINT_TOPIC, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
 
-    std::unique_ptr<geometry_msgs::msg::PolygonStamped> msg =
-      std::make_unique<geometry_msgs::msg::PolygonStamped>();
+    std::unique_ptr<geometry_msgs::msg::PolygonStamped> msg = std::make_unique<geometry_msgs::msg::PolygonStamped>();
 
     msg->header.frame_id = BASE_FRAME_ID;
     msg->header.stamp = this->now();
@@ -96,15 +86,12 @@ public:
     footprint_pub_->publish(std::move(msg));
   }
 
-  void polygonCallback(geometry_msgs::msg::PolygonStamped::SharedPtr msg)
-  {
+  void polygonCallback(geometry_msgs::msg::PolygonStamped::SharedPtr msg) {
     // 中文：保存最新可视化消息，供测试检查 frame、顶点数量和坐标。
     polygon_received_ = msg;
   }
 
-  geometry_msgs::msg::PolygonStamped::SharedPtr waitPolygonReceived(
-    const std::chrono::nanoseconds & timeout)
-  {
+  geometry_msgs::msg::PolygonStamped::SharedPtr waitPolygonReceived(const std::chrono::nanoseconds & timeout) {
     // 中文：在有限时间内泵送回调，等待 Polygon Publisher 的 transient-local 消息。
     rclcpp::Time start_time = this->now();
     while (rclcpp::ok() && this->now() - start_time <= rclcpp::Duration(timeout)) {
@@ -127,25 +114,15 @@ private:
 class PolygonWrapper : public nav2_collision_monitor::Polygon
 {
 public:
-  PolygonWrapper(
-    const nav2_util::LifecycleNode::WeakPtr & node,
-    const std::string & polygon_name,
-    const std::shared_ptr<tf2_ros::Buffer> tf_buffer,
-    const std::string & base_frame_id,
-    const tf2::Duration & transform_tolerance)
-  : nav2_collision_monitor::Polygon(
-      node, polygon_name, tf_buffer, base_frame_id, transform_tolerance)
-  {
+  PolygonWrapper(const nav2_util::LifecycleNode::WeakPtr & node, const std::string & polygon_name, const std::shared_ptr<tf2_ros::Buffer> tf_buffer, const std::string & base_frame_id, const tf2::Duration & transform_tolerance) : nav2_collision_monitor::Polygon(node, polygon_name, tf_buffer, base_frame_id, transform_tolerance) {
   }
 
-  double getSimulationTimeStep() const
-  {
+  double getSimulationTimeStep() const {
     // 中文：暴露保护成员，验证 action_type=approach 的模拟步长参数。
     return simulation_time_step_;
   }
 
-  double isVisualize() const
-  {
+  double isVisualize() const {
     // 中文：暴露可视化开关，验证默认值和显式配置。
     return visualize_;
   }
@@ -154,25 +131,15 @@ public:
 class CircleWrapper : public nav2_collision_monitor::Circle
 {
 public:
-  CircleWrapper(
-    const nav2_util::LifecycleNode::WeakPtr & node,
-    const std::string & polygon_name,
-    const std::shared_ptr<tf2_ros::Buffer> tf_buffer,
-    const std::string & base_frame_id,
-    const tf2::Duration & transform_tolerance)
-  : nav2_collision_monitor::Circle(
-      node, polygon_name, tf_buffer, base_frame_id, transform_tolerance)
-  {
+  CircleWrapper(const nav2_util::LifecycleNode::WeakPtr & node, const std::string & polygon_name, const std::shared_ptr<tf2_ros::Buffer> tf_buffer, const std::string & base_frame_id, const tf2::Duration & transform_tolerance) : nav2_collision_monitor::Circle(node, polygon_name, tf_buffer, base_frame_id, transform_tolerance) {
   }
 
-  double getRadius() const
-  {
+  double getRadius() const {
     // 中文：暴露圆半径，验证 Circle 专属参数读取。
     return radius_;
   }
 
-  double getRadiusSquared() const
-  {
+  double getRadiusSquared() const {
     // 中文：暴露缓存的半径平方，验证运行时优化值与 radius 一致。
     return radius_squared_;
   }
@@ -195,9 +162,7 @@ protected:
   void createCircle(const std::string & action_type);
 
   // Wait until footprint will be received
-  bool waitFootprint(
-    const std::chrono::nanoseconds & timeout,
-    std::vector<nav2_collision_monitor::Point> & footprint);
+  bool waitFootprint(const std::chrono::nanoseconds & timeout, std::vector<nav2_collision_monitor::Point> & footprint);
 
   std::shared_ptr<TestNode> test_node_;
 
@@ -208,8 +173,7 @@ protected:
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 };  // Tester
 
-Tester::Tester()
-{
+Tester::Tester() {
   // 中文：建立测试节点和 TF Listener；Polygon 的 FootprintSubscriber 将复用该 TF 缓存。
   test_node_ = std::make_shared<TestNode>();
 
@@ -218,8 +182,7 @@ Tester::Tester()
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 }
 
-Tester::~Tester()
-{
+Tester::~Tester() {
   // 中文：先销毁形状对象，再释放节点和 TF，避免回调访问已销毁资源。
   polygon_.reset();
   circle_.reset();
@@ -230,71 +193,46 @@ Tester::~Tester()
   tf_buffer_.reset();
 }
 
-void Tester::setCommonParameters(const std::string & polygon_name, const std::string & action_type)
-{
+void Tester::setCommonParameters(const std::string & polygon_name, const std::string & action_type) {
   // 中文：为每个测试形状写入共享行为参数，测试随后只覆盖其专属 points 或 radius。
-  test_node_->declare_parameter(
-    polygon_name + ".action_type", rclcpp::ParameterValue(action_type));
-  test_node_->set_parameter(
-    rclcpp::Parameter(polygon_name + ".action_type", action_type));
+  test_node_->declare_parameter(polygon_name + ".action_type", rclcpp::ParameterValue(action_type));
+  test_node_->set_parameter(rclcpp::Parameter(polygon_name + ".action_type", action_type));
 
-  test_node_->declare_parameter(
-    polygon_name + ".max_points", rclcpp::ParameterValue(MAX_POINTS));
-  test_node_->set_parameter(
-    rclcpp::Parameter(polygon_name + ".max_points", MAX_POINTS));
+  test_node_->declare_parameter(polygon_name + ".max_points", rclcpp::ParameterValue(MAX_POINTS));
+  test_node_->set_parameter(rclcpp::Parameter(polygon_name + ".max_points", MAX_POINTS));
 
-  test_node_->declare_parameter(
-    polygon_name + ".slowdown_ratio", rclcpp::ParameterValue(SLOWDOWN_RATIO));
-  test_node_->set_parameter(
-    rclcpp::Parameter(polygon_name + ".slowdown_ratio", SLOWDOWN_RATIO));
+  test_node_->declare_parameter(polygon_name + ".slowdown_ratio", rclcpp::ParameterValue(SLOWDOWN_RATIO));
+  test_node_->set_parameter(rclcpp::Parameter(polygon_name + ".slowdown_ratio", SLOWDOWN_RATIO));
 
-  test_node_->declare_parameter(
-    polygon_name + ".time_before_collision",
-    rclcpp::ParameterValue(TIME_BEFORE_COLLISION));
-  test_node_->set_parameter(
-    rclcpp::Parameter(polygon_name + ".time_before_collision", TIME_BEFORE_COLLISION));
+  test_node_->declare_parameter(polygon_name + ".time_before_collision", rclcpp::ParameterValue(TIME_BEFORE_COLLISION));
+  test_node_->set_parameter(rclcpp::Parameter(polygon_name + ".time_before_collision", TIME_BEFORE_COLLISION));
 
-  test_node_->declare_parameter(
-    polygon_name + ".simulation_time_step", rclcpp::ParameterValue(SIMULATION_TIME_STEP));
-  test_node_->set_parameter(
-    rclcpp::Parameter(polygon_name + ".simulation_time_step", SIMULATION_TIME_STEP));
+  test_node_->declare_parameter(polygon_name + ".simulation_time_step", rclcpp::ParameterValue(SIMULATION_TIME_STEP));
+  test_node_->set_parameter(rclcpp::Parameter(polygon_name + ".simulation_time_step", SIMULATION_TIME_STEP));
 
-  test_node_->declare_parameter(
-    polygon_name + ".visualize", rclcpp::ParameterValue(true));
-  test_node_->set_parameter(
-    rclcpp::Parameter(polygon_name + ".visualize", true));
+  test_node_->declare_parameter(polygon_name + ".visualize", rclcpp::ParameterValue(true));
+  test_node_->set_parameter(rclcpp::Parameter(polygon_name + ".visualize", true));
 
-  test_node_->declare_parameter(
-    polygon_name + ".polygon_pub_topic", rclcpp::ParameterValue(POLYGON_PUB_TOPIC));
-  test_node_->set_parameter(
-    rclcpp::Parameter(polygon_name + ".polygon_pub_topic", POLYGON_PUB_TOPIC));
+  test_node_->declare_parameter(polygon_name + ".polygon_pub_topic", rclcpp::ParameterValue(POLYGON_PUB_TOPIC));
+  test_node_->set_parameter(rclcpp::Parameter(polygon_name + ".polygon_pub_topic", POLYGON_PUB_TOPIC));
 }
 
-void Tester::setPolygonParameters(const std::vector<double> & points)
-{
+void Tester::setPolygonParameters(const std::vector<double> & points) {
   // 中文：配置 Footprint Topic 和静态 points；APPROACH 分支只使用前者，其他动作使用后者。
-  test_node_->declare_parameter(
-    std::string(POLYGON_NAME) + ".footprint_topic", rclcpp::ParameterValue(FOOTPRINT_TOPIC));
-  test_node_->set_parameter(
-    rclcpp::Parameter(std::string(POLYGON_NAME) + ".footprint_topic", FOOTPRINT_TOPIC));
+  test_node_->declare_parameter(std::string(POLYGON_NAME) + ".footprint_topic", rclcpp::ParameterValue(FOOTPRINT_TOPIC));
+  test_node_->set_parameter(rclcpp::Parameter(std::string(POLYGON_NAME) + ".footprint_topic", FOOTPRINT_TOPIC));
 
-  test_node_->declare_parameter(
-    std::string(POLYGON_NAME) + ".points", rclcpp::ParameterValue(points));
-  test_node_->set_parameter(
-    rclcpp::Parameter(std::string(POLYGON_NAME) + ".points", points));
+  test_node_->declare_parameter(std::string(POLYGON_NAME) + ".points", rclcpp::ParameterValue(points));
+  test_node_->set_parameter(rclcpp::Parameter(std::string(POLYGON_NAME) + ".points", points));
 }
 
-void Tester::setCircleParameters(const double radius)
-{
+void Tester::setCircleParameters(const double radius) {
   // 中文：写入 Circle 的 radius 参数，验证基类公共参数和子类参数分离。
-  test_node_->declare_parameter(
-    std::string(CIRCLE_NAME) + ".radius", rclcpp::ParameterValue(radius));
-  test_node_->set_parameter(
-    rclcpp::Parameter(std::string(CIRCLE_NAME) + ".radius", radius));
+  test_node_->declare_parameter(std::string(CIRCLE_NAME) + ".radius", rclcpp::ParameterValue(radius));
+  test_node_->set_parameter(rclcpp::Parameter(std::string(CIRCLE_NAME) + ".radius", radius));
 }
 
-bool Tester::checkUndeclaredParameter(const std::string & polygon_name, const std::string & param)
-{
+bool Tester::checkUndeclaredParameter(const std::string & polygon_name, const std::string & param) {
   // 中文：确认不适用的参数没有被错误声明，例如 Circle 不应创建 footprint_topic。
   bool ret = false;
 
@@ -303,8 +241,7 @@ bool Tester::checkUndeclaredParameter(const std::string & polygon_name, const st
     test_node_->get_parameter(polygon_name + "." + param);
   } catch (std::exception & ex) {
     std::string message = ex.what();
-    if (message.find("." + param) != std::string::npos &&
-      message.find("is not initialized") != std::string::npos)
+    if (message.find("." + param) != std::string::npos && message.find("is not initialized") != std::string::npos)
     {
       ret = true;
     }
@@ -312,36 +249,27 @@ bool Tester::checkUndeclaredParameter(const std::string & polygon_name, const st
   return ret;
 }
 
-void Tester::createPolygon(const std::string & action_type)
-{
+void Tester::createPolygon(const std::string & action_type) {
   // 中文：创建并激活普通 Polygon，后续测试直接调用其几何和碰撞接口。
   setCommonParameters(POLYGON_NAME, action_type);
   setPolygonParameters(SQUARE_POLYGON);
 
-  polygon_ = std::make_shared<PolygonWrapper>(
-    test_node_, POLYGON_NAME,
-    tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
+  polygon_ = std::make_shared<PolygonWrapper>(test_node_, POLYGON_NAME, tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
   ASSERT_TRUE(polygon_->configure());
   polygon_->activate();
 }
 
-void Tester::createCircle(const std::string & action_type)
-{
+void Tester::createCircle(const std::string & action_type) {
   // 中文：创建并激活 Circle，验证圆形区域与 Polygon 公共生命周期一致。
   setCommonParameters(CIRCLE_NAME, action_type);
   setCircleParameters(CIRCLE_RADIUS);
 
-  circle_ = std::make_shared<CircleWrapper>(
-    test_node_, CIRCLE_NAME,
-    tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
+  circle_ = std::make_shared<CircleWrapper>(test_node_, CIRCLE_NAME, tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
   ASSERT_TRUE(circle_->configure());
   circle_->activate();
 }
 
-bool Tester::waitFootprint(
-  const std::chrono::nanoseconds & timeout,
-  std::vector<nav2_collision_monitor::Point> & footprint)
-{
+bool Tester::waitFootprint(const std::chrono::nanoseconds & timeout, std::vector<nav2_collision_monitor::Point> & footprint) {
   // 中文：轮询动态 Footprint 更新，直到 Polygon 顶点非空或超时。
   rclcpp::Time start_time = test_node_->now();
   while (rclcpp::ok() && test_node_->now() - start_time <= rclcpp::Duration(timeout)) {
@@ -356,8 +284,7 @@ bool Tester::waitFootprint(
   return false;
 }
 
-TEST_F(Tester, testPolygonGetStopParameters)
-{
+TEST_F(Tester, testPolygonGetStopParameters) {
   // 中文：验证 STOP Polygon 的名称、动作类型、阈值、静态顶点和可视化开关。
   createPolygon("stop");
 
@@ -381,8 +308,7 @@ TEST_F(Tester, testPolygonGetStopParameters)
   EXPECT_NEAR(poly[3].y, SQUARE_POLYGON[7], EPSILON);
 }
 
-TEST_F(Tester, testPolygonGetSlowdownParameters)
-{
+TEST_F(Tester, testPolygonGetSlowdownParameters) {
   // 中文：验证 SLOWDOWN Polygon 的减速比例以及公共区域参数。
   createPolygon("slowdown");
 
@@ -395,8 +321,7 @@ TEST_F(Tester, testPolygonGetSlowdownParameters)
   EXPECT_NEAR(polygon_->getSlowdownRatio(), SLOWDOWN_RATIO, EPSILON);
 }
 
-TEST_F(Tester, testPolygonGetApproachParameters)
-{
+TEST_F(Tester, testPolygonGetApproachParameters) {
   // 中文：验证 APPROACH Polygon 读取 Footprint Topic、碰撞时间和模拟步长，并动态获得顶点。
   createPolygon("approach");
 
@@ -410,8 +335,7 @@ TEST_F(Tester, testPolygonGetApproachParameters)
   EXPECT_NEAR(polygon_->getSimulationTimeStep(), SIMULATION_TIME_STEP, EPSILON);
 }
 
-TEST_F(Tester, testCircleGetParameters)
-{
+TEST_F(Tester, testCircleGetParameters) {
   // 中文：验证 Circle 半径及半径平方缓存，同时确认它不声明 Footprint 参数。
   createCircle("approach");
 
@@ -425,98 +349,73 @@ TEST_F(Tester, testCircleGetParameters)
   EXPECT_NEAR(circle_->getRadiusSquared(), CIRCLE_RADIUS * CIRCLE_RADIUS, EPSILON);
 }
 
-TEST_F(Tester, testPolygonUndeclaredActionType)
-{
+TEST_F(Tester, testPolygonUndeclaredActionType) {
   // 中文：缺少 action_type 时 configure 应失败，防止未初始化动作进入运行态。
   // "action_type" parameter is not initialized
-  polygon_ = std::make_shared<PolygonWrapper>(
-    test_node_, POLYGON_NAME,
-    tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
+  polygon_ = std::make_shared<PolygonWrapper>(test_node_, POLYGON_NAME, tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
   ASSERT_FALSE(polygon_->configure());
   // Check that "action_type" parameter is not set after configuring
   ASSERT_TRUE(checkUndeclaredParameter(POLYGON_NAME, "action_type"));
 }
 
-TEST_F(Tester, testPolygonUndeclaredPoints)
-{
+TEST_F(Tester, testPolygonUndeclaredPoints) {
   // 中文：静态 Polygon 缺少 points 时 configure 应失败。
   // "points" parameter is not initialized
-  test_node_->declare_parameter(
-    std::string(POLYGON_NAME) + ".action_type", rclcpp::ParameterValue("stop"));
-  test_node_->set_parameter(
-    rclcpp::Parameter(std::string(POLYGON_NAME) + ".action_type", "stop"));
-  polygon_ = std::make_shared<PolygonWrapper>(
-    test_node_, POLYGON_NAME,
-    tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
+  test_node_->declare_parameter(std::string(POLYGON_NAME) + ".action_type", rclcpp::ParameterValue("stop"));
+  test_node_->set_parameter(rclcpp::Parameter(std::string(POLYGON_NAME) + ".action_type", "stop"));
+  polygon_ = std::make_shared<PolygonWrapper>(test_node_, POLYGON_NAME, tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
   ASSERT_FALSE(polygon_->configure());
   // Check that "points" parameter is not set after configuring
   ASSERT_TRUE(checkUndeclaredParameter(POLYGON_NAME, "points"));
 }
 
-TEST_F(Tester, testPolygonIncorrectActionType)
-{
+TEST_F(Tester, testPolygonIncorrectActionType) {
   // 中文：未知 action_type 字符串必须被拒绝，而不是默认为某种安全动作。
   setCommonParameters(POLYGON_NAME, "incorrect_action_type");
   setPolygonParameters(SQUARE_POLYGON);
 
-  polygon_ = std::make_shared<PolygonWrapper>(
-    test_node_, POLYGON_NAME,
-    tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
+  polygon_ = std::make_shared<PolygonWrapper>(test_node_, POLYGON_NAME, tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
   ASSERT_FALSE(polygon_->configure());
 }
 
-TEST_F(Tester, testPolygonIncorrectPoints1)
-{
+TEST_F(Tester, testPolygonIncorrectPoints1) {
   // 中文：奇数或过短的 points 数组必须被拒绝。
   setCommonParameters(POLYGON_NAME, "stop");
 
   std::vector<double> incorrect_points = SQUARE_POLYGON;
   incorrect_points.resize(6);  // Not enough for triangle
-  test_node_->declare_parameter(
-    std::string(POLYGON_NAME) + ".points", rclcpp::ParameterValue(incorrect_points));
-  test_node_->set_parameter(
-    rclcpp::Parameter(std::string(POLYGON_NAME) + ".points", incorrect_points));
+  test_node_->declare_parameter(std::string(POLYGON_NAME) + ".points", rclcpp::ParameterValue(incorrect_points));
+  test_node_->set_parameter(rclcpp::Parameter(std::string(POLYGON_NAME) + ".points", incorrect_points));
 
-  polygon_ = std::make_shared<PolygonWrapper>(
-    test_node_, POLYGON_NAME,
-    tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
+  polygon_ = std::make_shared<PolygonWrapper>(test_node_, POLYGON_NAME, tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
   ASSERT_FALSE(polygon_->configure());
 }
 
-TEST_F(Tester, testPolygonIncorrectPoints2)
-{
+TEST_F(Tester, testPolygonIncorrectPoints2) {
   // 中文：再次覆盖非法顶点数量边界，确保参数格式校验不会误接受退化区域。
   setCommonParameters(POLYGON_NAME, "stop");
 
   std::vector<double> incorrect_points = SQUARE_POLYGON;
   incorrect_points.resize(9);  // Odd number of points
-  test_node_->declare_parameter(
-    std::string(POLYGON_NAME) + ".points", rclcpp::ParameterValue(incorrect_points));
-  test_node_->set_parameter(
-    rclcpp::Parameter(std::string(POLYGON_NAME) + ".points", incorrect_points));
+  test_node_->declare_parameter(std::string(POLYGON_NAME) + ".points", rclcpp::ParameterValue(incorrect_points));
+  test_node_->set_parameter(rclcpp::Parameter(std::string(POLYGON_NAME) + ".points", incorrect_points));
 
-  polygon_ = std::make_shared<PolygonWrapper>(
-    test_node_, POLYGON_NAME,
-    tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
+  polygon_ = std::make_shared<PolygonWrapper>(test_node_, POLYGON_NAME, tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
   ASSERT_FALSE(polygon_->configure());
 }
 
-TEST_F(Tester, testCircleUndeclaredRadius)
-{
+TEST_F(Tester, testCircleUndeclaredRadius) {
   // 中文：Circle 缺少 radius 时 configure 应失败。
   setCommonParameters(CIRCLE_NAME, "stop");
 
-  circle_ = std::make_shared<CircleWrapper>(
-    test_node_, CIRCLE_NAME,
-    tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
+  circle_ = std::make_shared<CircleWrapper>(test_node_, CIRCLE_NAME, tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
   ASSERT_FALSE(circle_->configure());
 
   // Check that "radius" parameter is not set after configuring
   ASSERT_TRUE(checkUndeclaredParameter(CIRCLE_NAME, "radius"));
 }
 
-TEST_F(Tester, testPolygonUpdate)
-{
+TEST_F(Tester, testPolygonUpdate) {
   // 中文：验证 Footprint 消息到 Polygon 内部顶点和可视化点的动态同步。
   createPolygon("approach");
 
@@ -540,8 +439,7 @@ TEST_F(Tester, testPolygonUpdate)
   EXPECT_NEAR(footprint[3].y, SQUARE_POLYGON[7], EPSILON);
 }
 
-TEST_F(Tester, testPolygonGetPointsInside)
-{
+TEST_F(Tester, testPolygonGetPointsInside) {
   // 中文：验证普通多边形对内部、外部点的计数结果。
   createPolygon("stop");
 
@@ -559,17 +457,14 @@ TEST_F(Tester, testPolygonGetPointsInside)
   ASSERT_EQ(polygon_->getPointsInside(points), 1);
 }
 
-TEST_F(Tester, testPolygonGetPointsInsideEdge)
-{
+TEST_F(Tester, testPolygonGetPointsInsideEdge) {
   // 中文：验证点位于边界附近时的射线交叉算法行为，固定边界比较语义。
   // Test for checking edge cases in raytracing algorithm.
   // All points are lie on the edge lines parallel to OX, where the raytracing takes place.
   setCommonParameters(POLYGON_NAME, "stop");
   setPolygonParameters(ARBITRARY_POLYGON);
 
-  polygon_ = std::make_shared<PolygonWrapper>(
-    test_node_, POLYGON_NAME,
-    tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
+  polygon_ = std::make_shared<PolygonWrapper>(test_node_, POLYGON_NAME, tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
   ASSERT_TRUE(polygon_->configure());
 
   std::vector<nav2_collision_monitor::Point> points;
@@ -588,8 +483,7 @@ TEST_F(Tester, testPolygonGetPointsInsideEdge)
   ASSERT_EQ(polygon_->getPointsInside(points), 1);
 }
 
-TEST_F(Tester, testCircleGetPointsInside)
-{
+TEST_F(Tester, testCircleGetPointsInside) {
   // 中文：验证 Circle 的平方距离判断和边界点计数。
   createCircle("stop");
 
@@ -603,8 +497,7 @@ TEST_F(Tester, testCircleGetPointsInside)
   ASSERT_EQ(circle_->getPointsInside(points), 1);
 }
 
-TEST_F(Tester, testPolygonGetCollisionTime)
-{
+TEST_F(Tester, testPolygonGetCollisionTime) {
   // 中文：验证 APPROACH 预测中的立即碰撞、运动中碰撞和无碰撞三类结果。
   createPolygon("approach");
 
@@ -672,13 +565,11 @@ TEST_F(Tester, testPolygonGetCollisionTime)
   EXPECT_LT(polygon_->getCollisionTime(points, vel), 0.0);
 }
 
-TEST_F(Tester, testPolygonPublish)
-{
+TEST_F(Tester, testPolygonPublish) {
   // 中文：验证可视化消息的 frame、顶点数量和坐标已经从内部 Polygon 正确发布。
   createPolygon("stop");
   polygon_->publish();
-  geometry_msgs::msg::PolygonStamped::SharedPtr polygon_received =
-    test_node_->waitPolygonReceived(500ms);
+  geometry_msgs::msg::PolygonStamped::SharedPtr polygon_received = test_node_->waitPolygonReceived(500ms);
 
   ASSERT_NE(polygon_received, nullptr);
   ASSERT_EQ(polygon_received->polygon.points.size(), 4u);
@@ -694,20 +585,15 @@ TEST_F(Tester, testPolygonPublish)
   polygon_->deactivate();
 }
 
-TEST_F(Tester, testPolygonDefaultVisualize)
-{
+TEST_F(Tester, testPolygonDefaultVisualize) {
   // 中文：验证未显式配置 visualize 时默认关闭可视化，避免不必要的 Topic。
   // Use default parameters, visualize should be false by-default
-  test_node_->declare_parameter(
-    std::string(POLYGON_NAME) + ".action_type", rclcpp::ParameterValue("stop"));
-  test_node_->set_parameter(
-    rclcpp::Parameter(std::string(POLYGON_NAME) + ".action_type", "stop"));
+  test_node_->declare_parameter(std::string(POLYGON_NAME) + ".action_type", rclcpp::ParameterValue("stop"));
+  test_node_->set_parameter(rclcpp::Parameter(std::string(POLYGON_NAME) + ".action_type", "stop"));
   setPolygonParameters(SQUARE_POLYGON);
 
   // Create new polygon
-  polygon_ = std::make_shared<PolygonWrapper>(
-    test_node_, POLYGON_NAME,
-    tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
+  polygon_ = std::make_shared<PolygonWrapper>(test_node_, POLYGON_NAME, tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
   ASSERT_TRUE(polygon_->configure());
   polygon_->activate();
 
@@ -718,8 +604,7 @@ TEST_F(Tester, testPolygonDefaultVisualize)
   ASSERT_EQ(test_node_->waitPolygonReceived(100ms), nullptr);
 }
 
-int main(int argc, char ** argv)
-{
+int main(int argc, char ** argv) {
   // Initialize the system
   testing::InitGoogleTest(&argc, argv);
   rclcpp::init(argc, argv);

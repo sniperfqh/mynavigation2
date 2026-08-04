@@ -52,12 +52,7 @@ public:
    * @param base_frame_id Robot base frame ID
    * @param transform_tolerance Transform tolerance
    */
-  Polygon(
-    const nav2_util::LifecycleNode::WeakPtr & node,
-    const std::string & polygon_name,
-    const std::shared_ptr<tf2_ros::Buffer> tf_buffer,
-    const std::string & base_frame_id,
-    const tf2::Duration & transform_tolerance);
+  Polygon(const nav2_util::LifecycleNode::WeakPtr & node, const std::string & polygon_name, const std::shared_ptr<tf2_ros::Buffer> tf_buffer, const std::string & base_frame_id, const tf2::Duration & transform_tolerance);
   /**
    * @brief Polygon destructor
    */
@@ -144,9 +139,7 @@ public:
    * 中文：从当前 base frame 原点开始按输入速度离散投影机器人，并把障碍点变换到每个预测位姿下；
    * 中文：返回首次超过 max_points_ 的模拟时刻，静态已碰撞返回 0，无碰撞返回负数。
    */
-  double getCollisionTime(
-    const std::vector<Point> & collision_points,
-    const Velocity & velocity) const;
+  double getCollisionTime(const std::vector<Point> & collision_points, const Velocity & velocity) const;
 
   /**
    * @brief Publishes polygon message into a its own topic
@@ -183,8 +176,7 @@ protected:
    * @brief Callback executed when a parameter change is detected
    * @param event ParameterEvent message
    */
-  rcl_interfaces::msg::SetParametersResult dynamicParametersCallback(
-    std::vector<rclcpp::Parameter> parameters);
+  rcl_interfaces::msg::SetParametersResult dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters);
 
   bool isPointInside(const Point & point) const;
 

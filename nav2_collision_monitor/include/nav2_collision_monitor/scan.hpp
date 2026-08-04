@@ -47,15 +47,7 @@ public:
    * @param base_shift_correction Whether to correct source data towards to base frame movement,
    * considering the difference between current time and latest source time
    */
-  Scan(
-    const nav2_util::LifecycleNode::WeakPtr & node,
-    const std::string & source_name,
-    const std::shared_ptr<tf2_ros::Buffer> tf_buffer,
-    const std::string & base_frame_id,
-    const std::string & global_frame_id,
-    const tf2::Duration & transform_tolerance,
-    const rclcpp::Duration & source_timeout,
-    const bool base_shift_correction);
+  Scan(const nav2_util::LifecycleNode::WeakPtr & node, const std::string & source_name, const std::shared_ptr<tf2_ros::Buffer> tf_buffer, const std::string & base_frame_id, const std::string & global_frame_id, const tf2::Duration & transform_tolerance, const rclcpp::Duration & source_timeout, const bool base_shift_correction);
   /**
    * @brief Scan destructor
    */
@@ -75,9 +67,7 @@ public:
    * Added data is transformed to base_frame_id_ coordinate system at curr_time.
    * 中文：过滤尚未收到、已过期和超出量程的射线，再通过 TF 将有效极坐标点投影到 base frame。
    */
-  void getData(
-    const rclcpp::Time & curr_time,
-    std::vector<Point> & data) const;
+  void getData(const rclcpp::Time & curr_time, std::vector<Point> & data) const;
 
 protected:
   /**

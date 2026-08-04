@@ -20,8 +20,7 @@
 
 // 中文：独立进程入口只负责初始化 rclcpp、创建 Lifecycle CollisionMonitor、进入 ROS 事件循环并关闭。
 // 中文：节点的 configure／activate 等状态转换由外部 Lifecycle Manager 或测试包装器负责。
-int main(int argc, char * argv[])
-{
+int main(int argc, char * argv[]) {
   // 中文：解析 ROS 2 命令行参数并初始化底层通信。
   rclcpp::init(argc, argv);
   auto node = std::make_shared<nav2_collision_monitor::CollisionMonitor>();
