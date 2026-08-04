@@ -9,3 +9,9 @@ See the [Navigation Plugin list](https://navigation.ros.org/plugins/index.html) 
 See its [Configuration Guide Page](https://navigation.ros.org/configuration/packages/configuring-smoother-server.html) for additional parameter descriptions.
 
 This package contains the Simple Smoother and Savitzky-Golay Smoother plugins.
+
+## 中文翻译
+
+# Nav2 Smoother
+
+nav2_smoother 是 Nav2 的路径平滑任务服务器，提供 SmoothPath Action，并通过 Pluginlib 加载 Simple Smoother 和 Savitzky-Golay Smoother 插件。服务器把输入 Path 和时间预算传给插件，发布平滑路径，并可在返回前执行碰撞检查。

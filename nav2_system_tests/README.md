@@ -12,3 +12,9 @@ Most tests in this package will spin up Gazebo instances of a robot in an enviro
 - Testing system failures are properly recorded and can be recovered from
 
 This is primarily for use in Nav2 CI to establish a high degree of maintainer confidence when merging in large architectural changes to the Nav2 project. However, this is also useful to test installs of Nav2 locally or for additional information.
+
+## 中文翻译
+
+# 系统测试
+
+本包提供 Nav2 的高层系统测试，用于验证导航栈在仿真环境中的集成行为，包括规划、控制、定位、恢复、航点和 Lifecycle 启停。它主要服务于 Nav2 CI，在合并大型架构变更时建立维护者信心，也可用于本地验证 Nav2 安装。

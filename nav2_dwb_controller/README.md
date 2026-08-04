@@ -56,3 +56,11 @@ command velocity.
 * **Oscillation** - Prevents the robot from just moving backwards and forwards.
 * **Twirling** - Prevents holonomic robots from spinning as they make their way to
   the goal.
+
+## 中文翻译
+
+# DWB Controller
+
+DWB 是基于动态窗口的局部控制器。它在当前速度和加速度限制形成的可行速度窗口内生成候选轨迹，再由多个 Critic 插件对轨迹评分，选择最优轨迹并输出速度命令。
+
+插件体系包括 Trajectory Generator 和 Critic 两类。Trajectory Generator 根据机器人运动模型生成轨迹；Critic 根据路径距离、目标距离、障碍物、旋转或速度等指标给轨迹打分。多个 Critic 的总分用于选择下一条控制命令，配置文件可以组合多个生成器和评分器。

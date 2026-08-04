@@ -36,3 +36,9 @@ nav2_system_tests/scripts/getopt_ctest_loop.bash -c 100 -o /home/robot/data/resu
 ## Future Work
  * Add additional goal poses if the first one successfully passes
  * Remove the dependency on the turtlebot3 model and map by adding a simple / dummy robot and creating a world and map
+
+## 中文翻译
+
+# Nav2 系统测试
+
+该目录包含完整导航系统的集成测试。运行 Launch 后会启动地图、定位、规划、控制和机器人仿真，并通过测试目标检查导航成功、反馈和终态。原文 Notes 记录了测试环境更新事项；未来工作包括减少对 TurtleBot3 模型和地图的依赖，改用简单虚拟机器人、世界和地图。

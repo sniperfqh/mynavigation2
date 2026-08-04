@@ -96,3 +96,11 @@ Then execute the benchmarking:
 
 - `ros2 launch ./smoother_benchmark_bringup.py` to launch the nav2 stack and path smoothers benchmarking
 - `python3 ./process_data.py` to take the metric files and process them into key results (and plots)
+
+## 中文翻译
+
+# 路径平滑器基准测试
+
+该实验在随机目标上比较路径规划器和平滑器。运行脚本前安装 transforms3d、seaborn 和 tabulate。在 nav2_params.yaml 中选择规划器，并按原文示例配置 simple_smoother 与 nav2_constrained_smoother 的插件和权重。
+
+基准测试可通过源码中的计时改动，把 Planner Server 和 Smoother Server 的耗时从其他系统动作中隔离出来；这部分改动只用于实验，不应直接作为生产补丁。运行 smoother_benchmark_bringup.py 启动栈和平滑器基准，再运行 process_data.py 处理指标并生成结果图。

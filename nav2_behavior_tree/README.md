@@ -64,3 +64,15 @@ The BehaviorTree engine has a run method that accepts an XML description of a BT
 See the code in the [BT Navigator](../nav2_bt_navigator/src/bt_navigator.cpp) for an example usage of the BehaviorTreeEngine.
 
 For more information about the behavior tree nodes that are available in the default BehaviorTreeCPP library, see documentation here: https://www.behaviortree.dev/docs/3.8/learn-the-basics/BT_basics
+
+## 中文翻译
+
+# nav2_behavior_tree
+
+该模块被 nav2_bt_navigator 使用，用于实现执行导航或自主系统行为树的 ROS 2 节点。核心行为树处理由 Behavior-Tree.CPP 库提供。
+
+本包提供三类能力：把 ROS 2 Action 和 Service 集成到行为树的 C++ 模板类；Nav2 专用行为树节点；以及简化行为树处理并方便集成到 ROS 2 导航或上层自主节点的 BehaviorTreeEngine。配置指南、默认树说明、可用 XML 节点和新建 BT 插件教程仍以原文链接为准。
+
+## bt_action_node 模板与行为树引擎
+
+bt_action_node.hpp 中的模板允许开发者通过派生 BtActionNode，把指定的 ROS 2 Action 消息类型接入行为树。新节点需要在 BehaviorTreeEngine 工厂中注册，注册后才能在行为树 XML 中使用。原文示例展示了 FollowPath 节点注册、ComputePathToPose 与 FollowPath 的顺序执行，以及 BehaviorTreeEngine::run 的黑板、XML、循环回调、取消回调和循环超时参数。

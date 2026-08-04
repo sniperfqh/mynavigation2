@@ -85,3 +85,13 @@ When in doubt, open-loop is a reasonable choice for most users.
 The minimum and maximum velocities for rotation (e.g. ``Vw``) represent left and right turns. While we make it possible to specify these separately, most users would be wise to set these values the same (but signed) for rotation. Additionally, the parameters are signed, so it is important to specify maximum deceleration with negative signs to represent deceleration. Minimum velocities with negatives when moving backward, so backward movement can be restricted by setting this to ``0``.
 
 Deadband velocities are minimum thresholds, below which we set its value to `0`. This can be useful when your robot's breaking torque from stand still is non-trivial so sending very small values will pull high amounts of current.
+
+## 中文翻译
+
+# Velocity Smoother
+
+nav2_velocity_smoother 是一个 Lifecycle Component 节点，用于平滑 Nav2 发给底盘控制器的速度。它通过速度、加速度和死区约束减少电机磨损以及局部规划器产生的突变加速度。
+
+该包支持差分、全向和部分 Ackermann 平台，输入 cmd_vel，输出 smoothed_cmd_vel。节点按定时器频率运行，可高于控制器频率以插值速度。OPEN_LOOP 假定机器人实现了上一条平滑命令，CLOSED_LOOP 则读取里程计估计实际速度。
+
+参数包括平滑频率、比例缩放、反馈模式、最大／最小速度、死区、超时、最大加减速度和里程计窗口。速度超时后会发布零速度。低频或高延迟里程计适合 OPEN_LOOP；高频里程计可使用 CLOSED_LOOP，但平滑频率不应超过里程计频率。旋转速度上下限应使用带符号的成对值，减速度为负数；死区用于过滤低于静摩擦阈值的微小命令。

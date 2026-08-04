@@ -29,3 +29,9 @@ See the [Navigation Plugin list](https://navigation.ros.org/plugins/index.html) 
 更多参数说明见其 [配置指南](https://navigation.ros.org/configuration/packages/configuring-behavior-server.html)，关于如何编写行为的教程见 [行为插件编写教程](https://navigation.ros.org/plugin_tutorials/docs/writing_new_behavior_plugin.html)。
 
 当前已知和可用的规划器插件列表见 [Navigation Plugin 列表](https://navigation.ros.org/plugins/index.html)。
+
+## 中文翻译
+
+# Behaviors／行为
+
+该包提供 Nav2 行为插件，例如旋转、等待、前进、后退和清理等恢复或辅助动作。行为由 Behavior Server 通过 Pluginlib 加载，并在 Lifecycle 生命周期中完成配置、激活、停用和清理。具体行为插件负责自己的 Action 处理、周期更新、速度命令和碰撞检查；服务器负责共享 TF、Costmap、足迹和 Action 编排。

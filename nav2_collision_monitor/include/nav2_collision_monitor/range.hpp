@@ -29,6 +29,8 @@ namespace nav2_collision_monitor
 
 /**
  * @brief Implementation for IR/ultrasound range sensor source
+ * 中文：Range 适配器把单个距离读数按 field_of_view 离散成一段圆弧上的多个二维障碍点。
+ * 中文：它适合红外或超声波传感器，障碍点密度由 obstacles_angle 控制。
  */
 class Range : public Source
 {
@@ -62,6 +64,7 @@ public:
   /**
    * @brief Data source configuration routine. Obtains ROS-parameters
    * and creates range sensor subscriber.
+   * 中文：读取 Topic 和角度采样间隔，并按传感器 QoS 创建 Range 订阅器。
    */
   void configure();
 
@@ -70,6 +73,7 @@ public:
    * @param curr_time Current node time for data interpolation
    * @param data Array where the data from source to be added.
    * Added data is transformed to base_frame_id_ coordinate system at curr_time.
+   * 中文：先验证距离位于消息声明的最小／最大量程内，再把视场两端和中间采样点变换到 base frame。
    */
   void getData(
     const rclcpp::Time & curr_time,

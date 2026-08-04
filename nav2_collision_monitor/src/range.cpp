@@ -23,6 +23,7 @@
 namespace nav2_collision_monitor
 {
 
+// 中文：Range 源把一个扇形距离读数离散为障碍弧线，供没有完整 LaserScan 的传感器使用。
 Range::Range(
   const nav2_util::LifecycleNode::WeakPtr & node,
   const std::string & source_name,
@@ -37,17 +38,20 @@ Range::Range(
     transform_tolerance, source_timeout, base_shift_correction),
   data_(nullptr)
 {
+  // 中文：首帧数据为空时，getData() 不会虚构障碍点。
   RCLCPP_INFO(logger_, "[%s]: Creating Range", source_name_.c_str());
 }
 
 Range::~Range()
 {
+  // 中文：订阅器由析构阶段显式释放，避免测试或 Lifecycle 清理时残留回调。
   RCLCPP_INFO(logger_, "[%s]: Destroying Range", source_name_.c_str());
   data_sub_.reset();
 }
 
 void Range::configure()
 {
+  // 中文：读取公共 Topic、enabled 和 Range 专属 obstacles_angle，然后创建传感器订阅器。
   Source::configure();
   auto node = node_.lock();
   if (!node) {
@@ -68,6 +72,7 @@ void Range::getData(
   const rclcpp::Time & curr_time,
   std::vector<Point> & data) const
 {
+  // 中文：一个 Range 消息代表一条圆弧，不是单个点；本函数负责有效性、TF 和弧线采样。
   // Ignore data from the source if it is not being published yet or
   // not being published for a long time
   if (data_ == nullptr) {
@@ -78,6 +83,7 @@ void Range::getData(
   }
 
   // Ignore data, if its range is out of scope of range sensor abilities
+  // 中文：超出传感器声明能力的值可能代表无回波或错误量测，不能作为碰撞点使用。
   if (data_->range < data_->min_range || data_->range > data_->max_range) {
     RCLCPP_DEBUG(
       logger_,
@@ -88,6 +94,7 @@ void Range::getData(
 
   tf2::Transform tf_transform;
   if (base_shift_correction_) {
+    // 中文：时间对齐模式同时考虑消息时间和当前机器人位姿，减少传感器延迟造成的空间偏差。
     // Obtaining the transform to get data from source frame and time where it was received
     // to the base frame and current time
     if (
@@ -99,6 +106,7 @@ void Range::getData(
       return;
     }
   } else {
+    // 中文：快速模式忽略消息时间差，仅使用当前 source 到 base 的 TF。
     // Obtaining the transform to get data from source frame to base frame without time shift
     // considered. Less accurate but much more faster option not dependent on state estimation
     // frames.
@@ -112,6 +120,7 @@ void Range::getData(
   }
 
   // Calculate poses and refill data array
+  // 中文：从 -FoV/2 采样到 +FoV/2；循环后再显式追加终点，避免浮点累加漏掉边界。
   float angle;
   for (
     angle = -data_->field_of_view / 2;
@@ -145,6 +154,7 @@ void Range::getData(
 
 void Range::getParameters(std::string & source_topic)
 {
+  // 中文：obstacles_angle 越小，生成的点越密，碰撞覆盖更细但每帧计算量更大。
   auto node = node_.lock();
   if (!node) {
     throw std::runtime_error{"Failed to lock node"};
@@ -159,6 +169,7 @@ void Range::getParameters(std::string & source_topic)
 
 void Range::dataCallback(sensor_msgs::msg::Range::ConstSharedPtr msg)
 {
+  // 中文：只保留最新 Range 快照，转换和超时判定由 getData() 在统一时间基准下执行。
   data_ = msg;
 }
 

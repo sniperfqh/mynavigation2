@@ -427,3 +427,29 @@ A special condition of this when a routing or rerouting request is made up of on
 This is an application problem which can be addressed above but may have other creative solutions for your application. It is on you as an application developer to determine if this is a problem for you and what the most appropriate solution is, since different applications will have different levels of flexibility of deviating from the route or extremely strict route interpretations.
 
 Note that there are parameters like `prune_route`, `min_prune_distance_from_start` and `min_prune_distance_from_goal` which impact the pruning behavior while tracking a route using poses. There is also the option to request routes using NodeIDs instead of poses, which obviously would never have this issue since they are definitionally on the route graph at all times. That bypasses the entire issue if the goal(s) are always known to be on the graph.
+
+## 中文翻译
+
+# Nav2 Route Server
+
+Route Server 用预先定义的 Navigation Route Graph 补充 Planner Server 的自由空间规划。路线图可以手工生成，也可以通过 AI、几何或概率方法生成；服务器使用基于搜索的最优算法在图中寻找有效路线，并通过插件化 Edge Scorer 根据距离、时间、Costmap、语义和应用自定义信息计算边代价。
+
+路线图还可以携带速度限制、附加代价和待执行操作等任意元数据。Edge Scorer 与 Operations 插件读取这些元数据，动态改变路线、速度或行为；插件也可以从 Topic、Service 和 Action 获取外部信息。Route Server 能在跟踪过程中监控路线，在进入或离开边、到达节点时执行自定义操作，并支持重规划和事件触发。
+
+## 实用架构与设计
+
+可用架构包括：Route Server 直接连接控制器；通过 Behavior Tree 把路线规划、跟踪和恢复组合起来；由上层调度器通过 Action、Service 和事件驱动 Route Server。具体选择取决于任务和环境。包内部把 ROS 2 接口、图搜索算法、评分工厂、路线进度跟踪、操作工厂、文件解析和请求意图提取拆成独立对象，便于理解、单元测试和替换。Plugin 接口集中在文件加载、边评分和操作管理位置。
+
+## 评分器与操作插件
+
+CostmapScorer 按边上的最大或平均 Costmap 代价评分；DistanceScorer 按边长度和图中的百分比限速评分；DynamicEdgesScorer 通过外部 Service 动态提高代价、关闭边或重新开放边；TimeScorer 按速度限制和历史通行时间估算穿越时间；PenaltyScorer 读取图文件中的固定惩罚；SemanticScorer 按边的语义标签评分。
+
+StartPoseOrientationScorer 和 GoalPoseOrientationScorer 分别约束路线起点和终点方向。AdjustSpeedLimit 在进入新边时发布速度限制；CollisionMonitor 检查前方路线是否可能碰撞并阻塞边；ReroutingService 触发重新规划；TimeMarker、TriggerEvent 和其他 Operation 插件负责时间记录、事件触发及应用业务操作。
+
+## 性能、参数和 ROS 接口
+
+性能基准使用不同规模的路线图和随机起终点进行大量实验，用于估计搜索时间、节点数和边数对性能的影响。Route Server 的图搜索通常能在大规模图上提供可接受延迟，具体结果以 test/performance_benchmarking.cpp 为准。参数章节包括图文件、评分器、操作、跟踪频率、重规划、剪枝、服务和调试发布配置；ROS 接口包括计算路线、跟踪路线、重新规划、路由图发布、状态反馈和操作 Service。
+
+## 文件格式与使用边界
+
+路线图文件包含节点、边、元数据和坐标信息。元数据可以存储限速、语义类别、业务优先级和自定义操作参数。使用 Pose 请求路线时，prune_route、min_prune_distance_from_start 和 min_prune_distance_from_goal 会影响跟踪时剪枝；如果用 NodeID 请求，起终点按定义始终位于图上，可以绕开 Pose 不在路线图上的问题。

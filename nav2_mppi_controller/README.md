@@ -322,3 +322,23 @@ Thus, care should be taken to select weights of the obstacle critic in conjuncti
 As you increase or decrease your weights on the Obstacle, you may notice the aforementioned behaviors (e.g. won't overcome free to non-free threshold). To overcome them, increase the FollowPath critic cost to increase the desire for the trajectory planner to continue moving towards the goal. Make sure to not overshoot this though, keep them balanced. A desirable outcome is smooth motion roughly in the center of spaces without significant close interactions with obstacles. It shouldn't be perfectly following a path yet nor should the output velocity be wobbling jaggedly.
 
 Once you have your obstacle avoidance behavior tuned and matched with an appropriate path following penalty, tune the Path Align critic to align with the path. If you design exact-path-alignment behavior, its possible to skip the obstacle critic step as highly tuning the system to follow the path will give it less ability to deviate to avoid obstacles (though it'll slow and stop). Tuning the critic weight for the Obstacle critic high will do the job to avoid near-collisions but the repulsion weight is largely unnecessary to you. For others wanting more dynamic behavior, it _can_ be beneficial to slowly lower the weight on the obstacle critic to give the path alignment critic some more room to work. If your path was generated with a cost-aware planner (like all provided by Nav2) and providing paths sufficiently far from obstacles for your satisfaction, the impact of a slightly reduced Obstacle critic with a Path Alignment critic will do you well. Not over-weighting the path align critic will allow the robot to  deviate from the path to get around dynamic obstacles in the scene or other obstacles not previous considered during path planning. It is subjective as to the best behavior for your application, but it has been shown that MPPI can be an exact path tracker and/or avoid dynamic obstacles very fluidly and everywhere in between. The defaults provided are in the generally right regime for a balanced initial trade-off. 
+
+## 中文翻译
+
+# Model Predictive Path Integral Controller
+
+MPPI 是一种模型预测控制局部规划器，用于跟踪路径并主动避障。它实现 nav2_core::Controller，可作为 controller_server 的局部轨迹插件；在普通 Intel 处理器上可达到 50 Hz 以上，支持差分、全向和 Ackermann 机器人。
+
+## MPPI 算法
+
+算法从上一时刻的最优控制和当前机器人状态出发，从高斯分布采样控制扰动，把扰动后的控制输入在运动模型中前向仿真为一批轨迹。随后通过插件化 Critic 对每条轨迹评分，使用 softmax 权重更新控制序列，重复多轮迭代直到得到收敛解；当前解成为下一控制周期的初始控制。
+
+## 配置与 Critic
+
+配置覆盖轨迹可视化器、路径裁剪和处理器、Ackermann 运动模型、约束检查、目标角度、目标距离、障碍物、Costmap、路径对齐、路径角度、路径跟随、优先前进、旋转和速度死区等 Critic。每个 Critic 的权重、阈值和开关共同决定控制行为；XML 示例展示如何在 controller_server 中声明插件和参数。Topics 章节列出速度输出、轨迹调试和反馈 Topic。
+
+## 调参注意事项
+
+model_dt 通常应等于控制周期，例如 20 Hz 使用 0.05 秒；visualize 会额外计算轨迹，只适合调试。开始调参时先匹配 vx_max、vx_min、wz_max、vy_max 和 motion_model，再按最大速度、预测时域和路径裁剪距离设置 Costmap 尺寸。
+
+预测距离不能超出局部 Costmap 可提供的空间，否则机器人会被地图边界人为限速。Path Follow 和 Path Align 的 offset 也必须落在地图和预测时域允许的范围内。Obstacle Critic 的 repulsion_weight 要和 Inflation Layer 的半径、缩放因子共同调节：权重过高会使机器人在窄道抖动或拒绝进入低代价区域，权重过低则可能贴近障碍。通常先得到平滑的避障行为，再逐步增加 Path Align 权重；不要把路径对齐权重调得过高，否则机器人无法绕开动态障碍。

@@ -28,6 +28,7 @@ namespace nav2_collision_monitor
  * @brief Circle shape implementaiton.
  * For STOP/SLOWDOWN model it represents zone around the robot
  * while for APPROACH model it represents robot footprint.
+ * 中文：圆形区域通过半径平方直接判断点是否在内，避免多边形射线算法，适合高频 APPROACH 监控。
  */
 class Circle : public Polygon
 {
@@ -55,6 +56,7 @@ public:
    * @brief Gets polygon points, approximated to the circle.
    * To be used in visualization purposes.
    * @param poly Output polygon points (vertices)
+   * 中文：仅为 RViz 发布生成固定 16 边近似圆；实际碰撞统计仍使用精确半径平方判断。
    */
   void getPolygon(std::vector<Point> & poly) const override;
 
@@ -63,6 +65,7 @@ public:
    * @param points Input array of points to be checked
    * @return Number of points inside circle. If there are no points,
    * returns zero value.
+   * 中文：使用 x²+y² 与预缓存 radius_squared_ 比较，不需要开平方。
    */
   int getPointsInside(const std::vector<Point> & points) const override;
 
@@ -79,8 +82,10 @@ protected:
   // ----- Variables -----
 
   /// @brief Radius of the circle
+  // 中文：圆形安全区或圆形机器人 Footprint 的半径，单位为米。
   double radius_;
   /// @brief (radius * radius) value. Stored for optimization.
+  // 中文：预先缓存半径平方，避免每帧、每点重复计算。
   double radius_squared_;
 };  // class Circle
 

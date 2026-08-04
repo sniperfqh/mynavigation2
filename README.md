@@ -1011,3 +1011,13 @@ ros2 launch nav2_regulated_modules regulated_modules.launch.py \
 ```
 
 设备必须属于当前交互式终端并具有读取权限。节点退出时会恢复原终端属性。
+
+## 中文翻译
+
+# mynavigation2 项目说明
+
+本项目是当前工作区中的 Nav2 源码和机器人应用集合。README 前面的章节说明标准 BT 导航入口、导航数据流、节点链路、控制器选择、启动后检查以及通过 NavigateToPose 和 NavigateThroughPoses Action 发送目标。
+
+nav2_regulated_modules 提供 remote、autonomous 和 fixed_path 三种互斥运行模式。remote 只启动键盘遥控并向底盘输出速度；autonomous 运行标准规划、控制、平滑和速度限制链；fixed_path 通过 FollowFixedPath Action 接收完整路径，并复用 Nav2 Controller Server 执行。每种模式的 Launch 参数、输入 Topic、输出 Topic、前提条件和停止方式在原文对应章节中列出。
+
+贡献流程包括 Fork、克隆个人仓库、添加上游远端、创建开发分支、修改和验证、提交、推送以及创建 Pull Request。导航系统的安全边界是保持单一最终速度发布者、切换时先停止旧任务、校验 Path 和 TF，并在设备退出时恢复终端属性。原文代码、命令、参数和接口名称保持不变。

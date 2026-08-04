@@ -97,6 +97,20 @@ We isolated the A\*, costmap downsampler, smoother, and Node template objects fr
 See inline description of parameters in the `SmacPlanner`. This includes comments as specific parameters apply to `SmacPlanner2D` and `SmacPlanner` in place.
 
 ```
+
+## 中文翻译
+
+# Smac Planner
+
+Smac Planner 提供基于栅格的高性能全局规划器，包含 Smac 2D、Hybrid-A* 和 State Lattice 三类搜索。它支持任意角度代价搜索、车辆运动学约束、倒车、最小转弯半径、解析扩展、未知空间策略和可选路径平滑，并通过 nav2_core::GlobalPlanner 接入 Planner Server。
+
+## 设计与特性
+
+Smac 2D 适合二维栅格和任意角度搜索；Hybrid-A* 在搜索状态中携带朝向和运动模型，适合汽车式机器人；State Lattice 使用预计算运动原语表达可执行轨迹。代价函数综合障碍物代价、转向惩罚、倒车惩罚、方向变化和启发式距离。解析扩展可在接近目标时尝试 Dubins 或 Reeds-Shepp 曲线，以减少搜索时间并改善终点质量。
+
+## 参数、指标与调参
+
+参数包括 Costmap 代价、角度离散数量、最小转弯半径、运动模型、倒车、未知空间、最大迭代、解析扩展、平滑和容差。Metrics 用于记录规划时间、扩展节点、路径长度和代价。提高 Costmap 分辨率会改善几何质量，但会增加搜索规模和查询时间。潜势场和惩罚权重应按机器人尺寸、地图分辨率、倒车需求和期望路径质量调节；如果有效目标规划很慢，应检查膨胀半径、代价阈值、解析扩展和搜索空间是否过大。
 planner_server:
   ros__parameters:
     planner_plugins: ["GridBased"]

@@ -248,3 +248,11 @@ $ ros2 service call /map_saver/save_map nav2_msgs/srv/SaveMap "{map_topic: map, 
 以上为 `nav2_map_server/README.md` 的中文翻译。
 
 Similar code found with 1 license type
+
+## 中文翻译
+
+# Map Server
+
+Map Server 负责从 YAML 和图像文件加载 OccupancyGrid 地图，并通过 Map 服务和地图 Topic 提供给 Nav2。Map Saver 负责把当前地图保存为图像与 YAML。架构部分说明节点、MapIO 库、地图消息和文件格式之间的关系。
+
+CLI 用法包括启动 map_server、设置 map_server_params.yaml 或 combined_params.yaml，以及使用 map_saver 保存地图。当前支持的地图格式、图像编码、占用阈值、服务接口和参数含义按原文章节说明。README 中已有的中文翻译段落继续保留，本节补齐其英文部分的对应说明。

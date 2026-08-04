@@ -41,6 +41,8 @@
 
 using namespace std::chrono_literals;
 
+// 中文：本文件用真实 ROS Topic、TF 广播和传感器消息验证三类 Source 的统一输出契约。
+// 中文：测试同时覆盖时间过期、TF 不可用、量程／高度过滤以及 base_shift_correction 两种模式。
 static constexpr double EPSILON = std::numeric_limits<float>::epsilon();
 
 static const char BASE_FRAME_ID[]{"base_link"};
@@ -58,6 +60,7 @@ static const rclcpp::Duration DATA_TIMEOUT{rclcpp::Duration::from_seconds(5.0)};
 class TestNode : public nav2_util::LifecycleNode
 {
 public:
+  // 中文：测试节点负责发布 LaserScan、PointCloud2 和 Range 样例消息。
   TestNode()
   : nav2_util::LifecycleNode("test_node")
   {
@@ -72,6 +75,7 @@ public:
 
   void publishScan(const rclcpp::Time & stamp, const double range)
   {
+    // 中文：发布四条互相垂直、量程相同的射线，便于验证角度和 TF 平移。
     scan_pub_ = this->create_publisher<sensor_msgs::msg::LaserScan>(
       SCAN_TOPIC, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
 
@@ -96,6 +100,7 @@ public:
 
   void publishPointCloud(const rclcpp::Time & stamp)
   {
+    // 中文：构造两个高度有效点和一个超高点，用于验证高度窗口过滤。
     pointcloud_pub_ = this->create_publisher<sensor_msgs::msg::PointCloud2>(
       POINTCLOUD_TOPIC, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
 
@@ -138,6 +143,7 @@ public:
 
   void publishRange(const rclcpp::Time & stamp, const double range)
   {
+    // 中文：发布带视场角的单次 Range 量测，Source 应把它离散为一段弧线。
     range_pub_ = this->create_publisher<sensor_msgs::msg::Range>(
       RANGE_TOPIC, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
 
@@ -181,6 +187,7 @@ public:
 
   bool dataReceived() const
   {
+    // 中文：测试只需观察基类保护成员 data_ 是否已经收到消息。
     return data_ != nullptr;
   }
 };  // ScanWrapper
@@ -204,6 +211,7 @@ public:
 
   bool dataReceived() const
   {
+    // 中文：确认 PointCloud2 回调先收到消息，后续 getData() 再执行 TF 和高度裁剪。
     return data_ != nullptr;
   }
 };  // PointCloudWrapper
@@ -227,6 +235,7 @@ public:
 
   bool dataReceived() const
   {
+    // 中文：确认 Range 最新消息已进入 Source 快照。
     return data_ != nullptr;
   }
 };  // RangeWrapper
@@ -264,6 +273,7 @@ private:
 
 Tester::Tester()
 {
+  // 中文：建立测试节点、独立 TF 缓存和监听器，模拟生产环境的数据接收链。
   test_node_ = std::make_shared<TestNode>();
 
   tf_buffer_ = std::make_shared<tf2_ros::Buffer>(test_node_->get_clock());
@@ -273,6 +283,7 @@ Tester::Tester()
 
 Tester::~Tester()
 {
+  // 中文：先销毁 Source，再释放测试节点和 TF 资源，保证订阅回调不访问悬空对象。
   scan_.reset();
   pointcloud_.reset();
   range_.reset();
@@ -285,6 +296,7 @@ Tester::~Tester()
 
 void Tester::createSources(const bool base_shift_correction)
 {
+  // 中文：按生产参数命名空间创建 Scan、PointCloud、Range 三种实现，并统一配置 Topic 与窗口。
   // Create Scan object
   test_node_->declare_parameter(
     std::string(SCAN_NAME) + ".topic", rclcpp::ParameterValue(SCAN_TOPIC));
@@ -335,6 +347,7 @@ void Tester::createSources(const bool base_shift_correction)
 
 void Tester::sendTransforms(const rclcpp::Time & stamp)
 {
+  // 中文：广播 global->base 和 base->source 两段 TF，验证 Source 能沿 TF 链完成坐标转换。
   std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster =
     std::make_shared<tf2_ros::TransformBroadcaster>(test_node_);
 
@@ -367,6 +380,7 @@ void Tester::sendTransforms(const rclcpp::Time & stamp)
 
 bool Tester::waitScan(const std::chrono::nanoseconds & timeout)
 {
+  // 中文：在有限超时内泵送测试节点回调，等待 Scan 订阅器收到首帧。
   rclcpp::Time start_time = test_node_->now();
   while (rclcpp::ok() && test_node_->now() - start_time <= rclcpp::Duration(timeout)) {
     if (scan_->dataReceived()) {
@@ -380,6 +394,7 @@ bool Tester::waitScan(const std::chrono::nanoseconds & timeout)
 
 bool Tester::waitPointCloud(const std::chrono::nanoseconds & timeout)
 {
+  // 中文：等待 PointCloud2 首帧到达，避免测试在异步订阅尚未执行时读取空数据。
   rclcpp::Time start_time = test_node_->now();
   while (rclcpp::ok() && test_node_->now() - start_time <= rclcpp::Duration(timeout)) {
     if (pointcloud_->dataReceived()) {
@@ -393,6 +408,7 @@ bool Tester::waitPointCloud(const std::chrono::nanoseconds & timeout)
 
 bool Tester::waitRange(const std::chrono::nanoseconds & timeout)
 {
+  // 中文：等待 Range 首帧到达。
   rclcpp::Time start_time = test_node_->now();
   while (rclcpp::ok() && test_node_->now() - start_time <= rclcpp::Duration(timeout)) {
     if (range_->dataReceived()) {
@@ -406,6 +422,7 @@ bool Tester::waitRange(const std::chrono::nanoseconds & timeout)
 
 void Tester::checkScan(const std::vector<nav2_collision_monitor::Point> & data)
 {
+  // 中文：验证四条射线经 source->base 平移后的位置，确保角度增量和 TF 方向正确。
   ASSERT_EQ(data.size(), 4u);
 
   // Point 0: (1.0 + 0.1, 0.0 + 0.1)
@@ -427,6 +444,7 @@ void Tester::checkScan(const std::vector<nav2_collision_monitor::Point> & data)
 
 void Tester::checkPointCloud(const std::vector<nav2_collision_monitor::Point> & data)
 {
+  // 中文：只应留下高度窗口内的两个点，并检查它们的二维坐标。
   ASSERT_EQ(data.size(), 2u);
 
   // Point 0: (0.5 + 0.1, 0.5 + 0.1)
@@ -442,6 +460,7 @@ void Tester::checkPointCloud(const std::vector<nav2_collision_monitor::Point> & 
 
 void Tester::checkRange(const std::vector<nav2_collision_monitor::Point> & data)
 {
+  // 中文：验证弧线中间采样和明确补入的 +FoV/2 端点，避免浮点累加遗漏边界。
   ASSERT_EQ(data.size(), 21u);
 
   const double angle_increment = M_PI / 199;
@@ -460,6 +479,7 @@ void Tester::checkRange(const std::vector<nav2_collision_monitor::Point> & data)
 
 TEST_F(Tester, testGetData)
 {
+  // 中文：正常链路测试：三类 Source 均收到有效消息并输出正确的 base frame 点集。
   rclcpp::Time curr_time = test_node_->now();
 
   createSources();
@@ -494,6 +514,7 @@ TEST_F(Tester, testGetData)
 
 TEST_F(Tester, testGetOutdatedData)
 {
+  // 中文：过期数据测试：消息时间超过 DATA_TIMEOUT 时，三类 Source 都必须拒绝输出。
   rclcpp::Time curr_time = test_node_->now();
 
   createSources();
@@ -526,6 +547,7 @@ TEST_F(Tester, testGetOutdatedData)
 
 TEST_F(Tester, testIncorrectFrameData)
 {
+  // 中文：TF 时间不匹配测试：只有旧 TF 时，Source 应安全返回空数据而不是使用错误坐标。
   rclcpp::Time curr_time = test_node_->now();
 
   createSources();
@@ -559,6 +581,7 @@ TEST_F(Tester, testIncorrectFrameData)
 
 TEST_F(Tester, testIncorrectData)
 {
+  // 中文：传感器量程过滤测试：超出 LaserScan／Range 能力范围的数据被忽略。
   rclcpp::Time curr_time = test_node_->now();
 
   createSources();
@@ -586,6 +609,7 @@ TEST_F(Tester, testIncorrectData)
 
 TEST_F(Tester, testIgnoreTimeShift)
 {
+  // 中文：快速模式测试：关闭 base_shift_correction 后，即使 TF 时间较旧也使用当前 source->base 变换。
   rclcpp::Time curr_time = test_node_->now();
 
   createSources(false);

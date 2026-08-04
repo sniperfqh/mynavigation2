@@ -239,3 +239,21 @@ https://navigation.ros.org/configuration/packages/configuring-regulated-pp.html
 - 若要获得普通纯追踪行为：将所有布尔参数设为 false，并调整 `lookahead_dist`。
 - 目前没有“旋转到目标朝向”的完整行为，期望路径接近方向即为目标朝向，或通过宽松的 `min_theta_velocity_threshold` 让到达后进行微调。旋转到目标朝向的实现正在开发中。
 - 前视距离选择高度依赖机器人尺寸、响应性、控制器更新率和速度。请为你的平台调参；`regulated` 特性能降低大量调参难度。若出现抖动，可增大前视距离或缩放；若收敛太慢则减小前视距离。
+
+## 中文翻译
+
+# Nav2 受控纯追踪控制器
+
+这是一个用于跟踪路径的局部轨迹控制器。它在普通 Pure Pursuit 上增加碰撞和线速度调节，并根据当前速度调整 lookahead 距离，支持差分、步态、Ackermann 和有限能力的全向机器人。
+
+## 纯追踪基础
+
+控制器在机器人前方路径上选择 lookahead 点，根据机器人坐标系中的目标点计算曲率，再把曲率转换为线速度和角速度。全局路径持续裁剪到最近点，局部 Costmap 范围内的路径变换到机器人坐标系后用于跟踪。Pure Pursuit 本身不处理动态障碍，因此应配合能生成运动学可行路径的规划器。
+
+## 受控特性
+
+控制器根据曲率和障碍物距离降低线速度，减少急转弯过冲和窄道碰撞风险；使用最大允许碰撞时间向前预测当前速度下的 Footprint，并在 lookahead_arc 上发布预测弧。Adaptive Pure Pursuit 按速度缩放 lookahead，接近目标时根据 lookahead 误差减速。Humble 版本起，碰撞预测时间还会被 lookahead 点距离限制，避免预测超过机器人计划运动范围。
+
+## 配置、话题与调参
+
+配置包括 lookahead 距离、速度缩放、曲率限制、Costmap 碰撞检查、目标减速、旋转行为和运动学参数。lookahead_arc 既是碰撞检查边界，也可以作为速度指示器。若希望使用 Adaptive Pure Pursuit，只启用速度缩放 lookahead 并调节 lookahead_time、min_lookahead_dist 和 max_lookahead_dist；若希望使用普通 Pure Pursuit，则主要调节 lookahead_dist。前视距离应结合机器人尺寸、响应性、控制频率和速度选择；出现抖动时增大前视距离，跟踪收敛过慢时减小前视距离。

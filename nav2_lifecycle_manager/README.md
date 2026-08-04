@@ -16,3 +16,11 @@ The diagram below shows an _example_ of a list of managed nodes, and how it inte
 The UML diagram below shows the sequence of service calls once the _startup_ is requested from the lifecycle manager.
 
 <img src="./doc/uml_lifecycle_manager.JPG" title="Lifecycle manager UML diagram" width="100%" align="middle">
+
+## 中文翻译
+
+# Lifecycle Manager
+
+Lifecycle Manager 用于集中管理多个 ROS 2 Lifecycle 节点。它按配置顺序调用节点的 configure、activate、deactivate、cleanup、shutdown 和 reset 状态转换，并处理超时、失败和依赖顺序。
+
+该包把节点生命周期编排与具体导航算法分开：地图、定位、规划、控制和恢复服务器只需实现标准 Lifecycle 接口，Lifecycle Manager 通过服务客户端驱动它们，并可在某个节点失败时停止或回收整组导航节点。README 中的 UML 图展示了管理器、受管节点和状态转换的关系。

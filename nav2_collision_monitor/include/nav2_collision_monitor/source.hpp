@@ -33,6 +33,8 @@ namespace nav2_collision_monitor
 
 /**
  * @brief Basic data source class
+ * 中文：所有传感器输入的抽象基类，统一负责参数命名、TF 资源、时间有效性和运行期开关。
+ * 中文：派生类只负责订阅具体消息并把数据转换成 base_frame_id_ 下的二维 Point 列表。
  */
 class Source
 {
@@ -48,6 +50,8 @@ public:
    * @param source_timeout Maximum time interval in which data is considered valid
    * @param base_shift_correction Whether to correct source data towards to base frame movement,
    * considering the difference between current time and latest source time
+   * 中文：开启后查询 source 时间到当前 base 时间的插值 TF，补偿机器人在传感器延迟期间的位移；
+   * 中文：关闭后只查询当前 source 到 base 的变换，速度更快但忽略时间偏移。
    */
   Source(
     const nav2_util::LifecycleNode::WeakPtr & node,
@@ -69,6 +73,7 @@ public:
    * @param curr_time Current node time for data interpolation
    * @param data Array where the data from source to be added.
    * Added data is transformed to base_frame_id_ coordinate system at curr_time.
+   * 中文：派生类不得清空调用方已有数据，只应把本源有效点追加到 data，便于多个 Source 合并。
    */
   virtual void getData(
     const rclcpp::Time & curr_time,
@@ -84,12 +89,14 @@ protected:
   /**
    * @brief Source configuration routine.
    * @return True in case of everything is configured correctly, or false otherwise
+   * 中文：注册 enabled 动态参数回调；具体 Topic 与传感器参数由派生类在此之后读取。
    */
   bool configure();
 
   /**
    * @brief Supporting routine obtaining ROS-parameters common for all data sources
    * @param source_topic Output name of source subscription topic
+   * 中文：读取 `<source_name>.topic` 和 `<source_name>.enabled`，其中未配置 Topic 默认使用 scan。
    */
   void getCommonParameters(std::string & source_topic);
 
@@ -98,6 +105,7 @@ protected:
    * @param source_time Timestamp of latest obtained data
    * @param curr_time Current node time for source verification
    * @return True if data source is valid, otherwise false
+   * 中文：用当前时刻减去消息时间与 source_timeout_ 比较，过期数据直接丢弃，避免旧障碍物触发安全动作。
    */
   bool sourceValid(
     const rclcpp::Time & source_time,
@@ -138,6 +146,7 @@ protected:
   /// considering the difference between current time and latest source time
   bool base_shift_correction_;
   /// @brief Whether source is enabled
+  // 中文：该值可通过 ROS 参数动态切换，禁用时 CollisionMonitor 不调用该源的 getData()。
   bool enabled_;
 };  // class Source
 

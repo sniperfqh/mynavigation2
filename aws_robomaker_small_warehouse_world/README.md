@@ -116,3 +116,11 @@ roslaunch aws_robomaker_small_warehouse_world view_small_warehouse.launch
 ## Notes
 - Lighting might vary on different system(s) (e.g brighter on system without CPU and darker on system with GPU)
 - Adjust lighting parameters in .world file as you need
+
+## 中文翻译
+
+# AWS RoboMaker 小型仓库世界
+
+这是一个用于 Gazebo 的 AWS RoboMaker 小型仓库场景，适合构建和测试仓储、物流机器人应用。文档中的图片展示了 Gazebo 和 GzWeb 中的场景效果，模型表列出了仓库中可用的货架、箱体、桌子、地面、垃圾桶、灯具和托盘车等模型。
+
+在 ROS 应用中使用时，需要在工作空间维护 .rosinstall，执行 rosws update 获取世界包，在 Launch 文件中包含 small_warehouse.launch，并通过 rosdep install 和 colcon build 安装依赖、编译应用。直接运行 Gazebo 时设置 GAZEBO_MODEL_PATH 后启动 small_warehouse.world；无界面运行使用 gzserver，GzWeb 在另一个终端提供可视化界面。光照效果可能随硬件变化，可按需要调整 world 文件中的光照参数。
