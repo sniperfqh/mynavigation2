@@ -90,35 +90,30 @@ enum ActionType
 class CollisionMonitorWrapper : public nav2_collision_monitor::CollisionMonitor
 {
 public:
-  void start()
-  {
+  void start() {
     // 中文：直接调用 Lifecycle 回调，模拟 Lifecycle Manager 的 configure -> activate 流程。
     ASSERT_EQ(on_configure(get_current_state()), nav2_util::CallbackReturn::SUCCESS);
     ASSERT_EQ(on_activate(get_current_state()), nav2_util::CallbackReturn::SUCCESS);
   }
 
-  void stop()
-  {
+  void stop() {
     // 中文：按 deactivate -> cleanup -> shutdown 顺序收口测试节点资源。
     ASSERT_EQ(on_deactivate(get_current_state()), nav2_util::CallbackReturn::SUCCESS);
     ASSERT_EQ(on_cleanup(get_current_state()), nav2_util::CallbackReturn::SUCCESS);
     ASSERT_EQ(on_shutdown(get_current_state()), nav2_util::CallbackReturn::SUCCESS);
   }
 
-  void configure()
-  {
+  void configure() {
     // 中文：只配置不激活，用于验证非 active 状态不会发布输出速度。
     ASSERT_EQ(on_configure(get_current_state()), nav2_util::CallbackReturn::SUCCESS);
   }
 
-  void cant_configure()
-  {
+  void cant_configure() {
     // 中文：断言非法参数集合会使 configure 返回 FAILURE。
     ASSERT_EQ(on_configure(get_current_state()), nav2_util::CallbackReturn::FAILURE);
   }
 
-  bool correctDataReceived(const double expected_dist, const rclcpp::Time & stamp)
-  {
+  bool correctDataReceived(const double expected_dist, const rclcpp::Time & stamp) {
     // 中文：从各 Source 读取已变换点，检查至少一路数据的首点距离符合传感器输入。
     for (std::shared_ptr<nav2_collision_monitor::Source> source : sources_) {
       std::vector<nav2_collision_monitor::Point> collision_points;
@@ -142,13 +137,9 @@ public:
 
   // Configuring
   void setCommonParameters();
-  void addPolygon(
-    const std::string & polygon_name, const PolygonType type,
-    const double size, const std::string & at);
+  void addPolygon(const std::string & polygon_name, const PolygonType type, const double size, const std::string & at);
   void addSource(const std::string & source_name, const SourceType type);
-  void setVectors(
-    const std::vector<std::string> & polygons,
-    const std::vector<std::string> & sources);
+  void setVectors(const std::vector<std::string> & polygons, const std::vector<std::string> & sources);
 
   // Setting TF chains
   void sendTransforms(const rclcpp::Time & stamp);
@@ -161,14 +152,9 @@ public:
   void publishPointCloud(const double dist, const rclcpp::Time & stamp);
   void publishRange(const double dist, const rclcpp::Time & stamp);
   void publishCmdVel(const double x, const double y, const double tw);
-  bool waitData(
-    const double expected_dist,
-    const std::chrono::nanoseconds & timeout,
-    const rclcpp::Time & stamp);
+  bool waitData(const double expected_dist, const std::chrono::nanoseconds & timeout, const rclcpp::Time & stamp);
   bool waitCmdVel(const std::chrono::nanoseconds & timeout);
-  bool waitFuture(
-    rclcpp::Client<rcl_interfaces::srv::SetParameters>::SharedFuture,
-    const std::chrono::nanoseconds & timeout);
+  bool waitFuture(rclcpp::Client<rcl_interfaces::srv::SetParameters>::SharedFuture, const std::chrono::nanoseconds & timeout);
 
 protected:
   void cmdVelOutCallback(geometry_msgs::msg::Twist::SharedPtr msg);
@@ -194,35 +180,23 @@ protected:
   rclcpp::Client<rcl_interfaces::srv::SetParameters>::SharedPtr parameters_client_;
 };  // Tester
 
-Tester::Tester()
-{
+Tester::Tester() {
   // 中文：创建被测 Lifecycle 节点、三类传感器发布器、cmd_vel 双向链路和参数服务客户端。
   cm_ = std::make_shared<CollisionMonitorWrapper>();
 
-  footprint_pub_ = cm_->create_publisher<geometry_msgs::msg::PolygonStamped>(
-    FOOTPRINT_TOPIC, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
+  footprint_pub_ = cm_->create_publisher<geometry_msgs::msg::PolygonStamped>(FOOTPRINT_TOPIC, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
 
-  scan_pub_ = cm_->create_publisher<sensor_msgs::msg::LaserScan>(
-    SCAN_NAME, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
-  pointcloud_pub_ = cm_->create_publisher<sensor_msgs::msg::PointCloud2>(
-    POINTCLOUD_NAME, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
-  range_pub_ = cm_->create_publisher<sensor_msgs::msg::Range>(
-    RANGE_NAME, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
+  scan_pub_ = cm_->create_publisher<sensor_msgs::msg::LaserScan>(SCAN_NAME, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
+  pointcloud_pub_ = cm_->create_publisher<sensor_msgs::msg::PointCloud2>(POINTCLOUD_NAME, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
+  range_pub_ = cm_->create_publisher<sensor_msgs::msg::Range>(RANGE_NAME, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
 
-  cmd_vel_in_pub_ = cm_->create_publisher<geometry_msgs::msg::Twist>(
-    CMD_VEL_IN_TOPIC, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
-  cmd_vel_out_sub_ = cm_->create_subscription<geometry_msgs::msg::Twist>(
-    CMD_VEL_OUT_TOPIC, rclcpp::SystemDefaultsQoS(),
-    std::bind(&Tester::cmdVelOutCallback, this, std::placeholders::_1));
+  cmd_vel_in_pub_ = cm_->create_publisher<geometry_msgs::msg::Twist>(CMD_VEL_IN_TOPIC, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
+  cmd_vel_out_sub_ = cm_->create_subscription<geometry_msgs::msg::Twist>(CMD_VEL_OUT_TOPIC, rclcpp::SystemDefaultsQoS(), std::bind(&Tester::cmdVelOutCallback, this, std::placeholders::_1));
 
-  parameters_client_ =
-    cm_->create_client<rcl_interfaces::srv::SetParameters>(
-    std::string(
-      cm_->get_name()) + "/set_parameters");
+  parameters_client_ = cm_->create_client<rcl_interfaces::srv::SetParameters>(std::string(cm_->get_name()) + "/set_parameters");
 }
 
-Tester::~Tester()
-{
+Tester::~Tester() {
   // 中文：先停止 Topic 交互再释放节点，避免测试结束时异步回调访问已释放消息。
   footprint_pub_.reset();
 
@@ -236,174 +210,106 @@ Tester::~Tester()
   cm_.reset();
 }
 
-void Tester::setCommonParameters()
-{
+void Tester::setCommonParameters() {
   // 中文：写入节点级速度 Topic、Frame、TF 容差、Source 超时和零速发布超时。
-  cm_->declare_parameter(
-    "cmd_vel_in_topic", rclcpp::ParameterValue(CMD_VEL_IN_TOPIC));
-  cm_->set_parameter(
-    rclcpp::Parameter("cmd_vel_in_topic", CMD_VEL_IN_TOPIC));
-  cm_->declare_parameter(
-    "cmd_vel_out_topic", rclcpp::ParameterValue(CMD_VEL_OUT_TOPIC));
-  cm_->set_parameter(
-    rclcpp::Parameter("cmd_vel_out_topic", CMD_VEL_OUT_TOPIC));
+  cm_->declare_parameter("cmd_vel_in_topic", rclcpp::ParameterValue(CMD_VEL_IN_TOPIC));
+  cm_->set_parameter(rclcpp::Parameter("cmd_vel_in_topic", CMD_VEL_IN_TOPIC));
+  cm_->declare_parameter("cmd_vel_out_topic", rclcpp::ParameterValue(CMD_VEL_OUT_TOPIC));
+  cm_->set_parameter(rclcpp::Parameter("cmd_vel_out_topic", CMD_VEL_OUT_TOPIC));
 
-  cm_->declare_parameter(
-    "base_frame_id", rclcpp::ParameterValue(BASE_FRAME_ID));
-  cm_->set_parameter(
-    rclcpp::Parameter("base_frame_id", BASE_FRAME_ID));
-  cm_->declare_parameter(
-    "odom_frame_id", rclcpp::ParameterValue(ODOM_FRAME_ID));
-  cm_->set_parameter(
-    rclcpp::Parameter("odom_frame_id", ODOM_FRAME_ID));
+  cm_->declare_parameter("base_frame_id", rclcpp::ParameterValue(BASE_FRAME_ID));
+  cm_->set_parameter(rclcpp::Parameter("base_frame_id", BASE_FRAME_ID));
+  cm_->declare_parameter("odom_frame_id", rclcpp::ParameterValue(ODOM_FRAME_ID));
+  cm_->set_parameter(rclcpp::Parameter("odom_frame_id", ODOM_FRAME_ID));
 
-  cm_->declare_parameter(
-    "transform_tolerance", rclcpp::ParameterValue(TRANSFORM_TOLERANCE));
-  cm_->set_parameter(
-    rclcpp::Parameter("transform_tolerance", TRANSFORM_TOLERANCE));
-  cm_->declare_parameter(
-    "source_timeout", rclcpp::ParameterValue(SOURCE_TIMEOUT));
-  cm_->set_parameter(
-    rclcpp::Parameter("source_timeout", SOURCE_TIMEOUT));
+  cm_->declare_parameter("transform_tolerance", rclcpp::ParameterValue(TRANSFORM_TOLERANCE));
+  cm_->set_parameter(rclcpp::Parameter("transform_tolerance", TRANSFORM_TOLERANCE));
+  cm_->declare_parameter("source_timeout", rclcpp::ParameterValue(SOURCE_TIMEOUT));
+  cm_->set_parameter(rclcpp::Parameter("source_timeout", SOURCE_TIMEOUT));
 
-  cm_->declare_parameter(
-    "stop_pub_timeout", rclcpp::ParameterValue(STOP_PUB_TIMEOUT));
-  cm_->set_parameter(
-    rclcpp::Parameter("stop_pub_timeout", STOP_PUB_TIMEOUT));
+  cm_->declare_parameter("stop_pub_timeout", rclcpp::ParameterValue(STOP_PUB_TIMEOUT));
+  cm_->set_parameter(rclcpp::Parameter("stop_pub_timeout", STOP_PUB_TIMEOUT));
 }
 
-void Tester::addPolygon(
-  const std::string & polygon_name, const PolygonType type,
-  const double size, const std::string & at)
-{
+void Tester::addPolygon(const std::string & polygon_name, const PolygonType type, const double size, const std::string & at) {
   // 中文：按测试形状和动作类型生成最小参数集合；APPROACH 使用 Footprint Topic 替代 points。
   if (type == POLYGON) {
-    cm_->declare_parameter(
-      polygon_name + ".type", rclcpp::ParameterValue("polygon"));
-    cm_->set_parameter(
-      rclcpp::Parameter(polygon_name + ".type", "polygon"));
+    cm_->declare_parameter(polygon_name + ".type", rclcpp::ParameterValue("polygon"));
+    cm_->set_parameter(rclcpp::Parameter(polygon_name + ".type", "polygon"));
 
     if (at != "approach") {
-      const std::vector<double> points {
-        size, size, size, -size, -size, -size, -size, size};
-      cm_->declare_parameter(
-        polygon_name + ".points", rclcpp::ParameterValue(points));
-      cm_->set_parameter(
-        rclcpp::Parameter(polygon_name + ".points", points));
+      const std::vector<double> points {size, size, size, -size, -size, -size, -size, size};
+      cm_->declare_parameter(polygon_name + ".points", rclcpp::ParameterValue(points));
+      cm_->set_parameter(rclcpp::Parameter(polygon_name + ".points", points));
     } else {  // at == "approach"
-      cm_->declare_parameter(
-        polygon_name + ".footprint_topic", rclcpp::ParameterValue(FOOTPRINT_TOPIC));
-      cm_->set_parameter(
-        rclcpp::Parameter(polygon_name + ".footprint_topic", FOOTPRINT_TOPIC));
+      cm_->declare_parameter(polygon_name + ".footprint_topic", rclcpp::ParameterValue(FOOTPRINT_TOPIC));
+      cm_->set_parameter(rclcpp::Parameter(polygon_name + ".footprint_topic", FOOTPRINT_TOPIC));
     }
   } else if (type == CIRCLE) {
-    cm_->declare_parameter(
-      polygon_name + ".type", rclcpp::ParameterValue("circle"));
-    cm_->set_parameter(
-      rclcpp::Parameter(polygon_name + ".type", "circle"));
+    cm_->declare_parameter(polygon_name + ".type", rclcpp::ParameterValue("circle"));
+    cm_->set_parameter(rclcpp::Parameter(polygon_name + ".type", "circle"));
 
-    cm_->declare_parameter(
-      polygon_name + ".radius", rclcpp::ParameterValue(size));
-    cm_->set_parameter(
-      rclcpp::Parameter(polygon_name + ".radius", size));
+    cm_->declare_parameter(polygon_name + ".radius", rclcpp::ParameterValue(size));
+    cm_->set_parameter(rclcpp::Parameter(polygon_name + ".radius", size));
   } else {  // type == POLYGON_UNKNOWN
-    cm_->declare_parameter(
-      polygon_name + ".type", rclcpp::ParameterValue("unknown"));
-    cm_->set_parameter(
-      rclcpp::Parameter(polygon_name + ".type", "unknown"));
+    cm_->declare_parameter(polygon_name + ".type", rclcpp::ParameterValue("unknown"));
+    cm_->set_parameter(rclcpp::Parameter(polygon_name + ".type", "unknown"));
   }
 
-  cm_->declare_parameter(
-    polygon_name + ".enabled", rclcpp::ParameterValue(true));
-  cm_->set_parameter(
-    rclcpp::Parameter(polygon_name + ".enabled", true));
+  cm_->declare_parameter(polygon_name + ".enabled", rclcpp::ParameterValue(true));
+  cm_->set_parameter(rclcpp::Parameter(polygon_name + ".enabled", true));
 
-  cm_->declare_parameter(
-    polygon_name + ".action_type", rclcpp::ParameterValue(at));
-  cm_->set_parameter(
-    rclcpp::Parameter(polygon_name + ".action_type", at));
+  cm_->declare_parameter(polygon_name + ".action_type", rclcpp::ParameterValue(at));
+  cm_->set_parameter(rclcpp::Parameter(polygon_name + ".action_type", at));
 
-  cm_->declare_parameter(
-    polygon_name + ".max_points", rclcpp::ParameterValue(MAX_POINTS));
-  cm_->set_parameter(
-    rclcpp::Parameter(polygon_name + ".max_points", MAX_POINTS));
+  cm_->declare_parameter(polygon_name + ".max_points", rclcpp::ParameterValue(MAX_POINTS));
+  cm_->set_parameter(rclcpp::Parameter(polygon_name + ".max_points", MAX_POINTS));
 
-  cm_->declare_parameter(
-    polygon_name + ".slowdown_ratio", rclcpp::ParameterValue(SLOWDOWN_RATIO));
-  cm_->set_parameter(
-    rclcpp::Parameter(polygon_name + ".slowdown_ratio", SLOWDOWN_RATIO));
+  cm_->declare_parameter(polygon_name + ".slowdown_ratio", rclcpp::ParameterValue(SLOWDOWN_RATIO));
+  cm_->set_parameter(rclcpp::Parameter(polygon_name + ".slowdown_ratio", SLOWDOWN_RATIO));
 
-  cm_->declare_parameter(
-    polygon_name + ".time_before_collision", rclcpp::ParameterValue(TIME_BEFORE_COLLISION));
-  cm_->set_parameter(
-    rclcpp::Parameter(polygon_name + ".time_before_collision", TIME_BEFORE_COLLISION));
+  cm_->declare_parameter(polygon_name + ".time_before_collision", rclcpp::ParameterValue(TIME_BEFORE_COLLISION));
+  cm_->set_parameter(rclcpp::Parameter(polygon_name + ".time_before_collision", TIME_BEFORE_COLLISION));
 
-  cm_->declare_parameter(
-    polygon_name + ".simulation_time_step", rclcpp::ParameterValue(SIMULATION_TIME_STEP));
-  cm_->set_parameter(
-    rclcpp::Parameter(polygon_name + ".simulation_time_step", SIMULATION_TIME_STEP));
+  cm_->declare_parameter(polygon_name + ".simulation_time_step", rclcpp::ParameterValue(SIMULATION_TIME_STEP));
+  cm_->set_parameter(rclcpp::Parameter(polygon_name + ".simulation_time_step", SIMULATION_TIME_STEP));
 
-  cm_->declare_parameter(
-    polygon_name + ".visualize", rclcpp::ParameterValue(false));
-  cm_->set_parameter(
-    rclcpp::Parameter(polygon_name + ".visualize", false));
+  cm_->declare_parameter(polygon_name + ".visualize", rclcpp::ParameterValue(false));
+  cm_->set_parameter(rclcpp::Parameter(polygon_name + ".visualize", false));
 
-  cm_->declare_parameter(
-    polygon_name + ".polygon_pub_topic", rclcpp::ParameterValue(polygon_name));
-  cm_->set_parameter(
-    rclcpp::Parameter(polygon_name + ".polygon_pub_topic", polygon_name));
+  cm_->declare_parameter(polygon_name + ".polygon_pub_topic", rclcpp::ParameterValue(polygon_name));
+  cm_->set_parameter(rclcpp::Parameter(polygon_name + ".polygon_pub_topic", polygon_name));
 }
 
-void Tester::addSource(
-  const std::string & source_name, const SourceType type)
-{
+void Tester::addSource(const std::string & source_name, const SourceType type) {
   // 中文：为指定 Source 写入类型、Topic 以及 PointCloud 高度窗口等必要参数。
   if (type == SCAN) {
-    cm_->declare_parameter(
-      source_name + ".type", rclcpp::ParameterValue("scan"));
-    cm_->set_parameter(
-      rclcpp::Parameter(source_name + ".type", "scan"));
+    cm_->declare_parameter(source_name + ".type", rclcpp::ParameterValue("scan"));
+    cm_->set_parameter(rclcpp::Parameter(source_name + ".type", "scan"));
   } else if (type == POINTCLOUD) {
-    cm_->declare_parameter(
-      source_name + ".type", rclcpp::ParameterValue("pointcloud"));
-    cm_->set_parameter(
-      rclcpp::Parameter(source_name + ".type", "pointcloud"));
+    cm_->declare_parameter(source_name + ".type", rclcpp::ParameterValue("pointcloud"));
+    cm_->set_parameter(rclcpp::Parameter(source_name + ".type", "pointcloud"));
 
-    cm_->declare_parameter(
-      source_name + ".min_height", rclcpp::ParameterValue(0.1));
-    cm_->set_parameter(
-      rclcpp::Parameter(source_name + ".min_height", 0.1));
-    cm_->declare_parameter(
-      source_name + ".max_height", rclcpp::ParameterValue(1.0));
-    cm_->set_parameter(
-      rclcpp::Parameter(source_name + ".max_height", 1.0));
+    cm_->declare_parameter(source_name + ".min_height", rclcpp::ParameterValue(0.1));
+    cm_->set_parameter(rclcpp::Parameter(source_name + ".min_height", 0.1));
+    cm_->declare_parameter(source_name + ".max_height", rclcpp::ParameterValue(1.0));
+    cm_->set_parameter(rclcpp::Parameter(source_name + ".max_height", 1.0));
   } else if (type == RANGE) {
-    cm_->declare_parameter(
-      source_name + ".type", rclcpp::ParameterValue("range"));
-    cm_->set_parameter(
-      rclcpp::Parameter(source_name + ".type", "range"));
+    cm_->declare_parameter(source_name + ".type", rclcpp::ParameterValue("range"));
+    cm_->set_parameter(rclcpp::Parameter(source_name + ".type", "range"));
 
-    cm_->declare_parameter(
-      source_name + ".obstacles_angle", rclcpp::ParameterValue(M_PI / 200));
-    cm_->set_parameter(
-      rclcpp::Parameter(source_name + ".obstacles_angle", M_PI / 200));
+    cm_->declare_parameter(source_name + ".obstacles_angle", rclcpp::ParameterValue(M_PI / 200));
+    cm_->set_parameter(rclcpp::Parameter(source_name + ".obstacles_angle", M_PI / 200));
   } else {  // type == SOURCE_UNKNOWN
-    cm_->declare_parameter(
-      source_name + ".type", rclcpp::ParameterValue("unknown"));
-    cm_->set_parameter(
-      rclcpp::Parameter(source_name + ".type", "unknown"));
+    cm_->declare_parameter(source_name + ".type", rclcpp::ParameterValue("unknown"));
+    cm_->set_parameter(rclcpp::Parameter(source_name + ".type", "unknown"));
   }
 
-  cm_->declare_parameter(
-    source_name + ".topic", rclcpp::ParameterValue(source_name));
-  cm_->set_parameter(
-    rclcpp::Parameter(source_name + ".topic", source_name));
+  cm_->declare_parameter(source_name + ".topic", rclcpp::ParameterValue(source_name));
+  cm_->set_parameter(rclcpp::Parameter(source_name + ".topic", source_name));
 }
 
-void Tester::setVectors(
-  const std::vector<std::string> & polygons,
-  const std::vector<std::string> & sources)
-{
+void Tester::setVectors(const std::vector<std::string> & polygons, const std::vector<std::string> & sources) {
   // 中文：设置节点实际遍历的 polygons 和 observation_sources 名称数组。
   cm_->declare_parameter("polygons", rclcpp::ParameterValue(polygons));
   cm_->set_parameter(rclcpp::Parameter("polygons", polygons));
@@ -412,11 +318,9 @@ void Tester::setVectors(
   cm_->set_parameter(rclcpp::Parameter("observation_sources", sources));
 }
 
-void Tester::sendTransforms(const rclcpp::Time & stamp)
-{
+void Tester::sendTransforms(const rclcpp::Time & stamp) {
   // 中文：广播 base_source -> base 和 odom -> base 的 TF 链，并预填未来一秒的时间样本。
-  std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster =
-    std::make_shared<tf2_ros::TransformBroadcaster>(cm_);
+  std::shared_ptr<tf2_ros::TransformBroadcaster> tf_broadcaster = std::make_shared<tf2_ros::TransformBroadcaster>(cm_);
 
   geometry_msgs::msg::TransformStamped transform;
   transform.transform.rotation.x = 0.0;
@@ -441,11 +345,9 @@ void Tester::sendTransforms(const rclcpp::Time & stamp)
   }
 }
 
-void Tester::publishFootprint(const double radius, const rclcpp::Time & stamp)
-{
+void Tester::publishFootprint(const double radius, const rclcpp::Time & stamp) {
   // 中文：发布方形 Footprint，验证 Polygon APPROACH 的动态轮廓更新。
-  std::unique_ptr<geometry_msgs::msg::PolygonStamped> msg =
-    std::make_unique<geometry_msgs::msg::PolygonStamped>();
+  std::unique_ptr<geometry_msgs::msg::PolygonStamped> msg = std::make_unique<geometry_msgs::msg::PolygonStamped>();
 
   msg->header.frame_id = BASE_FRAME_ID;
   msg->header.stamp = stamp;
@@ -467,11 +369,9 @@ void Tester::publishFootprint(const double radius, const rclcpp::Time & stamp)
   footprint_pub_->publish(std::move(msg));
 }
 
-void Tester::publishScan(const double dist, const rclcpp::Time & stamp)
-{
+void Tester::publishScan(const double dist, const rclcpp::Time & stamp) {
   // 中文：发布 360 条同距离射线，距离参数决定障碍物是否落入安全区域。
-  std::unique_ptr<sensor_msgs::msg::LaserScan> msg =
-    std::make_unique<sensor_msgs::msg::LaserScan>();
+  std::unique_ptr<sensor_msgs::msg::LaserScan> msg = std::make_unique<sensor_msgs::msg::LaserScan>();
 
   msg->header.frame_id = SOURCE_FRAME_ID;
   msg->header.stamp = stamp;
@@ -489,20 +389,15 @@ void Tester::publishScan(const double dist, const rclcpp::Time & stamp)
   scan_pub_->publish(std::move(msg));
 }
 
-void Tester::publishPointCloud(const double dist, const rclcpp::Time & stamp)
-{
+void Tester::publishPointCloud(const double dist, const rclcpp::Time & stamp) {
   // 中文：发布同一距离、略有 y 偏移的两个有效高度点，验证点云二维投影。
-  std::unique_ptr<sensor_msgs::msg::PointCloud2> msg =
-    std::make_unique<sensor_msgs::msg::PointCloud2>();
+  std::unique_ptr<sensor_msgs::msg::PointCloud2> msg = std::make_unique<sensor_msgs::msg::PointCloud2>();
   sensor_msgs::PointCloud2Modifier modifier(*msg);
 
   msg->header.frame_id = SOURCE_FRAME_ID;
   msg->header.stamp = stamp;
 
-  modifier.setPointCloud2Fields(
-    3, "x", 1, sensor_msgs::msg::PointField::FLOAT32,
-    "y", 1, sensor_msgs::msg::PointField::FLOAT32,
-    "z", 1, sensor_msgs::msg::PointField::FLOAT32);
+  modifier.setPointCloud2Fields(3, "x", 1, sensor_msgs::msg::PointField::FLOAT32, "y", 1, sensor_msgs::msg::PointField::FLOAT32, "z", 1, sensor_msgs::msg::PointField::FLOAT32);
   modifier.resize(2);
 
   sensor_msgs::PointCloud2Iterator<float> iter_x(*msg, "x");
@@ -523,11 +418,9 @@ void Tester::publishPointCloud(const double dist, const rclcpp::Time & stamp)
   pointcloud_pub_->publish(std::move(msg));
 }
 
-void Tester::publishRange(const double dist, const rclcpp::Time & stamp)
-{
+void Tester::publishRange(const double dist, const rclcpp::Time & stamp) {
   // 中文：发布 Range 扇形量测，验证单点距离在旋转预测中的空间覆盖。
-  std::unique_ptr<sensor_msgs::msg::Range> msg =
-    std::make_unique<sensor_msgs::msg::Range>();
+  std::unique_ptr<sensor_msgs::msg::Range> msg = std::make_unique<sensor_msgs::msg::Range>();
 
   msg->header.frame_id = SOURCE_FRAME_ID;
   msg->header.stamp = stamp;
@@ -541,14 +434,12 @@ void Tester::publishRange(const double dist, const rclcpp::Time & stamp)
   range_pub_->publish(std::move(msg));
 }
 
-void Tester::publishCmdVel(const double x, const double y, const double tw)
-{
+void Tester::publishCmdVel(const double x, const double y, const double tw) {
   // 中文：清除上一帧输出后发布期望速度，随后由测试等待安全输出或确认没有输出。
   // Reset cmd_vel_out_ before calling CollisionMonitor::process()
   cmd_vel_out_ = nullptr;
 
-  std::unique_ptr<geometry_msgs::msg::Twist> msg =
-    std::make_unique<geometry_msgs::msg::Twist>();
+  std::unique_ptr<geometry_msgs::msg::Twist> msg = std::make_unique<geometry_msgs::msg::Twist>();
 
   msg->linear.x = x;
   msg->linear.y = y;
@@ -557,11 +448,7 @@ void Tester::publishCmdVel(const double x, const double y, const double tw)
   cmd_vel_in_pub_->publish(std::move(msg));
 }
 
-bool Tester::waitData(
-  const double expected_dist,
-  const std::chrono::nanoseconds & timeout,
-  const rclcpp::Time & stamp)
-{
+bool Tester::waitData(const double expected_dist, const std::chrono::nanoseconds & timeout, const rclcpp::Time & stamp) {
   // 中文：在有限超时内轮询所有已配置 Source，确认期望距离的数据已可被 CollisionMonitor 读取。
   rclcpp::Time start_time = cm_->now();
   while (rclcpp::ok() && cm_->now() - start_time <= rclcpp::Duration(timeout)) {
@@ -574,8 +461,7 @@ bool Tester::waitData(
   return false;
 }
 
-bool Tester::waitCmdVel(const std::chrono::nanoseconds & timeout)
-{
+bool Tester::waitCmdVel(const std::chrono::nanoseconds & timeout) {
   // 中文：等待 cmd_vel_out 回调写入最新消息。
   rclcpp::Time start_time = cm_->now();
   while (rclcpp::ok() && cm_->now() - start_time <= rclcpp::Duration(timeout)) {
@@ -588,10 +474,7 @@ bool Tester::waitCmdVel(const std::chrono::nanoseconds & timeout)
   return false;
 }
 
-bool Tester::waitFuture(
-  rclcpp::Client<rcl_interfaces::srv::SetParameters>::SharedFuture result_future,
-  const std::chrono::nanoseconds & timeout)
-{
+bool Tester::waitFuture(rclcpp::Client<rcl_interfaces::srv::SetParameters>::SharedFuture result_future, const std::chrono::nanoseconds & timeout) {
   // 中文：等待 SetParameters 服务完成，确保动态 enabled 参数修改已进入节点。
   rclcpp::Time start_time = cm_->now();
   while (rclcpp::ok() && cm_->now() - start_time <= rclcpp::Duration(timeout)) {
@@ -605,14 +488,12 @@ bool Tester::waitFuture(
   return false;
 }
 
-void Tester::cmdVelOutCallback(geometry_msgs::msg::Twist::SharedPtr msg)
-{
+void Tester::cmdVelOutCallback(geometry_msgs::msg::Twist::SharedPtr msg) {
   // 中文：保存最近的安全输出速度，测试用例据此断言透传、减速或停车结果。
   cmd_vel_out_ = msg;
 }
 
-TEST_F(Tester, testProcessStopSlowdown)
-{
+TEST_F(Tester, testProcessStopSlowdown) {
   // 中文：验证外层减速区与内层停车区的优先级、比例缩放以及障碍物移开后的恢复。
   rclcpp::Time curr_time = cm_->now();
 
@@ -670,8 +551,7 @@ TEST_F(Tester, testProcessStopSlowdown)
   cm_->stop();
 }
 
-TEST_F(Tester, testProcessApproach)
-{
+TEST_F(Tester, testProcessApproach) {
   // 中文：验证平移速度下 APPROACH 按剩余碰撞时间缩放速度，并在进入 Footprint 时停车。
   rclcpp::Time curr_time = cm_->now();
 
@@ -705,10 +585,8 @@ TEST_F(Tester, testProcessApproach)
   // change_ratio = (0.2 m / speed m/s) / TIME_BEFORE_COLLISION s
   // where speed = sqrt(0.5^2 + 0.2^2) ~= 0.538516481 m/s
   const double change_ratio = (0.2 / 0.538516481) / TIME_BEFORE_COLLISION;
-  ASSERT_NEAR(
-    cmd_vel_out_->linear.x, 0.5 * change_ratio, 0.5 * SIMULATION_TIME_STEP / TIME_BEFORE_COLLISION);
-  ASSERT_NEAR(
-    cmd_vel_out_->linear.y, 0.2 * change_ratio, 0.2 * SIMULATION_TIME_STEP / TIME_BEFORE_COLLISION);
+  ASSERT_NEAR(cmd_vel_out_->linear.x, 0.5 * change_ratio, 0.5 * SIMULATION_TIME_STEP / TIME_BEFORE_COLLISION);
+  ASSERT_NEAR(cmd_vel_out_->linear.y, 0.2 * change_ratio, 0.2 * SIMULATION_TIME_STEP / TIME_BEFORE_COLLISION);
   ASSERT_NEAR(cmd_vel_out_->angular.z, 0.0, EPSILON);
 
   // 3. Obstacle is inside robot footprint
@@ -734,8 +612,7 @@ TEST_F(Tester, testProcessApproach)
   cm_->stop();
 }
 
-TEST_F(Tester, testProcessApproachRotation)
-{
+TEST_F(Tester, testProcessApproachRotation) {
   // 中文：验证只有角速度时的 APPROACH 预测，确保旋转也会降低至安全角速度或停止。
   rclcpp::Time curr_time = cm_->now();
 
@@ -769,14 +646,9 @@ TEST_F(Tester, testProcessApproachRotation)
   ASSERT_TRUE(waitData(1.4, 500ms, curr_time));
   publishCmdVel(0.0, 0.0, M_PI / 4);
   ASSERT_TRUE(waitCmdVel(500ms));
-  ASSERT_NEAR(
-    cmd_vel_out_->linear.x, 0.0, EPSILON);
-  ASSERT_NEAR(
-    cmd_vel_out_->linear.y, 0.0, EPSILON);
-  ASSERT_NEAR(
-    cmd_vel_out_->angular.z,
-    M_PI / 5,
-    (M_PI / 4) * (SIMULATION_TIME_STEP / TIME_BEFORE_COLLISION));
+  ASSERT_NEAR(cmd_vel_out_->linear.x, 0.0, EPSILON);
+  ASSERT_NEAR(cmd_vel_out_->linear.y, 0.0, EPSILON);
+  ASSERT_NEAR(cmd_vel_out_->angular.z, M_PI / 5, (M_PI / 4) * (SIMULATION_TIME_STEP / TIME_BEFORE_COLLISION));
 
   // 3. Obstacle is inside robot footprint
   publishRange(0.5, curr_time);
@@ -800,8 +672,7 @@ TEST_F(Tester, testProcessApproachRotation)
   cm_->stop();
 }
 
-TEST_F(Tester, testCrossOver)
-{
+TEST_F(Tester, testCrossOver) {
   // 中文：验证 SLOWDOWN 与 APPROACH 同时存在时，根据当前速度选择更保守动作并允许模式切换。
   rclcpp::Time curr_time = cm_->now();
 
@@ -829,8 +700,7 @@ TEST_F(Tester, testCrossOver)
   ASSERT_TRUE(waitCmdVel(500ms));
   // change_ratio = (1.5 m / 3.0 m/s) / TIME_BEFORE_COLLISION s
   double change_ratio = (1.5 / 3.0) / TIME_BEFORE_COLLISION;
-  ASSERT_NEAR(
-    cmd_vel_out_->linear.x, 3.0 * change_ratio, 3.0 * SIMULATION_TIME_STEP / TIME_BEFORE_COLLISION);
+  ASSERT_NEAR(cmd_vel_out_->linear.x, 3.0 * change_ratio, 3.0 * SIMULATION_TIME_STEP / TIME_BEFORE_COLLISION);
   ASSERT_NEAR(cmd_vel_out_->linear.y, 0.0, EPSILON);
   ASSERT_NEAR(cmd_vel_out_->angular.z, 0.0, EPSILON);
 
@@ -850,8 +720,7 @@ TEST_F(Tester, testCrossOver)
   ASSERT_TRUE(waitCmdVel(500ms));
   // change_ratio = (0.5 m / 1.0 m/s) / TIME_BEFORE_COLLISION s
   change_ratio = (0.5 / 1.0) / TIME_BEFORE_COLLISION;
-  ASSERT_NEAR(
-    cmd_vel_out_->linear.x, 1.0 * change_ratio, 1.0 * SIMULATION_TIME_STEP / TIME_BEFORE_COLLISION);
+  ASSERT_NEAR(cmd_vel_out_->linear.x, 1.0 * change_ratio, 1.0 * SIMULATION_TIME_STEP / TIME_BEFORE_COLLISION);
   ASSERT_NEAR(cmd_vel_out_->linear.y, 0.0, EPSILON);
   ASSERT_NEAR(cmd_vel_out_->angular.z, 0.0, EPSILON);
 
@@ -859,8 +728,7 @@ TEST_F(Tester, testCrossOver)
   cm_->stop();
 }
 
-TEST_F(Tester, testCeasePublishZeroVel)
-{
+TEST_F(Tester, testCeasePublishZeroVel) {
   // 中文：验证机器人停车超过 stop_pub_timeout 后停止重复发布零速度，恢复运动后重新发布。
   rclcpp::Time curr_time = cm_->now();
 
@@ -922,8 +790,7 @@ TEST_F(Tester, testCeasePublishZeroVel)
   cm_->stop();
 }
 
-TEST_F(Tester, testPolygonNotEnabled)
-{
+TEST_F(Tester, testPolygonNotEnabled) {
   // 中文：通过动态参数禁用 Polygon，确认障碍物仍在区域内时不会继续停车。
   // Set Collision Monitor parameters.
   // Create a STOP polygon
@@ -972,8 +839,7 @@ TEST_F(Tester, testPolygonNotEnabled)
   cm_->stop();
 }
 
-TEST_F(Tester, testSourceNotEnabled)
-{
+TEST_F(Tester, testSourceNotEnabled) {
   // 中文：通过动态参数禁用传感器源，确认其数据不再触发已配置安全区域。
   // Set Collision Monitor parameters.
   // Create a STOP polygon
@@ -1022,8 +888,7 @@ TEST_F(Tester, testSourceNotEnabled)
   cm_->stop();
 }
 
-TEST_F(Tester, testProcessNonActive)
-{
+TEST_F(Tester, testProcessNonActive) {
   // 中文：节点仅 configure 未 activate 时，输入 cmd_vel 不应产生安全输出。
   rclcpp::Time curr_time = cm_->now();
 
@@ -1047,8 +912,7 @@ TEST_F(Tester, testProcessNonActive)
   cm_->stop();
 }
 
-TEST_F(Tester, testIncorrectPolygonType)
-{
+TEST_F(Tester, testIncorrectPolygonType) {
   // 中文：未知 Polygon type 必须导致节点配置失败。
   setCommonParameters();
   addPolygon("UnknownShape", POLYGON_UNKNOWN, 1.0, "stop");
@@ -1059,8 +923,7 @@ TEST_F(Tester, testIncorrectPolygonType)
   cm_->cant_configure();
 }
 
-TEST_F(Tester, testIncorrectSourceType)
-{
+TEST_F(Tester, testIncorrectSourceType) {
   // 中文：未知 Source type 必须导致节点配置失败。
   setCommonParameters();
   addPolygon("Stop", POLYGON, 1.0, "stop");
@@ -1071,8 +934,7 @@ TEST_F(Tester, testIncorrectSourceType)
   cm_->cant_configure();
 }
 
-TEST_F(Tester, testPolygonsNotSet)
-{
+TEST_F(Tester, testPolygonsNotSet) {
   // 中文：缺少 polygons 列表时配置失败，避免节点无安全区域却正常运行。
   setCommonParameters();
   addPolygon("Stop", POLYGON, 1.0, "stop");
@@ -1082,8 +944,7 @@ TEST_F(Tester, testPolygonsNotSet)
   cm_->cant_configure();
 }
 
-TEST_F(Tester, testSourcesNotSet)
-{
+TEST_F(Tester, testSourcesNotSet) {
   // 中文：缺少 observation_sources 列表时配置失败，避免节点在没有输入数据时误报安全状态。
   setCommonParameters();
   addPolygon("Stop", POLYGON, 1.0, "stop");
@@ -1095,8 +956,7 @@ TEST_F(Tester, testSourcesNotSet)
   cm_->cant_configure();
 }
 
-int main(int argc, char ** argv)
-{
+int main(int argc, char ** argv) {
   // 中文：初始化 GoogleTest 和 rclcpp，运行全部节点集成测试后统一关闭 ROS。
   // Initialize the system
   testing::InitGoogleTest(&argc, argv);

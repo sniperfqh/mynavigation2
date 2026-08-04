@@ -41,8 +41,7 @@ public:
 };
 RclCppFixture g_rclcppfixture;
 
-TEST(KinematicsTest, testTransformPoints)
-{
+TEST(KinematicsTest, testTransformPoints) {
   // 中文：验证先平移再逆旋转的点坐标变换，覆盖位于原点前后两侧的两个点。
   // Transform: move frame to (2.0, 1.0) coordinate and rotate it on 30 degrees
   const nav2_collision_monitor::Pose tf{2.0, 1.0, M_PI / 6.0};
@@ -69,8 +68,7 @@ TEST(KinematicsTest, testTransformPoints)
   EXPECT_NEAR(points[1].y, new_point_distance * std::sin(new_point_angle), EPSILON);
 }
 
-TEST(KinematicsTest, testProjectState)
-{
+TEST(KinematicsTest, testProjectState) {
   // 中文：验证单位时间内的位置平移、朝向旋转以及线速度随角度同步旋转。
   //     Y                                Y
   //     ^                                ^

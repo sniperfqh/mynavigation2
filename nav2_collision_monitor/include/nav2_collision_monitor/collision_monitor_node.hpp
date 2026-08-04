@@ -118,9 +118,7 @@ protected:
    * @return True if all parameters were obtained or false in failure case
    * 中文：读取速度 Topic、Frame、TF 容差、源数据超时和零速发布超时，并装配 polygons 与 sources。
    */
-  bool getParameters(
-    std::string & cmd_vel_in_topic,
-    std::string & cmd_vel_out_topic);
+  bool getParameters(std::string & cmd_vel_in_topic, std::string & cmd_vel_out_topic);
   /**
    * @brief Supporting routine creating and configuring all polygons
    * @param base_frame_id Robot base frame ID
@@ -128,9 +126,7 @@ protected:
    * @return True if all polygons were configured successfully or false in failure case
    * 中文：按 polygons 参数中的名称和 type 创建 Polygon 或 Circle，再逐个读取各自参数。
    */
-  bool configurePolygons(
-    const std::string & base_frame_id,
-    const tf2::Duration & transform_tolerance);
+  bool configurePolygons(const std::string & base_frame_id, const tf2::Duration & transform_tolerance);
   /**
    * @brief Supporting routine creating and configuring all data sources
    * @param base_frame_id Robot base frame ID
@@ -143,12 +139,7 @@ protected:
    * @return True if all sources were configured successfully or false in failure case
    * 中文：按 observation_sources 和 `<name>.type` 创建 Scan、PointCloud 或 Range 适配器。
    */
-  bool configureSources(
-    const std::string & base_frame_id,
-    const std::string & odom_frame_id,
-    const tf2::Duration & transform_tolerance,
-    const rclcpp::Duration & source_timeout,
-    const bool base_shift_correction);
+  bool configureSources(const std::string & base_frame_id, const std::string & odom_frame_id, const tf2::Duration & transform_tolerance, const rclcpp::Duration & source_timeout, const bool base_shift_correction);
 
   /**
    * @brief Main processing routine
@@ -166,11 +157,7 @@ protected:
    * @return True if returned action is caused by current polygon, otherwise false
    * 中文：统计点数是否超过 STOP／SLOWDOWN 阈值；停车直接清零，减速按比例缩放并与已有候选速度比较。
    */
-  bool processStopSlowdown(
-    const std::shared_ptr<Polygon> polygon,
-    const std::vector<Point> & collision_points,
-    const Velocity & velocity,
-    Action & robot_action) const;
+  bool processStopSlowdown(const std::shared_ptr<Polygon> polygon, const std::vector<Point> & collision_points, const Velocity & velocity, Action & robot_action) const;
 
   /**
    * @brief Processes APPROACH action type
@@ -181,11 +168,7 @@ protected:
    * @return True if returned action is caused by current polygon, otherwise false
    * 中文：模拟当前速度下的碰撞时间，将速度按 collision_time／time_before_collision 缩放。
    */
-  bool processApproach(
-    const std::shared_ptr<Polygon> polygon,
-    const std::vector<Point> & collision_points,
-    const Velocity & velocity,
-    Action & robot_action) const;
+  bool processApproach(const std::shared_ptr<Polygon> polygon, const std::vector<Point> & collision_points, const Velocity & velocity, Action & robot_action) const;
 
   /**
    * @brief Prints robot action and polygon caused it (if it was)
@@ -193,8 +176,7 @@ protected:
    * @param action_polygon Pointer to a polygon causing a selected action
    * 中文：只在动作类型发生变化时记录触发区域，避免每帧重复刷屏，同时保留安全状态切换日志。
    */
-  void printAction(
-    const Action & robot_action, const std::shared_ptr<Polygon> action_polygon) const;
+  void printAction(const Action & robot_action, const std::shared_ptr<Polygon> action_polygon) const;
 
   /**
    * @brief Polygons publishing routine. Made for visualization.

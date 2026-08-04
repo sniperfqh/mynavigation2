@@ -25,26 +25,17 @@ namespace nav2_collision_monitor
 
 // 中文：Circle 复用 Polygon 的动作、参数和发布接口，只替换几何判断与可视化顶点生成算法。
 // 中文：圆形判断使用半径平方，避免对每个传感器点调用 sqrt，适合高频安全监控。
-Circle::Circle(
-  const nav2_util::LifecycleNode::WeakPtr & node,
-  const std::string & polygon_name,
-  const std::shared_ptr<tf2_ros::Buffer> tf_buffer,
-  const std::string & base_frame_id,
-  const tf2::Duration & transform_tolerance)
-: Polygon::Polygon(node, polygon_name, tf_buffer, base_frame_id, transform_tolerance)
-{
+Circle::Circle(const nav2_util::LifecycleNode::WeakPtr & node, const std::string & polygon_name, const std::shared_ptr<tf2_ros::Buffer> tf_buffer, const std::string & base_frame_id, const tf2::Duration & transform_tolerance) : Polygon::Polygon(node, polygon_name, tf_buffer, base_frame_id, transform_tolerance) {
   // 中文：构造阶段只保存父类资源，半径在 configure() 读取参数后才有效。
   RCLCPP_INFO(logger_, "[%s]: Creating Circle", polygon_name_.c_str());
 }
 
-Circle::~Circle()
-{
+Circle::~Circle() {
   // 中文：显式记录生命周期边界；父类析构负责清理公共参数回调和顶点缓存。
   RCLCPP_INFO(logger_, "[%s]: Destroying Circle", polygon_name_.c_str());
 }
 
-void Circle::getPolygon(std::vector<Point> & poly) const
-{
+void Circle::getPolygon(std::vector<Point> & poly) const {
   // 中文：发布消息需要 Polygon 顶点，因此用 16 条等角边对圆进行可视化近似；
   // 中文：该近似不会参与 getPointsInside() 的实际安全判断。
   // Number of polygon points. More edges means better approximation.
@@ -64,8 +55,7 @@ void Circle::getPolygon(std::vector<Point> & poly) const
   }
 }
 
-int Circle::getPointsInside(const std::vector<Point> & points) const
-{
+int Circle::getPointsInside(const std::vector<Point> & points) const {
   // 中文：逐点比较到圆心的平方距离，返回落入圆形区域的障碍点数量。
   int num = 0;
   for (Point point : points) {
@@ -77,8 +67,7 @@ int Circle::getPointsInside(const std::vector<Point> & points) const
   return num;
 }
 
-bool Circle::getParameters(std::string & polygon_pub_topic, std::string & footprint_topic)
-{
+bool Circle::getParameters(std::string & polygon_pub_topic, std::string & footprint_topic) {
   // 中文：Circle 不订阅动态 Footprint；它只读取公共 Polygon 参数和 radius。
   auto node = node_.lock();
   if (!node) {
@@ -96,15 +85,11 @@ bool Circle::getParameters(std::string & polygon_pub_topic, std::string & footpr
   try {
     // Leave it not initialized: the will cause an error if it will not set
     // 中文：不提供默认半径，让缺少 radius 的配置在 configure 阶段显式失败。
-    nav2_util::declare_parameter_if_not_declared(
-      node, polygon_name_ + ".radius", rclcpp::PARAMETER_DOUBLE);
+    nav2_util::declare_parameter_if_not_declared(node, polygon_name_ + ".radius", rclcpp::PARAMETER_DOUBLE);
     radius_ = node->get_parameter(polygon_name_ + ".radius").as_double();
     radius_squared_ = radius_ * radius_;
   } catch (const std::exception & ex) {
-    RCLCPP_ERROR(
-      logger_,
-      "[%s]: Error while getting circle parameters: %s",
-      polygon_name_.c_str(), ex.what());
+    RCLCPP_ERROR(logger_, "[%s]: Error while getting circle parameters: %s", polygon_name_.c_str(), ex.what());
     return false;
   }
 

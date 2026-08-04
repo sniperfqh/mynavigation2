@@ -53,15 +53,7 @@ public:
    * 中文：开启后查询 source 时间到当前 base 时间的插值 TF，补偿机器人在传感器延迟期间的位移；
    * 中文：关闭后只查询当前 source 到 base 的变换，速度更快但忽略时间偏移。
    */
-  Source(
-    const nav2_util::LifecycleNode::WeakPtr & node,
-    const std::string & source_name,
-    const std::shared_ptr<tf2_ros::Buffer> tf_buffer,
-    const std::string & base_frame_id,
-    const std::string & global_frame_id,
-    const tf2::Duration & transform_tolerance,
-    const rclcpp::Duration & source_timeout,
-    const bool base_shift_correction);
+  Source(const nav2_util::LifecycleNode::WeakPtr & node, const std::string & source_name, const std::shared_ptr<tf2_ros::Buffer> tf_buffer, const std::string & base_frame_id, const std::string & global_frame_id, const tf2::Duration & transform_tolerance, const rclcpp::Duration & source_timeout, const bool base_shift_correction);
   /**
    * @brief Source destructor
    */
@@ -75,9 +67,7 @@ public:
    * Added data is transformed to base_frame_id_ coordinate system at curr_time.
    * 中文：派生类不得清空调用方已有数据，只应把本源有效点追加到 data，便于多个 Source 合并。
    */
-  virtual void getData(
-    const rclcpp::Time & curr_time,
-    std::vector<Point> & data) const = 0;
+  virtual void getData(const rclcpp::Time & curr_time, std::vector<Point> & data) const = 0;
 
   /**
    * @brief Obtains source enabled state
@@ -107,16 +97,13 @@ protected:
    * @return True if data source is valid, otherwise false
    * 中文：用当前时刻减去消息时间与 source_timeout_ 比较，过期数据直接丢弃，避免旧障碍物触发安全动作。
    */
-  bool sourceValid(
-    const rclcpp::Time & source_time,
-    const rclcpp::Time & curr_time) const;
+  bool sourceValid(const rclcpp::Time & source_time, const rclcpp::Time & curr_time) const;
 
   /**
    * @brief Callback executed when a parameter change is detected
    * @param event ParameterEvent message
    */
-  rcl_interfaces::msg::SetParametersResult dynamicParametersCallback(
-    std::vector<rclcpp::Parameter> parameters);
+  rcl_interfaces::msg::SetParametersResult dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters);
 
   // ----- Variables -----
 
