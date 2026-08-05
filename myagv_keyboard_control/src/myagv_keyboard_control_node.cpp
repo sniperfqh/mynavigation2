@@ -174,8 +174,8 @@ public:
     double update() {
         double vg = d_ * sm_; // 目标速度
 
-        // 1. 如果已经到达目标状态（速度为0且方向为0，或速度等于目标速度且加速度为0）
-        if (std::abs(sc_ - vg) < 1e-6 ) {
+        // 1. 如果已经到达目标状态（速度为0且方向为0，或速度等于目标速度且加速度为0） && std::abs(ac_) <= 1e-6
+        if (std::abs(sc_ - vg) <= 1e-6 ) {
             sc_ = vg;
             ac_ = 0.0;
             jc_ = 0.0;
@@ -211,31 +211,54 @@ public:
 
         // 2. 计算速度误差
         double vel_err = vg - sc_;
-        double dr = vel_err/(std::abs(vel_err)+1e-9);
+        double dr = 0;
+        if( vel_err < -1e-6 ) dr = -1.0;
+        if( vel_err >  1e-6 ) dr =  1.0;
 
         // 3. 决定加加速度 jc 的方向
         // 如果当前加速度方向与速度误差方向一致，且加速度过大，需要减小加速度
         // 如果当前加速度方向与速度误差方向相反，或者加速度不够，需要增加加速度
         
-        if ( dr*ac_>0.0 && std::abs( dr*vel_err - 0.5 * dr*ac_ * std::abs(ac_/jm_) )<= 1e-4) {
-            // 加速阶段或匀速阶段
-            jc_ = -dr*jm_; // 趋近目标，加速度减小
+        if ( dr*ac_>=0.0 && std::abs(vel_err)-0.5*std::abs(ac_*ac_/jm_) <= 1e-4) {
+            // 减少加速速阶段  （加加速度方向与目标速度方向相反）
+            if( std::abs(dr) > 1e-6){
+              jc_ =  -dr*jm_; // 趋近目标，加速度减小 
+            } else {
+              if (ac_ > 0.0) jc_ = -jm_;  
+              if (ac_ < 0.0) jc_ =  jm_;  
+            }
         } else {
-            // 减加速度阶段（加加速度方向与目标速度方向相反）
-            jc_ =  dr*jm_; // 目标较远，加速度增大
+            // 增加加速度阶段或匀速阶段（加加速度方向与目标速度方向相同）
+            if( std::abs(dr) > 1e-6){
+              jc_ =  dr*jm_; // 目标较远，加速度增大
+            }
+            else{
+              if (ac_ > 0.0) jc_ =  jm_;
+              if (ac_ < 0.0) jc_ = -jm_;
+            }
+            
         }
 
         // 4. 积分更新（欧拉法）
+        double tmp = ac_;
         ac_ += jc_ * dt_;
         
         // 5. 限制加速度范围
         ac_ = std::max(-am_, std::min(am_, ac_));
-        if( dr*ac_>0.0 && dr*jc_<0.0){
-          if(dr > 0) ac_ = std::max(ac_, 0.0);
-          if(dr < 0) ac_ = std::min(ac_, 0.0);
+        // 趋近目标时，加速度减小，防止加速度冲过0
+        if( dr*ac_>=0.0 && dr*jc_<=0.0 )
+        {
+          if( jc_<0.0 ) {
+            ac_ = std::max(ac_, 0.0);
+            // jc_ = 0.0; // 关键修复：加速度归零后，加加速度也必须归零
+          }
+          if( jc_>0.0 ) {
+            ac_ = std::min(ac_, 0.0);
+            // jc_ = 0.0; // 关键修复：加速度归零后，加加速度也必须归零
+          }
         }
 
-        sc_ += ac_ * dt_;
+        sc_ += 0.5*(tmp + ac_)*dt_ ;
 
         // 6. 限制速度范围并处理过零
         if (dr >= 1e-6) {
@@ -420,15 +443,15 @@ private:
     
     // 线性速度规划
     // 中文注释：使用稳态时钟计算真实周期，并把异常延迟限制到最多两个标称周期。
-    // const double elapsed = std::chrono::duration<double>(now - last_update_time_).count();
-    // last_update_time_ = now;
-    // const double dt = std::clamp(elapsed, 0.0, 2.0 / publish_rate_);
-    // // RCLCPP_INFO(get_logger(), "msg print time: dt=%.3f .", dt);
-    // updateSmoothedCommand(dt);             
+    const double elapsed = std::chrono::duration<double>(now - last_update_time_).count();
+    last_update_time_ = now;
+    const double dt = std::clamp(elapsed, 0.0, 2.0 / publish_rate_);
+    // RCLCPP_INFO(get_logger(), "msg print time: dt=%.3f .", dt);
+    updateSmoothedCommand(dt);             
 
     // S型曲线速度规划           
-    current_v_ = linear_planner_->update();           // S型曲线速度规划
-    current_w_ = angular_planner_->update();          // S型曲线速度规划
+    // current_v_ = linear_planner_->update();           // S型曲线速度规划
+    // current_w_ = angular_planner_->update();          // S型曲线速度规划
     publishCommand();
   }
 
