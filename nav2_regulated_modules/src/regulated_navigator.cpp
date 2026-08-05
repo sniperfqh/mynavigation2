@@ -24,8 +24,8 @@ RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : na
   declare_parameter("smooth_path_action", "smooth_path");
   declare_parameter("follow_path_action", "follow_path");
   declare_parameter("planner_id", "GridBasedAstar");
-  declare_parameter("controller_id", "DWB");
-  declare_parameter("goal_checker_id", "general_goal_checker");
+  declare_parameter("controller_id", "RPP");
+  declare_parameter("goal_checker_id", "stopped_goal_checker");
   declare_parameter("smoother_id", "simple_smoother");
   declare_parameter("use_smoother", true);
   declare_parameter("check_smoother_collisions", true);
