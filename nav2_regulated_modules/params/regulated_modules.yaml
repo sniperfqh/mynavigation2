@@ -111,8 +111,8 @@ regulated_navigator:  # 中文参数：无行为树的自定义规控编排节�
     smooth_path_action: "smooth_path"  # 中文参数：调用 Smoother Server 路径平滑 Action 的名称。
     follow_path_action: "follow_path"  # 中文参数：调用 Controller Server 路径跟踪 Action 的名称。
     planner_id: "GridBasedAstar"  # 中文参数：规控节点下发规划请求时指定的规划器插件标识。
-    controller_id: "DWB"  # 中文参数：规控节点下发跟踪请求时指定的控制器插件标识。
-    goal_checker_id: "general_goal_checker"  # 中文参数：FollowPath 使用的目标到达检查器标识。
+    controller_id: "RPP"  # 中文参数：规控节点下发跟踪请求时使用 RPP 受约束纯跟踪控制器。
+    goal_checker_id: "stopped_goal_checker"  # 中文参数：FollowPath 到点后还需满足低速停稳条件。
     use_smoother: true  # 中文参数：规划成功后先执行路径平滑，再下发给控制器。
     smoother_id: "simple_smoother"  # 中文参数：SmoothPath 请求使用的平滑器插件标识。
     check_smoother_collisions: true  # 中文参数：平滑过程中检查新路径是否与代价地图障碍碰撞。
@@ -139,12 +139,13 @@ controller_server:  # 中文参数：局部控制服务器节点，负责加载�
   ros__parameters:  # 中文参数：以下内容全部属于 controller_server 的 ROS 2 参数。
     use_sim_time: false  # 中文参数：关闭仿真时钟，控制循环使用系统时间。
     controller_frequency: 20.0  # 中文参数：局部控制器以 20 Hz 计算并发布速度命令。
+    odom_topic: "/odometry"  # 中文参数：控制器的实时速度反馈统一订阅 /odometry。
     min_x_velocity_threshold: 0.001  # 中文参数：X 方向速度绝对值低于 0.001 m/s 时按零速度处理。
     min_y_velocity_threshold: 0.5  # 中文参数：Y 方向速度低于 0.5 m/s 时按零处理；差速车不使用横移速度。
     min_theta_velocity_threshold: 0.001  # 中文参数：角速度绝对值低于 0.001 rad/s 时按零处理。
     failure_tolerance: 0.3  # 中文参数：控制器异常后允许短暂容忍 0.3 秒，再判定 FollowPath 失败。
     progress_checker_plugin: "progress_checker"  # 中文参数：选择名为 progress_checker 的进度检查插件。
-    goal_checker_plugins: ["general_goal_checker"]  # 中文参数：加载的目标到达检查器标识列表。
+    goal_checker_plugins: ["general_goal_checker", "stopped_goal_checker"]  # 中文参数：保留通用检查器，并新增要求机器人停稳的到点检查器。
     controller_plugins: ["DWB", "RPP", "MPPI", "GracefulController", "RotationShimController"]  # 中文参数：一次加载的全部局部控制器插件标识列表。
 
     progress_checker:  # 中文参数：SimpleProgressChecker 进度检查器配置组。
@@ -155,8 +156,16 @@ controller_server:  # 中文参数：局部控制服务器节点，负责加载�
     general_goal_checker:  # 中文参数：通用位置和航向目标检查器配置组。
       stateful: true  # 中文参数：进入位置容差后保持该阶段状态，再完成最终航向对齐。
       plugin: "nav2_controller::SimpleGoalChecker"  # 中文参数：加载 Nav2 简单目标检查器插件。
-      xy_goal_tolerance: 0.25  # 中文参数：机器人距目标平面位置 0.25 m 内视为位置到达。
-      yaw_goal_tolerance: 0.25  # 中文参数：机器人与目标航向误差 0.25 rad 内视为姿态到达。
+      xy_goal_tolerance: 0.125  # 中文参数：位置容差由 0.25 m 减半为 0.125 m，到点精度提高一倍。
+      yaw_goal_tolerance: 0.125  # 中文参数：航向容差由 0.25 rad 减半为 0.125 rad，到点精度提高一倍。
+
+    stopped_goal_checker:  # 中文参数：到点后额外确认底盘线速度和角速度均已降到停稳阈值。
+      stateful: true  # 中文参数：进入位置容差后保持位置已满足状态，继续完成航向对齐和停稳检查。
+      plugin: "nav2_controller::StoppedGoalChecker"  # 中文参数：加载带速度停稳判据的目标检查器。
+      xy_goal_tolerance: 0.125  # 中文参数：机器人距目标平面位置不超过 0.125 m。
+      yaw_goal_tolerance: 0.125  # 中文参数：机器人与目标航向误差不超过 0.125 rad。
+      trans_stopped_velocity: 0.05  # 中文参数：平移速度不超过 0.05 m/s 时认为已停稳。
+      rot_stopped_velocity: 0.05  # 中文参数：角速度不超过 0.05 rad/s 时认为已停稳。
 
     DWB:  # 中文参数：Dynamic Window Approach 局部轨迹采样控制器配置组。
       plugin: "dwb_core::DWBLocalPlanner"  # 中文参数：加载 DWBLocalPlanner 插件。
@@ -200,12 +209,12 @@ controller_server:  # 中文参数：局部控制服务器节点，负责加载�
 
     RPP:  # 中文参数：Regulated Pure Pursuit 受约束纯跟踪控制器配置组。
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"  # 中文参数：加载 RPP 控制器插件。
-      desired_linear_vel: 0.22  # 中文参数：无额外约束时的期望线速度为 0.22 m/s。
+      desired_linear_vel: 0.44  # 中文参数：期望线速度由 0.22 m/s 翻倍为 0.44 m/s。
       lookahead_dist: 0.45  # 中文参数：固定模式下纯跟踪前视距离为 0.45 m。
       min_lookahead_dist: 0.25  # 中文参数：速度缩放前视距离的最小值为 0.25 m。
       max_lookahead_dist: 0.75  # 中文参数：速度缩放前视距离的最大值为 0.75 m。
       lookahead_time: 1.5  # 中文参数：根据当前速度计算前视距离时采用 1.5 秒前视时间。
-      rotate_to_heading_angular_vel: 0.8  # 中文参数：原地对齐路径航向时使用 0.8 rad/s 角速度。
+      rotate_to_heading_angular_vel: 1.6  # 中文参数：原地对齐角速度由 0.8 rad/s 翻倍为 1.6 rad/s。
       transform_tolerance: 0.2  # 中文参数：路径和机器人位姿转换允许 0.2 秒时间容差。
       use_velocity_scaled_lookahead_dist: true  # 中文参数：根据当前线速度动态调整前视距离。
       min_approach_linear_velocity: 0.03  # 中文参数：接近目标减速时最低保持 0.03 m/s。
@@ -385,8 +394,8 @@ velocity_smoother:  # 中文参数：速度指令平滑器节点命名空间。
     smoothing_frequency: 20.0  # 中文参数：以 20 Hz 频率插值并发布平滑后的速度指令。
     scale_velocities: false  # 中文参数：某一速度分量受限时不按比例缩放其余速度分量。
     feedback: "CLOSED_LOOP"  # 中文参数：采用闭环模式，以里程计实测速度作为每个平滑周期的起点。
-    max_velocity: [0.26, 0.0, 1.0]  # 中文参数：x、y、theta 三轴最大速度依次为 0.26 m/s、0 m/s、1.0 rad/s。
-    min_velocity: [-0.26, 0.0, -1.0]  # 中文参数：x、y、theta 三轴最小速度依次为 -0.26 m/s、0 m/s、-1.0 rad/s。
+    max_velocity: [0.52, 0.0, 2.0]  # 中文参数：平滑器线速度和角速度上限分别由 0.26、1.0 翻倍为 0.52 m/s、2.0 rad/s。
+    min_velocity: [-0.52, 0.0, -2.0]  # 中文参数：负向速度下限同步翻倍，保持速度区间对称。
     max_accel: [2.5, 0.0, 3.2]  # 中文参数：x、y、theta 三轴最大加速度依次为 2.5 m/s²、0 m/s²、3.2 rad/s²。
     max_decel: [-2.5, 0.0, -3.2]  # 中文参数：x、y、theta 三轴最大减速度依次为 -2.5 m/s²、0 m/s²、-3.2 rad/s²。
     odom_topic: "/odometry"  # 中文参数：闭环反馈订阅的里程计 Topic，提供机器人实测线速度与角速度。
