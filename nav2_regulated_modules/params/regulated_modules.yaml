@@ -156,14 +156,14 @@ controller_server:  # 中文参数：局部控制服务器节点，负责加载�
     general_goal_checker:  # 中文参数：通用位置和航向目标检查器配置组。
       stateful: true  # 中文参数：进入位置容差后保持该阶段状态，再完成最终航向对齐。
       plugin: "nav2_controller::SimpleGoalChecker"  # 中文参数：加载 Nav2 简单目标检查器插件。
-      xy_goal_tolerance: 0.125  # 中文参数：位置容差由 0.25 m 减半为 0.125 m，到点精度提高一倍。
-      yaw_goal_tolerance: 0.125  # 中文参数：航向容差由 0.25 rad 减半为 0.125 rad，到点精度提高一倍。
+      xy_goal_tolerance: 0.0125  # 中文参数：位置容差由 0.25 m 减半为 0.125 m，到点精度提高一倍。
+      yaw_goal_tolerance: 0.0125  # 中文参数：航向容差由 0.25 rad 减半为 0.125 rad，到点精度提高一倍。
 
     stopped_goal_checker:  # 中文参数：到点后额外确认底盘线速度和角速度均已降到停稳阈值。
       stateful: true  # 中文参数：进入位置容差后保持位置已满足状态，继续完成航向对齐和停稳检查。
       plugin: "nav2_controller::StoppedGoalChecker"  # 中文参数：加载带速度停稳判据的目标检查器。
-      xy_goal_tolerance: 0.125  # 中文参数：机器人距目标平面位置不超过 0.125 m。
-      yaw_goal_tolerance: 0.125  # 中文参数：机器人与目标航向误差不超过 0.125 rad。
+      xy_goal_tolerance: 0.0125  # 中文参数：机器人距目标平面位置不超过 0.125 m。
+      yaw_goal_tolerance: 0.0125  # 中文参数：机器人与目标航向误差不超过 0.125 rad。
       trans_stopped_velocity: 0.05  # 中文参数：平移速度不超过 0.05 m/s 时认为已停稳。
       rot_stopped_velocity: 0.05  # 中文参数：角速度不超过 0.05 rad/s 时认为已停稳。
 

@@ -56,7 +56,7 @@ bt_navigator:
     wait_for_service_timeout: 1000
     # Change only selected_controller to switch the controller used by BT/action requests.
     # The value must be one of controller_server.controller_plugins.
-    selected_controller: "TEB"
+    selected_controller: "RPP"
     # 'default_nav_through_poses_bt_xml' and 'default_nav_to_pose_bt_xml' are use defaults:
     # nav2_bt_navigator/navigate_to_pose_w_replanning_and_recovery.xml
     # nav2_bt_navigator/navigate_through_poses_w_replanning_and_recovery.xml
@@ -144,8 +144,8 @@ controller_server:
     general_goal_checker:
       stateful: True
       plugin: "nav2_controller::SimpleGoalChecker"
-      xy_goal_tolerance: 0.25
-      yaw_goal_tolerance: 0.25
+      xy_goal_tolerance: 0.005
+      yaw_goal_tolerance: 0.005
     # DWB critic-based sampling controller. Stable default for TurtleBot3.
     DWB:
       plugin: "dwb_core::DWBLocalPlanner"
