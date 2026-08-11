@@ -54,8 +54,7 @@ void RegulatedNavigator::monitorTask() {
   }
   geometry_msgs::msg::PoseStamped current_pose;
   if (!lookupCurrentPose(current_pose)) {
-    if ((now() - last_valid_tf_time_).seconds() > localization_timeout_ &&
-      task_.state != NavigationState::LOCALIZATION_LOST)
+    if ((now() - last_valid_tf_time_).seconds() > localization_timeout_ && task_.state != NavigationState::LOCALIZATION_LOST)
     {
       LOG_ERROR("自研定位 map->base_link 超时，取消控制并停车");
       cancelSubGoals(true);
@@ -100,14 +99,11 @@ void RegulatedNavigator::monitorTask() {
 
   // 中文注释：直接使用 map->base_link 位移判断控制进展，不依赖 odom TF 或里程计消息。
   if (task_.state == NavigationState::CONTROLLING) {
-    if (task_.last_progress_pose.header.frame_id.empty() ||
-      navigation_utils::poseDistance(current_pose, task_.last_progress_pose) >=
-      progress_min_translation_)
+    if (task_.last_progress_pose.header.frame_id.empty() || navigation_utils::poseDistance(current_pose, task_.last_progress_pose) >= progress_min_translation_)
     {
       task_.last_progress_pose = current_pose;
       task_.last_progress_time = now();
-    } else if ((now() - task_.last_progress_time).seconds() >=
-      control_module_.progressTimeout())
+    } else if ((now() - task_.last_progress_time).seconds() >= control_module_.progressTimeout())
     {
       startRecovery("控制期间 map->base_link 位姿长时间无进展");
       return;
@@ -115,9 +111,7 @@ void RegulatedNavigator::monitorTask() {
   }
 
   updatePassedGoals(current_pose);
-  if (operation_mode_ == NavigationMode::AUTONOMOUS &&
-    task_.state == NavigationState::CONTROLLING && !planning_active_ &&
-    (now() - task_.last_replan_time).seconds() >= planning_module_.replanPeriod())
+  if (operation_mode_ == NavigationMode::AUTONOMOUS && task_.state == NavigationState::CONTROLLING && !planning_active_ && (now() - task_.last_replan_time).seconds() >= planning_module_.replanPeriod())
   {
     startPlanning(true);
   }
@@ -143,8 +137,7 @@ bool RegulatedNavigator::lookupCurrentPose(geometry_msgs::msg::PoseStamped & pos
 void RegulatedNavigator::updatePassedGoals(const geometry_msgs::msg::PoseStamped & current_pose) {
   if (task_.type != TaskType::THROUGH_POSES || task_.goals.size() <= 1) {return;}
   const auto previous_count = task_.goals.size();
-  while (task_.goals.size() > 1 &&
-    navigation_utils::poseDistance(current_pose, task_.goals.front()) <= passed_goal_radius_)
+  while (task_.goals.size() > 1 && navigation_utils::poseDistance(current_pose, task_.goals.front()) <= passed_goal_radius_)
   {
     task_.goals.erase(task_.goals.begin());
   }

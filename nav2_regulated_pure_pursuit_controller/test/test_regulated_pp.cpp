@@ -29,25 +29,20 @@
 
 class RclCppFixture
 {
-public:
-  RclCppFixture() {rclcpp::init(0, nullptr);}
+public: RclCppFixture() {rclcpp::init(0, nullptr);}
   ~RclCppFixture() {rclcpp::shutdown();}
 };
 RclCppFixture g_rclcppfixture;
 
 class BasicAPIRPP : public nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController
 {
-public:
-  BasicAPIRPP()
-  : nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController() {}
+public: BasicAPIRPP() : nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController() {}
 
   nav_msgs::msg::Path getPlan() {return global_plan_;}
 
   double getSpeed() {return desired_linear_vel_;}
 
-  std::unique_ptr<geometry_msgs::msg::PointStamped> createCarrotMsgWrapper(
-    const geometry_msgs::msg::PoseStamped & carrot_pose)
-  {
+  std::unique_ptr<geometry_msgs::msg::PointStamped> createCarrotMsgWrapper(const geometry_msgs::msg::PoseStamped & carrot_pose) {
     return createCarrotMsg(carrot_pose);
   }
 
@@ -55,67 +50,44 @@ public:
   void setCostRegulationScaling() {use_cost_regulated_linear_velocity_scaling_ = true;}
   void resetVelocityRegulationScaling() {use_regulated_linear_velocity_scaling_ = false;}
 
-  double getLookAheadDistanceWrapper(const geometry_msgs::msg::Twist & twist)
-  {
+  double getLookAheadDistanceWrapper(const geometry_msgs::msg::Twist & twist) {
     return getLookAheadDistance(twist);
   }
 
-  static geometry_msgs::msg::Point circleSegmentIntersectionWrapper(
-    const geometry_msgs::msg::Point & p1,
-    const geometry_msgs::msg::Point & p2,
-    double r)
-  {
+  static geometry_msgs::msg::Point circleSegmentIntersectionWrapper(const geometry_msgs::msg::Point & p1, const geometry_msgs::msg::Point & p2, double r) {
     return circleSegmentIntersection(p1, p2, r);
   }
 
-  geometry_msgs::msg::PoseStamped getLookAheadPointWrapper(
-    const double & dist, const nav_msgs::msg::Path & path)
-  {
+  geometry_msgs::msg::PoseStamped getLookAheadPointWrapper(const double & dist, const nav_msgs::msg::Path & path) {
     return getLookAheadPoint(dist, path);
   }
 
-  bool shouldRotateToPathWrapper(
-    const geometry_msgs::msg::PoseStamped & carrot_pose, double & angle_to_path)
-  {
+  bool shouldRotateToPathWrapper(const geometry_msgs::msg::PoseStamped & carrot_pose, double & angle_to_path) {
     return shouldRotateToPath(carrot_pose, angle_to_path);
   }
 
-  bool shouldRotateToGoalHeadingWrapper(const geometry_msgs::msg::PoseStamped & carrot_pose)
-  {
+  bool shouldRotateToGoalHeadingWrapper(const geometry_msgs::msg::PoseStamped & carrot_pose) {
     return shouldRotateToGoalHeading(carrot_pose);
   }
 
-  void rotateToHeadingWrapper(
-    double & linear_vel, double & angular_vel,
-    const double & angle_to_path, const geometry_msgs::msg::Twist & curr_speed)
-  {
+  void rotateToHeadingWrapper(double & linear_vel, double & angular_vel, const double & angle_to_path, const geometry_msgs::msg::Twist & curr_speed) {
     return rotateToHeading(linear_vel, angular_vel, angle_to_path, curr_speed);
   }
 
-  void applyConstraintsWrapper(
-    const double & curvature, const geometry_msgs::msg::Twist & curr_speed,
-    const double & pose_cost, const nav_msgs::msg::Path & path, double & linear_vel, double & sign)
-  {
-    return applyConstraints(
-      curvature, curr_speed, pose_cost, path,
-      linear_vel, sign);
+  void applyConstraintsWrapper(const double & curvature, const geometry_msgs::msg::Twist & curr_speed, const double & pose_cost, const nav_msgs::msg::Path & path, double & linear_vel, double & sign) {
+    return applyConstraints(curvature, curr_speed, pose_cost, path, linear_vel, sign);
   }
 
-  double findVelocitySignChangeWrapper(
-    const nav_msgs::msg::Path & transformed_plan)
-  {
+  double findVelocitySignChangeWrapper(const nav_msgs::msg::Path & transformed_plan) {
     return findVelocitySignChange(transformed_plan);
   }
 
-  nav_msgs::msg::Path transformGlobalPlanWrapper(
-    const geometry_msgs::msg::PoseStamped & pose)
-  {
+  nav_msgs::msg::Path transformGlobalPlanWrapper(const geometry_msgs::msg::PoseStamped & pose) {
     return transformGlobalPlan(pose);
   }
 };
 
-TEST(RegulatedPurePursuitTest, basicAPI)
-{
+TEST(RegulatedPurePursuitTest, basicAPI) {
   auto node = std::make_shared<rclcpp_lifecycle::LifecycleNode>("testRPP");
   std::string name = "PathFollower";
   auto tf = std::make_shared<tf2_ros::Buffer>(node->get_clock());
@@ -150,8 +122,7 @@ TEST(RegulatedPurePursuitTest, basicAPI)
   EXPECT_EQ(ctrl->getSpeed(), base_speed);
 }
 
-TEST(RegulatedPurePursuitTest, createCarrotMsg)
-{
+TEST(RegulatedPurePursuitTest, createCarrotMsg) {
   auto ctrl = std::make_shared<BasicAPIRPP>();
   geometry_msgs::msg::PoseStamped pose;
   pose.header.frame_id = "Hi!";
@@ -166,8 +137,7 @@ TEST(RegulatedPurePursuitTest, createCarrotMsg)
   EXPECT_EQ(rtn->point.z, 0.01);
 }
 
-TEST(RegulatedPurePursuitTest, findVelocitySignChange)
-{
+TEST(RegulatedPurePursuitTest, findVelocitySignChange) {
   auto ctrl = std::make_shared<BasicAPIRPP>();
   auto node = std::make_shared<rclcpp_lifecycle::LifecycleNode>("testRPPfindVelocitySignChange");
   geometry_msgs::msg::PoseStamped pose;
@@ -198,30 +168,18 @@ TEST(RegulatedPurePursuitTest, findVelocitySignChange)
   EXPECT_EQ(rtn, std::numeric_limits<double>::max());
 }
 
-using CircleSegmentIntersectionParam = std::tuple<
-  std::pair<double, double>,
-  std::pair<double, double>,
-  double,
-  std::pair<double, double>
->;
+using CircleSegmentIntersectionParam = std::tuple< std::pair<double, double>, std::pair<double, double>, double, std::pair<double, double> >;
 
 class CircleSegmentIntersectionTest
   : public ::testing::TestWithParam<CircleSegmentIntersectionParam>
 {};
 
-TEST_P(CircleSegmentIntersectionTest, circleSegmentIntersection)
-{
+TEST_P(CircleSegmentIntersectionTest, circleSegmentIntersection) {
   auto pair1 = std::get<0>(GetParam());
   auto pair2 = std::get<1>(GetParam());
   auto r = std::get<2>(GetParam());
   auto expected_pair = std::get<3>(GetParam());
-  auto pair_to_point = [](std::pair<double, double> p) -> geometry_msgs::msg::Point {
-      geometry_msgs::msg::Point point;
-      point.x = p.first;
-      point.y = p.second;
-      point.z = 0.0;
-      return point;
-    };
+  auto pair_to_point = [](std::pair<double, double> p) -> geometry_msgs::msg::Point {geometry_msgs::msg::Point point; point.x = p.first; point.y = p.second; point.z = 0.0; return point;};
   auto p1 = pair_to_point(pair1);
   auto p2 = pair_to_point(pair2);
   auto actual = BasicAPIRPP::circleSegmentIntersectionWrapper(p1, p2, r);
@@ -232,98 +190,9 @@ TEST_P(CircleSegmentIntersectionTest, circleSegmentIntersection)
   EXPECT_DOUBLE_EQ(r, std::hypot(actual.x, actual.y));
 }
 
-INSTANTIATE_TEST_SUITE_P(
-  InterpolationTest,
-  CircleSegmentIntersectionTest,
-  testing::Values(
-    // Origin to the positive X axis
-    CircleSegmentIntersectionParam{
-  {0.0, 0.0},
-  {2.0, 0.0},
-  1.0,
-  {1.0, 0.0}
-},
-    // Origin to hte negative X axis
-    CircleSegmentIntersectionParam{
-  {0.0, 0.0},
-  {-2.0, 0.0},
-  1.0,
-  {-1.0, 0.0}
-},
-    // Origin to the positive Y axis
-    CircleSegmentIntersectionParam{
-  {0.0, 0.0},
-  {0.0, 2.0},
-  1.0,
-  {0.0, 1.0}
-},
-    // Origin to the negative Y axis
-    CircleSegmentIntersectionParam{
-  {0.0, 0.0},
-  {0.0, -2.0},
-  1.0,
-  {0.0, -1.0}
-},
-    // non-origin to the X axis with non-unit circle, with the second point inside
-    CircleSegmentIntersectionParam{
-  {4.0, 0.0},
-  {-1.0, 0.0},
-  2.0,
-  {2.0, 0.0}
-},
-    // non-origin to the Y axis with non-unit circle, with the second point inside
-    CircleSegmentIntersectionParam{
-  {0.0, 4.0},
-  {0.0, -0.5},
-  2.0,
-  {0.0, 2.0}
-},
-    // origin to the positive X axis, on the circle
-    CircleSegmentIntersectionParam{
-  {2.0, 0.0},
-  {0.0, 0.0},
-  2.0,
-  {2.0, 0.0}
-},
-    // origin to the positive Y axis, on the circle
-    CircleSegmentIntersectionParam{
-  {0.0, 0.0},
-  {0.0, 2.0},
-  2.0,
-  {0.0, 2.0}
-},
-    // origin to the upper-right quadrant (3-4-5 triangle)
-    CircleSegmentIntersectionParam{
-  {0.0, 0.0},
-  {6.0, 8.0},
-  5.0,
-  {3.0, 4.0}
-},
-    // origin to the lower-left quadrant (3-4-5 triangle)
-    CircleSegmentIntersectionParam{
-  {0.0, 0.0},
-  {-6.0, -8.0},
-  5.0,
-  {-3.0, -4.0}
-},
-    // origin to the upper-left quadrant (3-4-5 triangle)
-    CircleSegmentIntersectionParam{
-  {0.0, 0.0},
-  {-6.0, 8.0},
-  5.0,
-  {-3.0, 4.0}
-},
-    // origin to the lower-right quadrant (3-4-5 triangle)
-    CircleSegmentIntersectionParam{
-  {0.0, 0.0},
-  {6.0, -8.0},
-  5.0,
-  {3.0, -4.0}
-}
-));
+INSTANTIATE_TEST_SUITE_P(InterpolationTest, CircleSegmentIntersectionTest, testing::Values(/* Origin to the positive X axis */ CircleSegmentIntersectionParam{{0.0, 0.0}, {2.0, 0.0}, 1.0, {1.0, 0.0}}, /* Origin to hte negative X axis */ CircleSegmentIntersectionParam{{0.0, 0.0}, {-2.0, 0.0}, 1.0, {-1.0, 0.0}}, /* Origin to the positive Y axis */ CircleSegmentIntersectionParam{{0.0, 0.0}, {0.0, 2.0}, 1.0, {0.0, 1.0}}, /* Origin to the negative Y axis */ CircleSegmentIntersectionParam{{0.0, 0.0}, {0.0, -2.0}, 1.0, {0.0, -1.0}}, /* non-origin to the X axis with non-unit circle, with the second point inside */ CircleSegmentIntersectionParam{{4.0, 0.0}, {-1.0, 0.0}, 2.0, {2.0, 0.0}}, /* non-origin to the Y axis with non-unit circle, with the second point inside */ CircleSegmentIntersectionParam{{0.0, 4.0}, {0.0, -0.5}, 2.0, {0.0, 2.0}}, /* origin to the positive X axis, on the circle */ CircleSegmentIntersectionParam{{2.0, 0.0}, {0.0, 0.0}, 2.0, {2.0, 0.0}}, /* origin to the positive Y axis, on the circle */ CircleSegmentIntersectionParam{{0.0, 0.0}, {0.0, 2.0}, 2.0, {0.0, 2.0}}, /* origin to the upper-right quadrant (3-4-5 triangle) */ CircleSegmentIntersectionParam{{0.0, 0.0}, {6.0, 8.0}, 5.0, {3.0, 4.0}}, /* origin to the lower-left quadrant (3-4-5 triangle) */ CircleSegmentIntersectionParam{{0.0, 0.0}, {-6.0, -8.0}, 5.0, {-3.0, -4.0}}, /* origin to the upper-left quadrant (3-4-5 triangle) */ CircleSegmentIntersectionParam{{0.0, 0.0}, {-6.0, 8.0}, 5.0, {-3.0, 4.0}}, /* origin to the lower-right quadrant (3-4-5 triangle) */ CircleSegmentIntersectionParam{{0.0, 0.0}, {6.0, -8.0}, 5.0, {3.0, -4.0}}));
 
-TEST(RegulatedPurePursuitTest, lookaheadAPI)
-{
+TEST(RegulatedPurePursuitTest, lookaheadAPI) {
   auto ctrl = std::make_shared<BasicAPIRPP>();
   auto node = std::make_shared<rclcpp_lifecycle::LifecycleNode>("testRPP");
   std::string name = "PathFollower";
@@ -372,10 +241,7 @@ TEST(RegulatedPurePursuitTest, lookaheadAPI)
   EXPECT_EQ(pt.pose.position.x, 1.0);
 
   // test getting next closest point without interpolation
-  node->set_parameter(
-    rclcpp::Parameter(
-      name + ".use_interpolation",
-      rclcpp::ParameterValue(false)));
+  node->set_parameter(rclcpp::Parameter(name + ".use_interpolation", rclcpp::ParameterValue(false)));
   ctrl->configure(node, name, tf, costmap);
   dist = 3.8;
   pt = ctrl->getLookAheadPointWrapper(dist, path);
@@ -387,18 +253,14 @@ TEST(RegulatedPurePursuitTest, lookaheadAPI)
   EXPECT_EQ(pt.pose.position.x, 9.0);
 
   // test interpolation
-  node->set_parameter(
-    rclcpp::Parameter(
-      name + ".use_interpolation",
-      rclcpp::ParameterValue(true)));
+  node->set_parameter(rclcpp::Parameter(name + ".use_interpolation", rclcpp::ParameterValue(true)));
   ctrl->configure(node, name, tf, costmap);
   dist = 3.8;
   pt = ctrl->getLookAheadPointWrapper(dist, path);
   EXPECT_EQ(pt.pose.position.x, 3.8);
 }
 
-TEST(RegulatedPurePursuitTest, rotateTests)
-{
+TEST(RegulatedPurePursuitTest, rotateTests) {
   auto ctrl = std::make_shared<BasicAPIRPP>();
   auto node = std::make_shared<rclcpp_lifecycle::LifecycleNode>("testRPP");
   std::string name = "PathFollower";
@@ -468,8 +330,7 @@ TEST(RegulatedPurePursuitTest, rotateTests)
   EXPECT_NEAR(ang_v, 0.84, 0.01);
 }
 
-TEST(RegulatedPurePursuitTest, applyConstraints)
-{
+TEST(RegulatedPurePursuitTest, applyConstraints) {
   auto ctrl = std::make_shared<BasicAPIRPP>();
   auto node = std::make_shared<rclcpp_lifecycle::LifecycleNode>("testRPP");
   std::string name = "PathFollower";
@@ -479,17 +340,11 @@ TEST(RegulatedPurePursuitTest, applyConstraints)
   costmap->on_configure(state);
 
   constexpr double approach_velocity_scaling_dist = 0.6;
-  nav2_util::declare_parameter_if_not_declared(
-    node,
-    name + ".approach_velocity_scaling_dist",
-    rclcpp::ParameterValue(approach_velocity_scaling_dist));
+  nav2_util::declare_parameter_if_not_declared(node, name + ".approach_velocity_scaling_dist", rclcpp::ParameterValue(approach_velocity_scaling_dist));
 
   ctrl->configure(node, name, tf, costmap);
 
-  auto no_approach_path = path_utils::generate_path(
-    geometry_msgs::msg::PoseStamped(), 0.1, {
-    std::make_unique<path_utils::Straight>(approach_velocity_scaling_dist + 1.0)
-  });
+  auto no_approach_path = path_utils::generate_path(geometry_msgs::msg::PoseStamped(), 0.1, {std::make_unique<path_utils::Straight>(approach_velocity_scaling_dist + 1.0)});
 
   double curvature = 0.5;
   geometry_msgs::msg::Twist curr_speed;
@@ -499,39 +354,28 @@ TEST(RegulatedPurePursuitTest, applyConstraints)
 
   // test curvature regulation (default)
   curr_speed.linear.x = 0.25;
-  ctrl->applyConstraintsWrapper(
-    curvature, curr_speed, pose_cost, no_approach_path,
-    linear_vel, sign);
+  ctrl->applyConstraintsWrapper(curvature, curr_speed, pose_cost, no_approach_path, linear_vel, sign);
   EXPECT_EQ(linear_vel, 0.25);  // min set speed
 
   linear_vel = 1.0;
   curvature = 0.7407;
   curr_speed.linear.x = 0.5;
-  ctrl->applyConstraintsWrapper(
-    curvature, curr_speed, pose_cost, no_approach_path,
-    linear_vel, sign);
+  ctrl->applyConstraintsWrapper(curvature, curr_speed, pose_cost, no_approach_path, linear_vel, sign);
   EXPECT_NEAR(linear_vel, 0.5, 0.01);  // lower by curvature
 
   linear_vel = 1.0;
   curvature = 1000.0;
   curr_speed.linear.x = 0.25;
-  ctrl->applyConstraintsWrapper(
-    curvature, curr_speed, pose_cost, no_approach_path,
-    linear_vel, sign);
+  ctrl->applyConstraintsWrapper(curvature, curr_speed, pose_cost, no_approach_path, linear_vel, sign);
   EXPECT_NEAR(linear_vel, 0.25, 0.01);  // min out by curvature
 
   // Approach velocity scaling on a path with no distance left
-  auto approach_path = path_utils::generate_path(
-    geometry_msgs::msg::PoseStamped(), 0.1, {
-    std::make_unique<path_utils::Straight>(0.0)
-  });
+  auto approach_path = path_utils::generate_path(geometry_msgs::msg::PoseStamped(), 0.1, {std::make_unique<path_utils::Straight>(0.0)});
 
   linear_vel = 1.0;
   curvature = 0.0;
   curr_speed.linear.x = 0.25;
-  ctrl->applyConstraintsWrapper(
-    curvature, curr_speed, pose_cost, approach_path,
-    linear_vel, sign);
+  ctrl->applyConstraintsWrapper(curvature, curr_speed, pose_cost, approach_path, linear_vel, sign);
   EXPECT_NEAR(linear_vel, 0.05, 0.01);  // min out on min approach velocity
 
   // now try with cost regulation (turn off velocity and only cost)
@@ -569,47 +413,20 @@ TEST(RegulatedPurePursuitTest, applyConstraints)
   // EXPECT_NEAR(linear_vel, 0.5, 0.01);
 }
 
-TEST(RegulatedPurePursuitTest, testDynamicParameter)
-{
+TEST(RegulatedPurePursuitTest, testDynamicParameter) {
   auto node = std::make_shared<rclcpp_lifecycle::LifecycleNode>("Smactest");
   auto costmap = std::make_shared<nav2_costmap_2d::Costmap2DROS>("global_costmap");
   costmap->on_configure(rclcpp_lifecycle::State());
-  auto ctrl =
-    std::make_unique<nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController>();
+  auto ctrl = std::make_unique<nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController>();
   auto tf = std::make_shared<tf2_ros::Buffer>(node->get_clock());
   ctrl->configure(node, "test", tf, costmap);
   ctrl->activate();
 
-  auto rec_param = std::make_shared<rclcpp::AsyncParametersClient>(
-    node->get_node_base_interface(), node->get_node_topics_interface(),
-    node->get_node_graph_interface(),
-    node->get_node_services_interface());
+  auto rec_param = std::make_shared<rclcpp::AsyncParametersClient>(node->get_node_base_interface(), node->get_node_topics_interface(), node->get_node_graph_interface(), node->get_node_services_interface());
 
-  auto results = rec_param->set_parameters_atomically(
-    {rclcpp::Parameter("test.desired_linear_vel", 1.0),
-      rclcpp::Parameter("test.lookahead_dist", 7.0),
-      rclcpp::Parameter("test.max_lookahead_dist", 7.0),
-      rclcpp::Parameter("test.min_lookahead_dist", 6.0),
-      rclcpp::Parameter("test.lookahead_time", 1.8),
-      rclcpp::Parameter("test.rotate_to_heading_angular_vel", 18.0),
-      rclcpp::Parameter("test.min_approach_linear_velocity", 1.0),
-      rclcpp::Parameter("test.max_allowed_time_to_collision_up_to_carrot", 2.0),
-      rclcpp::Parameter("test.cost_scaling_dist", 2.0),
-      rclcpp::Parameter("test.cost_scaling_gain", 4.0),
-      rclcpp::Parameter("test.regulated_linear_scaling_min_radius", 10.0),
-      rclcpp::Parameter("test.transform_tolerance", 30.0),
-      rclcpp::Parameter("test.max_angular_accel", 3.0),
-      rclcpp::Parameter("test.rotate_to_heading_min_angle", 0.7),
-      rclcpp::Parameter("test.regulated_linear_scaling_min_speed", 4.0),
-      rclcpp::Parameter("test.use_velocity_scaled_lookahead_dist", false),
-      rclcpp::Parameter("test.use_regulated_linear_velocity_scaling", false),
-      rclcpp::Parameter("test.use_cost_regulated_linear_velocity_scaling", false),
-      rclcpp::Parameter("test.allow_reversing", false),
-      rclcpp::Parameter("test.use_rotate_to_heading", false)});
+  auto results = rec_param->set_parameters_atomically({rclcpp::Parameter("test.desired_linear_vel", 1.0), rclcpp::Parameter("test.lookahead_dist", 7.0), rclcpp::Parameter("test.max_lookahead_dist", 7.0), rclcpp::Parameter("test.min_lookahead_dist", 6.0), rclcpp::Parameter("test.lookahead_time", 1.8), rclcpp::Parameter("test.rotate_to_heading_angular_vel", 18.0), rclcpp::Parameter("test.min_approach_linear_velocity", 1.0), rclcpp::Parameter("test.max_allowed_time_to_collision_up_to_carrot", 2.0), rclcpp::Parameter("test.cost_scaling_dist", 2.0), rclcpp::Parameter("test.cost_scaling_gain", 4.0), rclcpp::Parameter("test.regulated_linear_scaling_min_radius", 10.0), rclcpp::Parameter("test.transform_tolerance", 30.0), rclcpp::Parameter("test.max_angular_accel", 3.0), rclcpp::Parameter("test.rotate_to_heading_min_angle", 0.7), rclcpp::Parameter("test.regulated_linear_scaling_min_speed", 4.0), rclcpp::Parameter("test.use_velocity_scaled_lookahead_dist", false), rclcpp::Parameter("test.use_regulated_linear_velocity_scaling", false), rclcpp::Parameter("test.use_cost_regulated_linear_velocity_scaling", false), rclcpp::Parameter("test.allow_reversing", false), rclcpp::Parameter("test.use_rotate_to_heading", false)});
 
-  rclcpp::spin_until_future_complete(
-    node->get_node_base_interface(),
-    results);
+  rclcpp::spin_until_future_complete(node->get_node_base_interface(), results);
 
   EXPECT_EQ(node->get_parameter("test.desired_linear_vel").as_double(), 1.0);
   EXPECT_EQ(node->get_parameter("test.lookahead_dist").as_double(), 7.0);
@@ -618,9 +435,7 @@ TEST(RegulatedPurePursuitTest, testDynamicParameter)
   EXPECT_EQ(node->get_parameter("test.lookahead_time").as_double(), 1.8);
   EXPECT_EQ(node->get_parameter("test.rotate_to_heading_angular_vel").as_double(), 18.0);
   EXPECT_EQ(node->get_parameter("test.min_approach_linear_velocity").as_double(), 1.0);
-  EXPECT_EQ(
-    node->get_parameter(
-      "test.max_allowed_time_to_collision_up_to_carrot").as_double(), 2.0);
+  EXPECT_EQ(node->get_parameter("test.max_allowed_time_to_collision_up_to_carrot").as_double(), 2.0);
   EXPECT_EQ(node->get_parameter("test.cost_scaling_dist").as_double(), 2.0);
   EXPECT_EQ(node->get_parameter("test.cost_scaling_gain").as_double(), 4.0);
   EXPECT_EQ(node->get_parameter("test.regulated_linear_scaling_min_radius").as_double(), 10.0);
@@ -630,37 +445,25 @@ TEST(RegulatedPurePursuitTest, testDynamicParameter)
   EXPECT_EQ(node->get_parameter("test.regulated_linear_scaling_min_speed").as_double(), 4.0);
   EXPECT_EQ(node->get_parameter("test.use_velocity_scaled_lookahead_dist").as_bool(), false);
   EXPECT_EQ(node->get_parameter("test.use_regulated_linear_velocity_scaling").as_bool(), false);
-  EXPECT_EQ(
-    node->get_parameter(
-      "test.use_cost_regulated_linear_velocity_scaling").as_bool(), false);
+  EXPECT_EQ(node->get_parameter("test.use_cost_regulated_linear_velocity_scaling").as_bool(), false);
   EXPECT_EQ(node->get_parameter("test.allow_reversing").as_bool(), false);
   EXPECT_EQ(node->get_parameter("test.use_rotate_to_heading").as_bool(), false);
 }
 
 class TransformGlobalPlanTest : public ::testing::Test
 {
-protected:
-  void SetUp() override
-  {
+protected: void SetUp() override {
     ctrl_ = std::make_shared<BasicAPIRPP>();
     node_ = std::make_shared<rclcpp_lifecycle::LifecycleNode>("testRPP");
     tf_buffer_ = std::make_shared<tf2_ros::Buffer>(node_->get_clock());
     costmap_ = std::make_shared<nav2_costmap_2d::Costmap2DROS>("fake_costmap");
   }
 
-  void configure_costmap(uint16_t width, double resolution)
-  {
+  void configure_costmap(uint16_t width, double resolution) {
     constexpr char costmap_frame[] = "test_costmap_frame";
     constexpr char robot_frame[] = "test_robot_frame";
 
-    auto results = costmap_->set_parameters(
-    {
-      rclcpp::Parameter("global_frame", costmap_frame),
-      rclcpp::Parameter("robot_base_frame", robot_frame),
-      rclcpp::Parameter("width", width),
-      rclcpp::Parameter("height", width),
-      rclcpp::Parameter("resolution", resolution)
-    });
+    auto results = costmap_->set_parameters({rclcpp::Parameter("global_frame", costmap_frame), rclcpp::Parameter("robot_base_frame", robot_frame), rclcpp::Parameter("width", width), rclcpp::Parameter("height", width), rclcpp::Parameter("resolution", resolution)});
     for (const auto & result : results) {
       EXPECT_TRUE(result.successful) << result.reason;
     }
@@ -669,17 +472,13 @@ protected:
     costmap_->on_configure(state);
   }
 
-  void configure_controller(double max_robot_pose_search_dist)
-  {
+  void configure_controller(double max_robot_pose_search_dist) {
     std::string plugin_name = "test_rpp";
-    nav2_util::declare_parameter_if_not_declared(
-      node_, plugin_name + ".max_robot_pose_search_dist",
-      rclcpp::ParameterValue(max_robot_pose_search_dist));
+    nav2_util::declare_parameter_if_not_declared(node_, plugin_name + ".max_robot_pose_search_dist", rclcpp::ParameterValue(max_robot_pose_search_dist));
     ctrl_->configure(node_, plugin_name, tf_buffer_, costmap_);
   }
 
-  void setup_transforms(geometry_msgs::msg::Point & robot_position)
-  {
+  void setup_transforms(geometry_msgs::msg::Point & robot_position) {
     transform_time_ = node_->get_clock()->now();
     // Note: transforms go parent to child
 
@@ -702,10 +501,7 @@ protected:
     costmap_to_robot.transform.translation.z = robot_position.z;
 
     tf2_msgs::msg::TFMessage tf_message;
-    tf_message.transforms = {
-      path_to_costmap,
-      costmap_to_robot
-    };
+    tf_message.transforms = {path_to_costmap, costmap_to_robot};
     for (const auto & transform : tf_message.transforms) {
       tf_buffer_->setTransform(transform, "test", false);
     }
@@ -726,8 +522,7 @@ protected:
 // This tests that not only should nothing get pruned on a costmap
 // that contains the entire global_plan, and also that it doesn't skip to the end of the path
 // which is closer to the robot pose than the start.
-TEST_F(TransformGlobalPlanTest, no_pruning_on_large_costmap)
-{
+TEST_F(TransformGlobalPlanTest, no_pruning_on_large_costmap) {
   geometry_msgs::msg::PoseStamped robot_pose;
   robot_pose.header.frame_id = COSTMAP_FRAME;
   robot_pose.header.stamp = transform_time_;
@@ -752,10 +547,7 @@ TEST_F(TransformGlobalPlanTest, no_pruning_on_large_costmap)
   constexpr double spacing = 0.1;
   constexpr double circle_radius = 1.0;
 
-  auto global_plan = path_utils::generate_path(
-    start_of_path, spacing, {
-    std::make_unique<path_utils::LeftCircle>(circle_radius)
-  });
+  auto global_plan = path_utils::generate_path(start_of_path, spacing, {std::make_unique<path_utils::LeftCircle>(circle_radius)});
 
   ctrl_->setPlan(global_plan);
 
@@ -767,8 +559,7 @@ TEST_F(TransformGlobalPlanTest, no_pruning_on_large_costmap)
 
 // This plan shouldn't get pruned because of the costmap,
 // but should be half pruned because it is halfway around the circle
-TEST_F(TransformGlobalPlanTest, transform_start_selection)
-{
+TEST_F(TransformGlobalPlanTest, transform_start_selection) {
   geometry_msgs::msg::PoseStamped robot_pose;
   robot_pose.header.frame_id = COSTMAP_FRAME;
   robot_pose.header.stamp = transform_time_;
@@ -796,10 +587,7 @@ TEST_F(TransformGlobalPlanTest, transform_start_selection)
   start_of_path.pose.position.y = 0.0;
   start_of_path.pose.position.z = 0.0;
 
-  auto global_plan = path_utils::generate_path(
-    start_of_path, spacing, {
-    std::make_unique<path_utils::LeftCircle>(circle_radius)
-  });
+  auto global_plan = path_utils::generate_path(start_of_path, spacing, {std::make_unique<path_utils::LeftCircle>(circle_radius)});
 
   ctrl_->setPlan(global_plan);
 
@@ -811,8 +599,7 @@ TEST_F(TransformGlobalPlanTest, transform_start_selection)
 }
 
 // This should throw an exception when all poses are outside of the costmap
-TEST_F(TransformGlobalPlanTest, all_poses_outside_of_costmap)
-{
+TEST_F(TransformGlobalPlanTest, all_poses_outside_of_costmap) {
   geometry_msgs::msg::PoseStamped robot_pose;
   robot_pose.header.frame_id = COSTMAP_FRAME;
   robot_pose.header.stamp = transform_time_;
@@ -841,10 +628,7 @@ TEST_F(TransformGlobalPlanTest, all_poses_outside_of_costmap)
   start_of_path.pose.position.y = 0.0;
   start_of_path.pose.position.z = 0.0;
 
-  auto global_plan = path_utils::generate_path(
-    start_of_path, spacing, {
-    std::make_unique<path_utils::LeftCircle>(circle_radius)
-  });
+  auto global_plan = path_utils::generate_path(start_of_path, spacing, {std::make_unique<path_utils::LeftCircle>(circle_radius)});
 
   ctrl_->setPlan(global_plan);
 
@@ -853,8 +637,7 @@ TEST_F(TransformGlobalPlanTest, all_poses_outside_of_costmap)
 }
 
 // Should shortcut the circle if the circle is shorter than max_robot_pose_search_dist
-TEST_F(TransformGlobalPlanTest, good_circle_shortcut)
-{
+TEST_F(TransformGlobalPlanTest, good_circle_shortcut) {
   geometry_msgs::msg::PoseStamped robot_pose;
   robot_pose.header.frame_id = COSTMAP_FRAME;
   robot_pose.header.stamp = transform_time_;
@@ -883,10 +666,7 @@ TEST_F(TransformGlobalPlanTest, good_circle_shortcut)
   start_of_path.pose.position.y = 0.0;
   start_of_path.pose.position.z = 0.0;
 
-  auto global_plan = path_utils::generate_path(
-    start_of_path, spacing, {
-    std::make_unique<path_utils::LeftCircle>(circle_radius)
-  });
+  auto global_plan = path_utils::generate_path(start_of_path, spacing, {std::make_unique<path_utils::LeftCircle>(circle_radius)});
 
   ctrl_->setPlan(global_plan);
 
@@ -898,8 +678,7 @@ TEST_F(TransformGlobalPlanTest, good_circle_shortcut)
 }
 
 // Simple costmap pruning on a straight line
-TEST_F(TransformGlobalPlanTest, costmap_pruning)
-{
+TEST_F(TransformGlobalPlanTest, costmap_pruning) {
   geometry_msgs::msg::PoseStamped robot_pose;
   robot_pose.header.frame_id = COSTMAP_FRAME;
   robot_pose.header.stamp = transform_time_;
@@ -928,10 +707,7 @@ TEST_F(TransformGlobalPlanTest, costmap_pruning)
 
   constexpr double path_length = 100.0;
 
-  auto global_plan = path_utils::generate_path(
-    start_of_path, spacing, {
-    std::make_unique<path_utils::Straight>(path_length)
-  });
+  auto global_plan = path_utils::generate_path(start_of_path, spacing, {std::make_unique<path_utils::Straight>(path_length)});
 
   ctrl_->setPlan(global_plan);
 
@@ -943,8 +719,7 @@ TEST_F(TransformGlobalPlanTest, costmap_pruning)
 }
 
 // Should prune out later portions of the path that come back into the costmap
-TEST_F(TransformGlobalPlanTest, prune_after_leaving_costmap)
-{
+TEST_F(TransformGlobalPlanTest, prune_after_leaving_costmap) {
   geometry_msgs::msg::PoseStamped robot_pose;
   robot_pose.header.frame_id = COSTMAP_FRAME;
   robot_pose.header.stamp = transform_time_;
@@ -973,12 +748,7 @@ TEST_F(TransformGlobalPlanTest, prune_after_leaving_costmap)
 
   constexpr double path_length = 100.0;
 
-  auto global_plan = path_utils::generate_path(
-    start_of_path, spacing, {
-    std::make_unique<path_utils::Straight>(path_length),
-    std::make_unique<path_utils::LeftTurnAround>(1.0),
-    std::make_unique<path_utils::Straight>(path_length)
-  });
+  auto global_plan = path_utils::generate_path(start_of_path, spacing, {std::make_unique<path_utils::Straight>(path_length), std::make_unique<path_utils::LeftTurnAround>(1.0), std::make_unique<path_utils::Straight>(path_length)});
 
   ctrl_->setPlan(global_plan);
 

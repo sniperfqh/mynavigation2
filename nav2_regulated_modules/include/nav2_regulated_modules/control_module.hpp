@@ -11,8 +11,7 @@ class ControlModule
 {
 public:
   // 中文注释：写入控制插件 ID、目标检查器 ID 和无进展超时，并校验超时必须为正数。
-  void configure(
-    std::string controller_id, std::string goal_checker_id, double progress_timeout);
+  void configure(std::string controller_id, std::string goal_checker_id, double progress_timeout);
 
   // 中文注释：返回 FollowPath Goal 使用的控制器插件 ID。
   const std::string & controllerId() const;

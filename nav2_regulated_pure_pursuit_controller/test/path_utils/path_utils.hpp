@@ -38,9 +38,7 @@ public:
 
 class Arc : public PathSegment
 {
-public:
-  explicit Arc(double radius, double radians)
-  : radius_(radius), radians_(radians) {}
+public: explicit Arc(double radius, double radians) : radius_(radius), radians_(radians) {}
   void append(nav_msgs::msg::Path & path, double spacing) const override;
 
 private:
@@ -50,9 +48,7 @@ private:
 
 class Straight : public PathSegment
 {
-public:
-  explicit Straight(double length)
-  : length_(length) {}
+public: explicit Straight(double length) : length_(length) {}
   void append(nav_msgs::msg::Path & path, double spacing) const override;
 
 private:
@@ -61,50 +57,35 @@ private:
 
 class LeftTurn : public Arc
 {
-public:
-  explicit LeftTurn(double radius)
-  : Arc(radius, M_PI_2) {}
+public: explicit LeftTurn(double radius) : Arc(radius, M_PI_2) {}
 };
 
 class RightTurn : public Arc
 {
-public:
-  explicit RightTurn(double radius)
-  : Arc(radius, -M_PI_2) {}
+public: explicit RightTurn(double radius) : Arc(radius, -M_PI_2) {}
 };
 
 class LeftTurnAround : public Arc
 {
-public:
-  explicit LeftTurnAround(double radius)
-  : Arc(radius, M_PI) {}
+public: explicit LeftTurnAround(double radius) : Arc(radius, M_PI) {}
 };
 
 class RightTurnAround : public Arc
 {
-public:
-  explicit RightTurnAround(double radius)
-  : Arc(radius, -M_PI) {}
+public: explicit RightTurnAround(double radius) : Arc(radius, -M_PI) {}
 };
 
 class LeftCircle : public Arc
 {
-public:
-  explicit LeftCircle(double radius)
-  : Arc(radius, 2.0 * M_PI) {}
+public: explicit LeftCircle(double radius) : Arc(radius, 2.0 * M_PI) {}
 };
 
 class RightCircle : public Arc
 {
-public:
-  explicit RightCircle(double radius)
-  : Arc(radius, -2.0 * M_PI) {}
+public: explicit RightCircle(double radius) : Arc(radius, -2.0 * M_PI) {}
 };
 
-nav_msgs::msg::Path generate_path(
-  geometry_msgs::msg::PoseStamped start,
-  double spacing,
-  std::initializer_list<std::unique_ptr<PathSegment>> segments);
+nav_msgs::msg::Path generate_path(geometry_msgs::msg::PoseStamped start, double spacing, std::initializer_list<std::unique_ptr<PathSegment>> segments);
 
 }  // namespace path_utils
 

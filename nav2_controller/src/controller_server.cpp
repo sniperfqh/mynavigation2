@@ -455,19 +455,7 @@ void ControllerServer::computeAndPublishVelocity() {
   // Find the closest pose to current pose on global path
   // 中文：在全局路径上查找距离当前位姿最近的位姿。
   nav_msgs::msg::Path & current_path = current_path_;
-  auto find_closest_pose_idx =
-    [&pose, &current_path]() {
-      size_t closest_pose_idx = 0;
-      double curr_min_dist = std::numeric_limits<double>::max();
-      for (size_t curr_idx = 0; curr_idx < current_path.poses.size(); ++curr_idx) {
-        double curr_dist = nav2_util::geometry_utils::euclidean_distance(pose, current_path.poses[curr_idx]);
-        if (curr_dist < curr_min_dist) {
-          curr_min_dist = curr_dist;
-          closest_pose_idx = curr_idx;
-        }
-      }
-      return closest_pose_idx;
-    };
+  auto find_closest_pose_idx = [&pose, &current_path]() {size_t closest_pose_idx = 0; double curr_min_dist = std::numeric_limits<double>::max(); for (size_t curr_idx = 0; curr_idx < current_path.poses.size(); ++curr_idx) {double curr_dist = nav2_util::geometry_utils::euclidean_distance(pose, current_path.poses[curr_idx]); if (curr_dist < curr_min_dist) {curr_min_dist = curr_dist; closest_pose_idx = curr_idx;}} return closest_pose_idx;};
 
   feedback->distance_to_goal = nav2_util::geometry_utils::calculate_path_length(current_path_, find_closest_pose_idx());
   action_server_->publish_feedback(feedback);

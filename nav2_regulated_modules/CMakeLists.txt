@@ -21,6 +21,7 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(spdlog_wrapper REQUIRED)
+find_package(visualization_msgs REQUIRED)
 
 # 中文注释：生成固定路径业务 Action；外层接口只暴露完整 Path、剩余距离和成功标志。
 rosidl_generate_interfaces(${PROJECT_NAME}
@@ -62,8 +63,13 @@ ament_target_dependencies(regulated_navigator_node
 rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
 target_link_libraries(regulated_navigator_node "${cpp_typesupport_target}")
 
+# 中文注释：将 Collision Monitor 的三个 PolygonStamped 转为可调线宽并带文字的 RViz MarkerArray。
+add_executable(collision_boundary_visualizer_node src/collision_boundary_visualizer.cpp)
+target_compile_features(collision_boundary_visualizer_node PUBLIC c_std_99 cxx_std_17)
+ament_target_dependencies(collision_boundary_visualizer_node rclcpp geometry_msgs visualization_msgs)
+
 # 中文注释：安装可执行文件供 ros2 run 调用，并安装头文件及运行所需配置资源。
-install(TARGETS regulated_navigator_node
+install(TARGETS regulated_navigator_node collision_boundary_visualizer_node
   DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY

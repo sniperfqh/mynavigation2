@@ -11,9 +11,7 @@ class PlanningModule
 {
 public:
   // 中文注释：写入规划／平滑插件选择、平滑开关、重规划频率和连续失败上限。
-  void configure(
-    std::string planner_id, std::string smoother_id, bool use_smoother,
-    double replan_frequency, int max_failures);
+  void configure(std::string planner_id, std::string smoother_id, bool use_smoother, double replan_frequency, int max_failures);
 
   // 中文注释：返回 ComputePath Goal 使用的规划插件 ID。
   const std::string & plannerId() const;

@@ -48,27 +48,8 @@ void RegulatedNavigator::startPlanning(const bool replanning) {
     goal.planner_id = planning_module_.plannerId();
     goal.use_start = false;
     auto options = rclcpp_action::Client<ComputePathThroughPoses>::SendGoalOptions();
-    options.goal_response_callback = [this, generation, sequence](auto handle) {
-        if (isCurrentPlan(generation, sequence)) {
-          active_compute_poses_goal_ = handle;
-          if (!handle) {
-            planning_active_ = false;
-            handlePlanningFailure("多点规划 Goal 被拒绝");
-          }
-        }
-      };
-    options.result_callback = [this, generation, sequence](const auto & result) {
-        if (!isCurrentPlan(generation, sequence)) {return;}
-        planning_active_ = false;
-        active_compute_poses_goal_.reset();
-        if (result.code != rclcpp_action::ResultCode::SUCCEEDED || !result.result ||
-          result.result->path.poses.empty())
-        {
-          handlePlanningFailure("多点规划失败或返回空路径");
-          return;
-        }
-        onPathReady(result.result->path);
-      };
+    options.goal_response_callback = [this, generation, sequence](auto handle) {if (isCurrentPlan(generation, sequence)) {active_compute_poses_goal_ = handle; if (!handle) {planning_active_ = false; handlePlanningFailure("多点规划 Goal 被拒绝");}}};
+    options.result_callback = [this, generation, sequence](const auto & result) {if (!isCurrentPlan(generation, sequence)) {return;} planning_active_ = false; active_compute_poses_goal_.reset(); if (result.code != rclcpp_action::ResultCode::SUCCEEDED || !result.result || result.result->path.poses.empty()) {handlePlanningFailure("多点规划失败或返回空路径"); return;} onPathReady(result.result->path);};
     compute_poses_client_->async_send_goal(goal, options);
   } else {
     ComputePathToPose::Goal goal;
@@ -76,27 +57,8 @@ void RegulatedNavigator::startPlanning(const bool replanning) {
     goal.planner_id = planning_module_.plannerId();
     goal.use_start = false;
     auto options = rclcpp_action::Client<ComputePathToPose>::SendGoalOptions();
-    options.goal_response_callback = [this, generation, sequence](auto handle) {
-        if (isCurrentPlan(generation, sequence)) {
-          active_compute_pose_goal_ = handle;
-          if (!handle) {
-            planning_active_ = false;
-            handlePlanningFailure("单点规划 Goal 被拒绝");
-          }
-        }
-      };
-    options.result_callback = [this, generation, sequence](const auto & result) {
-        if (!isCurrentPlan(generation, sequence)) {return;}
-        planning_active_ = false;
-        active_compute_pose_goal_.reset();
-        if (result.code != rclcpp_action::ResultCode::SUCCEEDED || !result.result ||
-          result.result->path.poses.empty())
-        {
-          handlePlanningFailure("单点规划失败或返回空路径");
-          return;
-        }
-        onPathReady(result.result->path);
-      };
+    options.goal_response_callback = [this, generation, sequence](auto handle) {if (isCurrentPlan(generation, sequence)) {active_compute_pose_goal_ = handle; if (!handle) {planning_active_ = false; handlePlanningFailure("单点规划 Goal 被拒绝");}}};
+    options.result_callback = [this, generation, sequence](const auto & result) {if (!isCurrentPlan(generation, sequence)) {return;} planning_active_ = false; active_compute_pose_goal_.reset(); if (result.code != rclcpp_action::ResultCode::SUCCEEDED || !result.result || result.result->path.poses.empty()) {handlePlanningFailure("单点规划失败或返回空路径"); return;} onPathReady(result.result->path);};
     compute_pose_client_->async_send_goal(goal, options);
   }
 }
@@ -130,28 +92,8 @@ void RegulatedNavigator::onPathReady(const nav_msgs::msg::Path & path) {
   goal.check_for_collisions = check_smoother_collisions_;
   LOG_DEBUG("发起路径平滑，generation={}，plan_sequence={}，smoother_id={}，原始路径点数={}", generation, sequence, planning_module_.smootherId(), path.poses.size());
   auto options = rclcpp_action::Client<SmoothPath>::SendGoalOptions();
-  options.goal_response_callback = [this, generation, sequence](auto handle) {
-      if (isCurrentPlan(generation, sequence)) {
-        active_smooth_goal_ = handle;
-        if (!handle) {
-          LOG_WARN("平滑 Goal 被拒绝，回退使用原始路径");
-          sendFollowPath(pending_raw_path_);
-        }
-      }
-    };
-  options.result_callback = [this, generation, sequence](const auto & result) {
-      if (!isCurrentPlan(generation, sequence)) {return;}
-      active_smooth_goal_.reset();
-      if (result.code == rclcpp_action::ResultCode::SUCCEEDED && result.result &&
-        !result.result->path.poses.empty())
-      {
-        LOG_DEBUG("路径平滑成功，generation={}，plan_sequence={}，路径点数={} -> {}", generation, sequence, pending_raw_path_.poses.size(), result.result->path.poses.size());
-        sendFollowPath(result.result->path);
-      } else {
-        LOG_WARN("路径平滑失败，回退使用原始规划路径");
-        sendFollowPath(pending_raw_path_);
-      }
-    };
+  options.goal_response_callback = [this, generation, sequence](auto handle) {if (isCurrentPlan(generation, sequence)) {active_smooth_goal_ = handle; if (!handle) {LOG_WARN("平滑 Goal 被拒绝，回退使用原始路径"); sendFollowPath(pending_raw_path_);}}};
+  options.result_callback = [this, generation, sequence](const auto & result) {if (!isCurrentPlan(generation, sequence)) {return;} active_smooth_goal_.reset(); if (result.code == rclcpp_action::ResultCode::SUCCEEDED && result.result && !result.result->path.poses.empty()) {LOG_DEBUG("路径平滑成功，generation={}，plan_sequence={}，路径点数={} -> {}", generation, sequence, pending_raw_path_.poses.size(), result.result->path.poses.size()); sendFollowPath(result.result->path);} else {LOG_WARN("路径平滑失败，回退使用原始规划路径"); sendFollowPath(pending_raw_path_);}};
   smooth_client_->async_send_goal(goal, options);
 }
 
@@ -159,8 +101,7 @@ void RegulatedNavigator::onPathReady(const nav_msgs::msg::Path & path) {
 void RegulatedNavigator::handlePlanningFailure(const std::string & reason) {
   task_.last_error = reason;
   ++task_.consecutive_planning_failures;
-  if (updating_path_ && active_follow_goal_ &&
-    task_.consecutive_planning_failures < planning_module_.maxFailures())
+  if (updating_path_ && active_follow_goal_ && task_.consecutive_planning_failures < planning_module_.maxFailures())
   {
     task_.state = NavigationState::CONTROLLING;
     LOG_WARN("{}，继续跟随旧路径", reason);

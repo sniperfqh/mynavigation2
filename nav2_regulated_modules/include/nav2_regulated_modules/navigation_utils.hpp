@@ -14,9 +14,7 @@ namespace navigation_utils
 builtin_interfaces::msg::Duration durationFromSeconds(double seconds);
 
 // 中文注释：计算两个 Pose 在 XY 平面的欧氏距离，不考虑高度和朝向。
-double poseDistance(
-  const geometry_msgs::msg::PoseStamped & first,
-  const geometry_msgs::msg::PoseStamped & second);
+double poseDistance(const geometry_msgs::msg::PoseStamped & first, const geometry_msgs::msg::PoseStamped & second);
 
 // 中文注释：从 Pose 四元数提取绕 Z 轴的偏航角。
 double yawFromPose(const geometry_msgs::msg::PoseStamped & pose);

@@ -173,6 +173,22 @@ Visualization Manager:
       Use Fixed Frame: true
       Use rainbow: true
       Value: true
+    - Class: rviz_common/Group
+      Displays:
+        - Class: rviz_default_plugins/MarkerArray
+          Enabled: true
+          Name: Deep Boundary Lines and Labels
+          Namespaces:
+            {}
+          Topic:
+            Depth: 5
+            Durability Policy: Transient Local
+            History Policy: Keep Last
+            Reliability Policy: Reliable
+            Value: /collision_monitor_boundaries
+          Value: true
+      Enabled: true
+      Name: Collision Monitor Boundaries
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -574,10 +590,10 @@ Visualization Manager:
       Name: Current View
       Near Clip Distance: 0.009999999776482582
       Scale: 80
-      Target Frame: <Fixed Frame>
+      Target Frame: base_link
       Value: TopDownOrtho (rviz_default_plugins)
-      X: 0.569
-      Y: 0.541
+      X: 0
+      Y: 0
     Saved: ~
 Window Geometry:
   Displays:

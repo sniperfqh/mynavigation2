@@ -69,19 +69,13 @@ public:
 
 private:
   // 中文注释：校验单点导航 Goal 是否可由当前自主模式执行。
-  rclcpp_action::GoalResponse handlePoseGoal(
-    const rclcpp_action::GoalUUID & uuid,
-    const std::shared_ptr<const NavigateToPose::Goal> goal);
+  rclcpp_action::GoalResponse handlePoseGoal(const rclcpp_action::GoalUUID & uuid, const std::shared_ptr<const NavigateToPose::Goal> goal);
   // 中文注释：校验多点导航 Goal 的模式、位姿数组和行为树字段。
-  rclcpp_action::GoalResponse handlePosesGoal(
-    const rclcpp_action::GoalUUID & uuid,
-    const std::shared_ptr<const NavigateThroughPoses::Goal> goal);
+  rclcpp_action::GoalResponse handlePosesGoal(const rclcpp_action::GoalUUID & uuid, const std::shared_ptr<const NavigateThroughPoses::Goal> goal);
   // 中文注释：接收单点外层 Goal 的取消请求。
-  rclcpp_action::CancelResponse handlePoseCancel(
-    const std::shared_ptr<NavigatePoseHandle> goal);
+  rclcpp_action::CancelResponse handlePoseCancel(const std::shared_ptr<NavigatePoseHandle> goal);
   // 中文注释：接收多点外层 Goal 的取消请求。
-  rclcpp_action::CancelResponse handlePosesCancel(
-    const std::shared_ptr<NavigatePosesHandle> goal);
+  rclcpp_action::CancelResponse handlePosesCancel(const std::shared_ptr<NavigatePosesHandle> goal);
   // 中文注释：初始化已接受的单点任务并启动规划。
   void handlePoseAccepted(const std::shared_ptr<NavigatePoseHandle> goal);
   // 中文注释：初始化已接受的多点任务并启动规划。
@@ -89,17 +83,13 @@ private:
   // 中文注释：把 goal_pose Topic 输入转换为自主单点任务。
   void onTopicGoal(const geometry_msgs::msg::PoseStamped::SharedPtr goal);
   // 中文注释：校验固定路径业务 Goal 的模式、激活状态和 Path 基本结构。
-  rclcpp_action::GoalResponse handleFixedPathGoal(
-    const rclcpp_action::GoalUUID & uuid,
-    const std::shared_ptr<const FollowFixedPath::Goal> goal);
+  rclcpp_action::GoalResponse handleFixedPathGoal(const rclcpp_action::GoalUUID & uuid, const std::shared_ptr<const FollowFixedPath::Goal> goal);
   // 中文注释：记录固定路径业务 Goal 的取消请求，由监控周期统一收口。
-  rclcpp_action::CancelResponse handleFixedPathCancel(
-    const std::shared_ptr<FixedPathHandle> goal);
+  rclcpp_action::CancelResponse handleFixedPathCancel(const std::shared_ptr<FixedPathHandle> goal);
   // 中文注释：完成 Path 变换和下游检查后，以新 Action Goal 替换旧任务。
   void handleFixedPathAccepted(const std::shared_ptr<FixedPathHandle> goal);
   // 中文注释：校验固定路径并统一变换到全局坐标系。
-  std::optional<nav_msgs::msg::Path> prepareFixedPath(
-    const nav_msgs::msg::Path & path);
+  std::optional<nav_msgs::msg::Path> prepareFixedPath(const nav_msgs::msg::Path & path);
   // 中文注释：按固定频率把当前位姿、耗时、剩余距离和恢复次数反馈给外层 Action。
   void publishFeedback();
 

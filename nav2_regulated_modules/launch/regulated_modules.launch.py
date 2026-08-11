@@ -12,6 +12,7 @@ from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import LoadComposableNodes, Node
 from launch_ros.descriptions import ComposableNode, ParameterFile
+from launch_ros.parameter_descriptions import ParameterValue
 from nav2_common.launch import RewrittenYaml
 
 
@@ -34,11 +35,24 @@ def generate_launch_description():
     use_respawn = LaunchConfiguration('use_respawn')
     log_level = LaunchConfiguration('log_level')
     operation_mode = LaunchConfiguration('operation_mode')
+    fixed_path_progress_timeout = LaunchConfiguration(
+        'fixed_path_progress_timeout')
     default_keyboard_input_device = (
         os.ttyname(sys.stdin.fileno()) if sys.stdin.isatty() else '/dev/tty')
     keyboard_input_device = LaunchConfiguration('keyboard_input_device')
     is_remote = PythonExpression(["'", operation_mode, "' == 'remote'"])
     is_navigation = PythonExpression(["'", operation_mode, "' != 'remote'"])
+    smoothed_cmd_vel_topic = PythonExpression([
+        "'cmd_vel_collision_in' if '", operation_mode,
+        "' == 'fixed_path' else 'cmd_vel'"])
+    collision_monitor_output_topic = PythonExpression([
+        "'cmd_vel' if '", operation_mode,
+        "' == 'fixed_path' else 'cmd_vel_collision_unused'"])
+    effective_progress_timeout = ParameterValue(
+        PythonExpression([
+            fixed_path_progress_timeout, " if '", operation_mode,
+            "' == 'fixed_path' else 10.0"]),
+        value_type=float)
 
     # 中文注释：Lifecycle 激活顺序先准备底层服务器，最后激活负责业务编排的导航器。
     lifecycle_nodes = [
@@ -47,6 +61,8 @@ def generate_launch_description():
         'smoother_server',
         # 中文注释：不启动行为树、恢复行为和路点服务器，仅保留规划控制主链。
         'velocity_smoother',
+        # 中文注释：碰撞监视器只在 fixed_path 速度链中接收速度，提供停止、减速和接近三种安全动作。
+        'collision_monitor',
         # 中文注释：规控入口依赖其他服务器，因此最后激活、停机时最先停用。
         'regulated_navigator',
     ]
@@ -147,6 +163,11 @@ def generate_launch_description():
         choices=['remote', 'autonomous', 'fixed_path'],
         description='Robot operation mode')
 
+    declare_fixed_path_progress_timeout_cmd = DeclareLaunchArgument(
+        'fixed_path_progress_timeout',
+        default_value='120.0',
+        description='Maximum stationary time allowed in fixed_path mode')
+
     declare_keyboard_input_device_cmd = DeclareLaunchArgument(
         'keyboard_input_device',
         default_value=default_keyboard_input_device,
@@ -204,7 +225,10 @@ def generate_launch_description():
                 output='screen',
                 respawn=use_respawn,
                 respawn_delay=2.0,
-                parameters=[configured_params],
+                parameters=[
+                    configured_params,
+                    {'progress_checker.movement_time_allowance':
+                     effective_progress_timeout}],
                 arguments=['--ros-args', '--log-level', log_level],
                 remappings=remappings + [('cmd_vel', 'cmd_vel_nav')]),
             Node(
@@ -228,7 +252,26 @@ def generate_launch_description():
                 parameters=[configured_params],
                 arguments=['--ros-args', '--log-level', log_level],
                 remappings=remappings +
-                [('cmd_vel', 'cmd_vel_nav'), ('cmd_vel_smoothed', 'cmd_vel')]),
+                [('cmd_vel', 'cmd_vel_nav'),
+                 ('cmd_vel_smoothed', smoothed_cmd_vel_topic)]),
+            Node(
+                package='nav2_collision_monitor',
+                executable='collision_monitor',
+                name='collision_monitor',
+                output='screen',
+                respawn=use_respawn,
+                respawn_delay=2.0,
+                parameters=[
+                    configured_params,
+                    {
+                        'cmd_vel_in_topic': 'cmd_vel_collision_in',
+                        'cmd_vel_out_topic': ParameterValue(
+                            collision_monitor_output_topic,
+                            value_type=str),
+                    },
+                ],
+                arguments=['--ros-args', '--log-level', log_level],
+                remappings=remappings),
             Node(
                 package='nav2_regulated_modules',
                 executable='regulated_navigator_node',
@@ -236,7 +279,13 @@ def generate_launch_description():
                 output='screen',
                 respawn=use_respawn,
                 respawn_delay=2.0,
-                parameters=[configured_params, {'operation_mode': operation_mode}],
+                parameters=[
+                    configured_params,
+                    {
+                        'operation_mode': operation_mode,
+                        'progress_timeout': effective_progress_timeout,
+                    },
+                ],
                 arguments=['--ros-args', '--log-level', log_level],
                 remappings=remappings),
             Node(
@@ -272,7 +321,10 @@ def generate_launch_description():
                 package='nav2_controller',
                 plugin='nav2_controller::ControllerServer',
                 name='controller_server',
-                parameters=[configured_params],
+                parameters=[
+                    configured_params,
+                    {'progress_checker.movement_time_allowance':
+                     effective_progress_timeout}],
                 remappings=remappings + [('cmd_vel', 'cmd_vel_nav')]),
             ComposableNode(
                 package='nav2_smoother',
@@ -287,7 +339,22 @@ def generate_launch_description():
                 name='velocity_smoother',
                 parameters=[configured_params],
                 remappings=remappings +
-                [('cmd_vel', 'cmd_vel_nav'), ('cmd_vel_smoothed', 'cmd_vel')]),
+                [('cmd_vel', 'cmd_vel_nav'),
+                 ('cmd_vel_smoothed', smoothed_cmd_vel_topic)]),
+            ComposableNode(
+                package='nav2_collision_monitor',
+                plugin='nav2_collision_monitor::CollisionMonitor',
+                name='collision_monitor',
+                parameters=[
+                    configured_params,
+                    {
+                        'cmd_vel_in_topic': 'cmd_vel_collision_in',
+                        'cmd_vel_out_topic': ParameterValue(
+                            collision_monitor_output_topic,
+                            value_type=str),
+                    },
+                ],
+                remappings=remappings),
             ComposableNode(
                 package='nav2_lifecycle_manager',
                 plugin='nav2_lifecycle_manager::LifecycleManager',
@@ -304,7 +371,13 @@ def generate_launch_description():
         executable='regulated_navigator_node',
         name='regulated_navigator',
         output='screen',
-        parameters=[configured_params, {'operation_mode': operation_mode}],
+        parameters=[
+            configured_params,
+            {
+                'operation_mode': operation_mode,
+                'progress_timeout': effective_progress_timeout,
+            },
+        ],
         arguments=['--ros-args', '--log-level', log_level],
         remappings=remappings)
 
@@ -317,6 +390,13 @@ def generate_launch_description():
         output='screen',
         parameters=[{'input_topic': '/cmd_vel'},
                     {'output_topic': '/control_to_uart'}])
+
+    # 中文注释：独立可视化节点把三个碰撞区域转换为深色粗线和角点文字，不参与速度安全决策。
+    collision_boundary_visualizer_cmd = Node(
+        package='nav2_regulated_modules',
+        executable='collision_boundary_visualizer_node',
+        name='collision_boundary_visualizer',
+        output='screen')
 
     # 中文注释：遥控模式直接复用键盘节点，绝不同时启动 controlpub 和自动规控链。
     remote_control_cmd = Node(
@@ -340,6 +420,7 @@ def generate_launch_description():
             load_composable_nodes,
             start_regulated_navigator_cmd,
             start_controlpub_cmd,
+            collision_boundary_visualizer_cmd,
         ])
 
     # 中文注释：按“环境变量→参数声明→互斥业务分支”的顺序组装最终 LaunchDescription。
@@ -360,6 +441,7 @@ def generate_launch_description():
     ld.add_action(declare_use_respawn_cmd)
     ld.add_action(declare_log_level_cmd)
     ld.add_action(declare_operation_mode_cmd)
+    ld.add_action(declare_fixed_path_progress_timeout_cmd)
     ld.add_action(declare_keyboard_input_device_cmd)
     ld.add_action(remote_control_cmd)
     ld.add_action(navigation_group)

@@ -246,8 +246,7 @@ protected:
    * @return double velocity value
    * 中文：double 速度值。
    */
-  double getThresholdedVelocity(double velocity, double threshold)
-  {
+  double getThresholdedVelocity(double velocity, double threshold) {
     return (std::abs(velocity) > threshold) ? velocity : 0.0;
   }
 
@@ -259,8 +258,7 @@ protected:
    * @return Twist Twist after thresholds applied
    * 中文：Twist 应用阈值后的 Twist。
    */
-  nav_2d_msgs::msg::Twist2D getThresholdedTwist(const nav_2d_msgs::msg::Twist2D & twist)
-  {
+  nav_2d_msgs::msg::Twist2D getThresholdedTwist(const nav_2d_msgs::msg::Twist2D & twist) {
     nav_2d_msgs::msg::Twist2D twist_thresh;
     twist_thresh.x = getThresholdedVelocity(twist.x, min_x_velocity_threshold_);
     twist_thresh.y = getThresholdedVelocity(twist.y, min_y_velocity_threshold_);
@@ -274,8 +272,7 @@ protected:
    * @param event ParameterEvent message
    * 中文：ParameterEvent 消息。
    */
-  rcl_interfaces::msg::SetParametersResult
-  dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters);
+  rcl_interfaces::msg::SetParametersResult dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters);
 
   // Dynamic parameters handler
   // 中文：动态参数处理器。

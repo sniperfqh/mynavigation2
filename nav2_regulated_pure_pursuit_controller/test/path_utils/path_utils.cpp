@@ -21,10 +21,7 @@
 namespace path_utils
 {
 
-void append_transform_to_path(
-  nav_msgs::msg::Path & path,
-  tf2::Transform & relative_transform)
-{
+void append_transform_to_path(nav_msgs::msg::Path & path, tf2::Transform & relative_transform) {
   // Add a new empty pose
   path.poses.emplace_back();
   // Get the previous, last pose (after the emplace_back so the reference isn't invalidated)
@@ -42,8 +39,7 @@ void append_transform_to_path(
   new_pose.header.frame_id = previous_pose.header.frame_id;
 }
 
-void Straight::append(nav_msgs::msg::Path & path, double spacing) const
-{
+void Straight::append(nav_msgs::msg::Path & path, double spacing) const {
   auto num_points = std::floor(length_ / spacing);
   path.poses.reserve(path.poses.size() + num_points);
   tf2::Transform translation(tf2::Quaternion::getIdentity(), tf2::Vector3(spacing, 0.0, 0.0));
@@ -52,30 +48,22 @@ void Straight::append(nav_msgs::msg::Path & path, double spacing) const
   }
 }
 
-double chord_length(double radius, double radians)
-{
+double chord_length(double radius, double radians) {
   return 2 * radius * sin(radians / 2);
 }
 
-void Arc::append(nav_msgs::msg::Path & path, double spacing) const
-{
+void Arc::append(nav_msgs::msg::Path & path, double spacing) const {
   double length = radius_ * std::abs(radians_);
   size_t num_points = std::floor(length / spacing);
   double radians_per_step = radians_ / num_points;
-  tf2::Transform transform(
-    tf2::Quaternion(tf2::Vector3(0.0, 0.0, 1.0), radians_per_step),
-    tf2::Vector3(chord_length(radius_, std::abs(radians_per_step)), 0.0, 0.0));
+  tf2::Transform transform(tf2::Quaternion(tf2::Vector3(0.0, 0.0, 1.0), radians_per_step), tf2::Vector3(chord_length(radius_, std::abs(radians_per_step)), 0.0, 0.0));
   path.poses.reserve(path.poses.size() + num_points);
   for (size_t i = 0; i < num_points; ++i) {
     append_transform_to_path(path, transform);
   }
 }
 
-nav_msgs::msg::Path generate_path(
-  geometry_msgs::msg::PoseStamped start,
-  double spacing,
-  std::initializer_list<std::unique_ptr<PathSegment>> segments)
-{
+nav_msgs::msg::Path generate_path(geometry_msgs::msg::PoseStamped start, double spacing, std::initializer_list<std::unique_ptr<PathSegment>> segments) {
   nav_msgs::msg::Path path;
   path.header = start.header;
   path.poses.push_back(start);

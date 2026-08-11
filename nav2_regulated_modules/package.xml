@@ -24,6 +24,7 @@
   <depend>tf2_ros</depend>
   <depend>tf2_geometry_msgs</depend>
   <depend>spdlog_wrapper</depend>
+  <depend>visualization_msgs</depend>
   <exec_depend>rosidl_default_runtime</exec_depend>
 
   <!-- 中文注释：运行期依赖覆盖 Launch、Nav2 服务器、规划控制插件和底盘输出节点。 -->
@@ -34,6 +35,7 @@
   <exec_depend>nav2_planner</exec_depend>
   <exec_depend>nav2_smoother</exec_depend>
   <exec_depend>nav2_velocity_smoother</exec_depend>
+  <exec_depend>nav2_collision_monitor</exec_depend>
   <!-- 中文注释：恢复由规控节点直接清理代价地图，不依赖 nav2_behaviors 或路点服务器。 -->
   <exec_depend>nav2_lifecycle_manager</exec_depend>
   <exec_depend>nav2_map_server</exec_depend>
