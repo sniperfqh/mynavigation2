@@ -246,7 +246,7 @@
     <include>
       <uri>model://diffbot</uri>
       <name>diffbot</name>
-      <pose>-3.071 3.583 0.01 0 0 -1.5707963267948966</pose>
+      <pose>-3.68 4.02 0.01 0 0 -1.5707963267948966</pose>
     </include>
 
 

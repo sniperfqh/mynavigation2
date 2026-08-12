@@ -5,5 +5,5 @@ negate: 0
 occupied_thresh: 0.65
 free_thresh: 0.196
 
-# Initial pose from the upstream AWS RoboMaker warehouse map metadata.
-# x: -3.071, y: 3.583
+# Current simulation and AMCL initial position.
+# x: -3.68, y: 4.02

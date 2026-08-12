@@ -42,12 +42,12 @@ def generate_launch_description():
     keyboard_input_device = LaunchConfiguration('keyboard_input_device')
     is_remote = PythonExpression(["'", operation_mode, "' == 'remote'"])
     is_navigation = PythonExpression(["'", operation_mode, "' != 'remote'"])
-    smoothed_cmd_vel_topic = PythonExpression([
-        "'cmd_vel_collision_in' if '", operation_mode,
-        "' == 'fixed_path' else 'cmd_vel'"])
-    collision_monitor_output_topic = PythonExpression([
-        "'cmd_vel' if '", operation_mode,
-        "' == 'fixed_path' else 'cmd_vel_collision_unused'"])
+    # 中文注释：停用 Collision Monitor 后，Velocity Smoother 在所有导航模式下直接发布最终 /cmd_vel。
+    smoothed_cmd_vel_topic = 'cmd_vel'
+    # 中文注释：以下 Collision Monitor 输出 Topic 选择逻辑随碰撞模块一起停用，保留注释便于后续恢复。
+    # collision_monitor_output_topic = PythonExpression([
+    #     "'cmd_vel' if '", operation_mode,
+    #     "' == 'fixed_path' else 'cmd_vel_collision_unused'"])
     effective_progress_timeout = ParameterValue(
         PythonExpression([
             fixed_path_progress_timeout, " if '", operation_mode,
@@ -61,8 +61,8 @@ def generate_launch_description():
         'smoother_server',
         # 中文注释：不启动行为树、恢复行为和路点服务器，仅保留规划控制主链。
         'velocity_smoother',
-        # 中文注释：碰撞监视器只在 fixed_path 速度链中接收速度，提供停止、减速和接近三种安全动作。
-        'collision_monitor',
+        # 中文注释：Collision Monitor 已停用，不加入 Lifecycle Manager 的节点名单。
+        # 'collision_monitor',
         # 中文注释：规控入口依赖其他服务器，因此最后激活、停机时最先停用。
         'regulated_navigator',
     ]
@@ -254,24 +254,25 @@ def generate_launch_description():
                 remappings=remappings +
                 [('cmd_vel', 'cmd_vel_nav'),
                  ('cmd_vel_smoothed', smoothed_cmd_vel_topic)]),
-            Node(
-                package='nav2_collision_monitor',
-                executable='collision_monitor',
-                name='collision_monitor',
-                output='screen',
-                respawn=use_respawn,
-                respawn_delay=2.0,
-                parameters=[
-                    configured_params,
-                    {
-                        'cmd_vel_in_topic': 'cmd_vel_collision_in',
-                        'cmd_vel_out_topic': ParameterValue(
-                            collision_monitor_output_topic,
-                            value_type=str),
-                    },
-                ],
-                arguments=['--ros-args', '--log-level', log_level],
-                remappings=remappings),
+            # 中文注释：停用非组合模式的 Collision Monitor，速度由 Velocity Smoother 直接发布到 /cmd_vel。
+            # Node(
+            #     package='nav2_collision_monitor',
+            #     executable='collision_monitor',
+            #     name='collision_monitor',
+            #     output='screen',
+            #     respawn=use_respawn,
+            #     respawn_delay=2.0,
+            #     parameters=[
+            #         configured_params,
+            #         {
+            #             'cmd_vel_in_topic': 'cmd_vel_collision_in',
+            #             'cmd_vel_out_topic': ParameterValue(
+            #                 collision_monitor_output_topic,
+            #                 value_type=str),
+            #         },
+            #     ],
+            #     arguments=['--ros-args', '--log-level', log_level],
+            #     remappings=remappings),
             Node(
                 package='nav2_regulated_modules',
                 executable='regulated_navigator_node',
@@ -341,20 +342,21 @@ def generate_launch_description():
                 remappings=remappings +
                 [('cmd_vel', 'cmd_vel_nav'),
                  ('cmd_vel_smoothed', smoothed_cmd_vel_topic)]),
-            ComposableNode(
-                package='nav2_collision_monitor',
-                plugin='nav2_collision_monitor::CollisionMonitor',
-                name='collision_monitor',
-                parameters=[
-                    configured_params,
-                    {
-                        'cmd_vel_in_topic': 'cmd_vel_collision_in',
-                        'cmd_vel_out_topic': ParameterValue(
-                            collision_monitor_output_topic,
-                            value_type=str),
-                    },
-                ],
-                remappings=remappings),
+            # 中文注释：停用组合模式的 Collision Monitor，速度由 Velocity Smoother 直接发布到 /cmd_vel。
+            # ComposableNode(
+            #     package='nav2_collision_monitor',
+            #     plugin='nav2_collision_monitor::CollisionMonitor',
+            #     name='collision_monitor',
+            #     parameters=[
+            #         configured_params,
+            #         {
+            #             'cmd_vel_in_topic': 'cmd_vel_collision_in',
+            #             'cmd_vel_out_topic': ParameterValue(
+            #                 collision_monitor_output_topic,
+            #                 value_type=str),
+            #         },
+            #     ],
+            #     remappings=remappings),
             ComposableNode(
                 package='nav2_lifecycle_manager',
                 plugin='nav2_lifecycle_manager::LifecycleManager',
@@ -391,12 +393,12 @@ def generate_launch_description():
         parameters=[{'input_topic': '/cmd_vel'},
                     {'output_topic': '/control_to_uart'}])
 
-    # 中文注释：独立可视化节点把三个碰撞区域转换为深色粗线和角点文字，不参与速度安全决策。
-    collision_boundary_visualizer_cmd = Node(
-        package='nav2_regulated_modules',
-        executable='collision_boundary_visualizer_node',
-        name='collision_boundary_visualizer',
-        output='screen')
+    # 中文注释：Collision Monitor 停用后不再启动碰撞边界可视化节点，保留注释便于后续恢复。
+    # collision_boundary_visualizer_cmd = Node(
+    #     package='nav2_regulated_modules',
+    #     executable='collision_boundary_visualizer_node',
+    #     name='collision_boundary_visualizer',
+    #     output='screen')
 
     # 中文注释：遥控模式直接复用键盘节点，绝不同时启动 controlpub 和自动规控链。
     remote_control_cmd = Node(
@@ -420,7 +422,7 @@ def generate_launch_description():
             load_composable_nodes,
             start_regulated_navigator_cmd,
             start_controlpub_cmd,
-            collision_boundary_visualizer_cmd,
+            # collision_boundary_visualizer_cmd,
         ])
 
     # 中文注释：按“环境变量→参数声明→互斥业务分支”的顺序组装最终 LaunchDescription。

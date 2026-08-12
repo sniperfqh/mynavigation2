@@ -74,7 +74,7 @@ def generate_launch_description():
     #   wait/photo/input 等任务插件。
     # velocity_smoother：
     #   速度平滑器。接收 controller_server 输出的 cmd_vel_nav，按速度/加速度约束和反馈模式
-    #   输出最终 cmd_vel，避免速度跳变直接作用到底盘。
+    #   输出 cmd_vel_collision_in，交给 Collision Monitor 完成安全裁决后再发布最终 cmd_vel。
     lifecycle_nodes = ['controller_server',
                        'smoother_server',
                        'planner_server',
@@ -217,7 +217,7 @@ def generate_launch_description():
                 arguments=['--ros-args', '--log-level', log_level],
                 remappings=remappings),
             # 中文说明：velocity_smoother 位于 controller_server 和底盘 cmd_vel 之间，
-            # 输入 cmd_vel_nav，输出 cmd_vel，是实际底盘速度命令前的最后一道限幅/平滑。
+            # 输入 cmd_vel_nav，输出 cmd_vel_collision_in，再由 Collision Monitor 发布最终 cmd_vel。
             Node(
                 package='nav2_velocity_smoother',
                 executable='velocity_smoother',
@@ -228,7 +228,7 @@ def generate_launch_description():
                 parameters=[configured_params],
                 arguments=['--ros-args', '--log-level', log_level],
                 remappings=remappings +
-                        [('cmd_vel', 'cmd_vel_nav'), ('cmd_vel_smoothed', 'cmd_vel')]),
+                        [('cmd_vel', 'cmd_vel_nav'), ('cmd_vel_smoothed', 'cmd_vel_collision_in')]),
             Node(
                 package='nav2_lifecycle_manager',
                 executable='lifecycle_manager',
@@ -289,7 +289,7 @@ def generate_launch_description():
                 name='velocity_smoother',
                 parameters=[configured_params],
                 remappings=remappings +
-                           [('cmd_vel', 'cmd_vel_nav'), ('cmd_vel_smoothed', 'cmd_vel')]),
+                           [('cmd_vel', 'cmd_vel_nav'), ('cmd_vel_smoothed', 'cmd_vel_collision_in')]),
             ComposableNode(
                 package='nav2_lifecycle_manager',
                 plugin='nav2_lifecycle_manager::LifecycleManager',

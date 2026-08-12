@@ -290,7 +290,7 @@
       <min_linear_acceleration>-1.0</min_linear_acceleration>
       <max_angular_acceleration>2.5</max_angular_acceleration>
       <min_angular_acceleration>-2.5</min_angular_acceleration>
-      <max_linear_velocity>0.6</max_linear_velocity>
+      <max_linear_velocity>1.5</max_linear_velocity>
       <min_linear_velocity>-0.6</min_linear_velocity>
       <max_angular_velocity>1.5</max_angular_velocity>
       <min_angular_velocity>-1.5</min_angular_velocity>

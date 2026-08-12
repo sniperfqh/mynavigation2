@@ -41,6 +41,33 @@ def generate_launch_description():
         cmd=['ign', 'gazebo', '-r', '-v', '3', world_only],
         output='screen')
 
+    collision_monitor = Node(
+        package='nav2_collision_monitor',
+        executable='collision_monitor',
+        name='collision_monitor',
+        output='screen',
+        parameters=[params_file, {'use_sim_time': use_sim_time}],
+        remappings=[('/tf', 'tf'), ('/tf_static', 'tf_static')])
+
+    collision_monitor_lifecycle_manager = Node(
+        package='nav2_lifecycle_manager',
+        executable='lifecycle_manager',
+        name='lifecycle_manager_collision_monitor',
+        output='screen',
+        parameters=[{
+            'use_sim_time': use_sim_time,
+            'autostart': True,
+            'node_names': ['collision_monitor']}])
+
+    collision_boundary_visualizer = Node(
+        package='nav2_regulated_modules',
+        executable='collision_boundary_visualizer_node',
+        name='collision_boundary_visualizer',
+        output='screen',
+        parameters=[{'use_sim_time': use_sim_time}],
+        remappings=[
+            ('/local_costmap/published_footprint', '/collision_monitor_unused_footprint')])
+
     return LaunchDescription([
         ign_resource_path,
         ign_partition,
@@ -88,8 +115,8 @@ def generate_launch_description():
                 'use_sim_time': use_sim_time,
                 'params_file': params_file,
                 'localization_child_frame': 'odom',
-                'localization_x': '0.0',
-                'localization_y': '0.0',
+                'localization_x': '-3.68',
+                'localization_y': '4.02',
                 'localization_z': '0.0',
                 'localization_yaw': '-1.5707963267948966',
                 'localization_tf_time_offset': '0.0'}.items(),
@@ -101,6 +128,10 @@ def generate_launch_description():
                 'use_sim_time': use_sim_time,
                 'params_file': params_file}.items(),
         ),
+
+        collision_monitor,
+        collision_monitor_lifecycle_manager,
+        collision_boundary_visualizer,
 
         Node(
             condition=IfCondition(use_rviz),
