@@ -37,8 +37,6 @@ VelocitySmoother::VelocitySmoother(const rclcpp::NodeOptions & options)
   LOG_INFO("Creating velocity smoother");
   LOG_INFO("Velocity smoother limits cmd_vel_nav before publishing final cmd_vel");
 
-  // 中文注释：VelocitySmoother 是控制链最后一层速度整形节点；
-  // 它订阅 controller_server 输出的 cmd_vel，按速度/加速度/死区约束生成 cmd_vel_smoothed。
 }
 
 VelocitySmoother::~VelocitySmoother()
@@ -59,7 +57,6 @@ VelocitySmoother::on_configure(const rclcpp_lifecycle::State &)
   double velocity_timeout_dbl;
 
   // Smoothing metadata
-  // 中文：平滑元数据。
   declare_parameter_if_not_declared(node, "smoothing_frequency", rclcpp::ParameterValue(20.0));
   declare_parameter_if_not_declared(
     node, "feedback", rclcpp::ParameterValue(std::string("OPEN_LOOP")));
@@ -71,10 +68,7 @@ VelocitySmoother::on_configure(const rclcpp_lifecycle::State &)
     "Velocity smoother metadata smoothing_frequency={}, feedback={}, scale_velocities={}",
     smoothing_frequency_, feedback_type.c_str(), scale_velocities_);
 
-  // 中文注释：速度、加速度和减速度约束均按 x/y/theta 三个维度配置；
-  // 配置错误在 configure 阶段直接失败，避免运行中输出不可信速度。
   // Kinematics
-  // 中文：运动学参数。
   declare_parameter_if_not_declared(
     node, "max_velocity", rclcpp::ParameterValue(std::vector<double>{0.50, 0.0, 2.5}));
   declare_parameter_if_not_declared(
@@ -104,7 +98,6 @@ VelocitySmoother::on_configure(const rclcpp_lifecycle::State &)
   }
 
   // Get feature parameters
-  // 中文：获取功能参数。
   declare_parameter_if_not_declared(node, "odom_topic", rclcpp::ParameterValue("odom"));
   declare_parameter_if_not_declared(node, "odom_duration", rclcpp::ParameterValue(0.1));
   declare_parameter_if_not_declared(
@@ -128,7 +121,6 @@ VelocitySmoother::on_configure(const rclcpp_lifecycle::State &)
   }
 
   // Get control type
-  // 中文：获取控制类型。
   if (feedback_type == "OPEN_LOOP") {
     open_loop_ = true;
     LOG_INFO("Velocity smoother uses OPEN_LOOP feedback from last published command");
@@ -141,8 +133,6 @@ VelocitySmoother::on_configure(const rclcpp_lifecycle::State &)
   }
 
   // Setup inputs / outputs
-  // 中文注释：输入 topic 名为 cmd_vel，输出 topic 名为 cmd_vel_smoothed；
-  // launch/remap 决定它们最终接到 controller_server 和底盘的哪一端。
   smoothed_cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel_smoothed", 1);
   cmd_sub_ = create_subscription<geometry_msgs::msg::Twist>(
     "cmd_vel", rclcpp::QoS(1),
@@ -166,7 +156,6 @@ VelocitySmoother::on_activate(const rclcpp_lifecycle::State &)
     std::bind(&VelocitySmoother::dynamicParametersCallback, this, _1));
 
   // create bond connection
-  // 中文：创建 bond 连接。
   createBond();
   return nav2_util::CallbackReturn::SUCCESS;
 }
@@ -183,7 +172,6 @@ VelocitySmoother::on_deactivate(const rclcpp_lifecycle::State &)
   dyn_params_handler_.reset();
 
   // destroy bond connection
-  // 中文：销毁 bond 连接。
   destroyBond();
   return nav2_util::CallbackReturn::SUCCESS;
 }
@@ -208,7 +196,6 @@ VelocitySmoother::on_shutdown(const rclcpp_lifecycle::State &)
 void VelocitySmoother::inputCommandCallback(const geometry_msgs::msg::Twist::SharedPtr msg)
 {
   // If message contains NaN or Inf, ignore
-  // 中文：如果消息包含 NaN 或 Inf，则忽略。
   if (!nav2_util::validateTwist(*msg)) {
     RCLCPP_ERROR(get_logger(), "Velocity message contains NaNs or Infs! Ignoring as invalid!");
     return;
@@ -225,18 +212,14 @@ double VelocitySmoother::findEtaConstraint(
   const double v_curr, const double v_cmd, const double accel, const double decel)
 {
   // Exploiting vector scaling properties
-  // 中文：利用向量缩放特性。
   double dv = v_cmd - v_curr;
 
   double v_component_max;
   double v_component_min;
 
   // Accelerating if magnitude of v_cmd is above magnitude of v_curr
-  // 中文：如果 v_cmd 的幅值大于 v_curr 的幅值，则加速。
   // and if v_cmd and v_curr have the same sign (i.e. speed is NOT passing through 0.0)
-  // 中文：并且 v_cmd 与 v_curr 同号，即速度没有穿过 0.0。
   // Decelerating otherwise
-  // 中文：否则执行减速。
   if (abs(v_cmd) >= abs(v_curr) && v_curr * v_cmd >= 0.0) {
     v_component_max = accel / smoothing_frequency_;
     v_component_min = -accel / smoothing_frequency_;
@@ -266,11 +249,8 @@ double VelocitySmoother::applyConstraints(
   double v_component_min;
 
   // Accelerating if magnitude of v_cmd is above magnitude of v_curr
-  // 中文：如果 v_cmd 的幅值大于 v_curr 的幅值，则加速。
   // and if v_cmd and v_curr have the same sign (i.e. speed is NOT passing through 0.0)
-  // 中文：并且 v_cmd 与 v_curr 同号，即速度没有穿过 0.0。
   // Decelerating otherwise
-  // 中文：否则执行减速。
   if (abs(v_cmd) >= abs(v_curr) && v_curr * v_cmd >= 0.0) {
     v_component_max = accel / smoothing_frequency_;
     v_component_min = -accel / smoothing_frequency_;
@@ -285,17 +265,13 @@ double VelocitySmoother::applyConstraints(
 void VelocitySmoother::smootherTimer()
 {
   // Wait until the first command is received
-  // 中文：等待收到第一条速度命令。
   if (!command_) {
     return;
   }
 
   auto cmd_vel = std::make_unique<geometry_msgs::msg::Twist>();
 
-  // 中文注释：超过 velocity_timeout 后不再保持旧命令，而是发布逐步衰减到 0 的速度，
-  // 防止上游控制器停止输出时底盘继续沿最后速度运动。
   // Check for velocity timeout. If nothing received, publish zeros to apply deceleration
-  // 中文：检查速度超时；若未收到命令，则发布零速度以执行减速。
   if (now() - last_command_time_ > velocity_timeout_) {
     if (last_cmd_ == geometry_msgs::msg::Twist() || stopped_) {
       stopped_ = true;
@@ -306,10 +282,7 @@ void VelocitySmoother::smootherTimer()
 
   stopped_ = false;
 
-  // 中文注释：OPEN_LOOP 使用上一帧平滑输出作为当前速度估计；
-  // CLOSED_LOOP 使用里程计反馈，更贴近真实底盘但依赖 odom 质量。
   // Get current velocity based on feedback type
-  // 中文：根据反馈类型获取当前速度。
   geometry_msgs::msg::Twist current_;
   if (open_loop_) {
     current_ = last_cmd_;
@@ -318,21 +291,15 @@ void VelocitySmoother::smootherTimer()
   }
 
   // Apply absolute velocity restrictions to the command
-  // 中文：对命令应用绝对速度限制。
   command_->linear.x = std::clamp(command_->linear.x, min_velocities_[0], max_velocities_[0]);
   command_->linear.y = std::clamp(command_->linear.y, min_velocities_[1], max_velocities_[1]);
   command_->angular.z = std::clamp(command_->angular.z, min_velocities_[2], max_velocities_[2]);
 
   // Find if any component is not within the acceleration constraints. If so, store the most
-  // 中文：检查是否有分量不满足加速度约束；若有，则保存最显著的
   // significant scale factor to apply to the vector <dvx, dvy, dvw>, eta, to reduce all axes
-  // 中文：缩放因子 eta，并应用到向量 <dvx, dvy, dvw>，按比例缩小所有轴，
   // proportionally to follow the same direction, within change of velocity bounds.
-  // 中文：从而在速度变化边界内保持同一方向。
   // In case eta reduces another axis out of its own limit, apply accel constraint to guarantee
-  // 中文：如果 eta 导致其他轴超出自身限制，则应用加速度约束以保证
   // output is within limits, even if it deviates from requested command slightly.
-  // 中文：输出仍在限制内，即使会略微偏离请求命令。
   double eta = 1.0;
   if (scale_velocities_) {
     double curr_eta = -1.0;
@@ -365,7 +332,6 @@ void VelocitySmoother::smootherTimer()
   last_cmd_ = *cmd_vel;
 
   // Apply deadband restrictions & publish
-  // 中文：应用死区限制并发布。
   cmd_vel->linear.x = fabs(cmd_vel->linear.x) < deadband_velocities_[0] ? 0.0 : cmd_vel->linear.x;
   cmd_vel->linear.y = fabs(cmd_vel->linear.y) < deadband_velocities_[1] ? 0.0 : cmd_vel->linear.y;
   cmd_vel->angular.z = fabs(cmd_vel->angular.z) <

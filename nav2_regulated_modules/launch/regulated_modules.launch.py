@@ -1,5 +1,3 @@
-# 中文注释：统一启动遥控、自主规划和固定路径三种互斥模式。
-# 中文注释：remote 只启动键盘节点；其余模式启动地图、规划、平滑、控制和底盘转换链。
 import os
 import sys
 
@@ -17,7 +15,6 @@ from nav2_common.launch import RewrittenYaml
 
 
 def generate_launch_description():
-    # 中文注释：解析包共享目录、当前 Launch 目录以及全部可由命令行覆盖的启动参数。
     bringup_dir = get_package_share_directory('nav2_regulated_modules')
     launch_dir = os.path.dirname(__file__)
 
@@ -42,9 +39,7 @@ def generate_launch_description():
     keyboard_input_device = LaunchConfiguration('keyboard_input_device')
     is_remote = PythonExpression(["'", operation_mode, "' == 'remote'"])
     is_navigation = PythonExpression(["'", operation_mode, "' != 'remote'"])
-    # 中文注释：停用 Collision Monitor 后，Velocity Smoother 在所有导航模式下直接发布最终 /cmd_vel。
     smoothed_cmd_vel_topic = 'cmd_vel'
-    # 中文注释：以下 Collision Monitor 输出 Topic 选择逻辑随碰撞模块一起停用，保留注释便于后续恢复。
     # collision_monitor_output_topic = PythonExpression([
     #     "'cmd_vel' if '", operation_mode,
     #     "' == 'fixed_path' else 'cmd_vel_collision_unused'"])
@@ -54,31 +49,24 @@ def generate_launch_description():
             "' == 'fixed_path' else 10.0"]),
         value_type=float)
 
-    # 中文注释：Lifecycle 激活顺序先准备底层服务器，最后激活负责业务编排的导航器。
     lifecycle_nodes = [
         'planner_server',
         'controller_server',
         'smoother_server',
-        # 中文注释：不启动行为树、恢复行为和路点服务器，仅保留规划控制主链。
         'velocity_smoother',
-        # 中文注释：Collision Monitor 已停用，不加入 Lifecycle Manager 的节点名单。
         # 'collision_monitor',
-        # 中文注释：规控入口依赖其他服务器，因此最后激活、停机时最先停用。
         'regulated_navigator',
     ]
 
-    # 中文注释：统一采用相对 TF Topic，保证 namespace 模式下仍能正确重映射。
     remappings = [('/tf', 'tf'),
                   ('/tf_static', 'tf_static')]
 
-    # 中文注释：在加载 YAML 时统一覆写时钟、自动激活和地图路径。
     param_substitutions = {
         'use_sim_time': use_sim_time,
         'autostart': autostart,
         'yaml_filename': map_yaml_file,
     }
 
-    # 中文注释：RewrittenYaml 按 namespace 生成运行时参数文件，并把字符串值转换为实际类型。
     configured_params = ParameterFile(
         RewrittenYaml(
             source_file=params_file,
@@ -87,15 +75,12 @@ def generate_launch_description():
             convert_types=True),
         allow_substs=True)
 
-    # 中文注释：启用行缓冲，确保多进程日志能及时显示完整行。
     stdout_linebuf_envvar = SetEnvironmentVariable(
         'RCUTILS_LOGGING_BUFFERED_STREAM', '1')
 
-    # 中文注释：统一把自定义 spdlog 文件写到可写目录，避免目标机默认目录权限导致节点退出。
     spdlog_log_dir_envvar = SetEnvironmentVariable(
         'SPDLOG_WRAPPER_LOG_DIR', '/tmp/nav2_logs')
 
-    # 中文注释：以下 Launch 参数覆盖命名空间、地图、时钟、组合模式、日志和三模式选择。
     declare_namespace_cmd = DeclareLaunchArgument(
         'namespace',
         default_value='',
@@ -173,7 +158,6 @@ def generate_launch_description():
         default_value=default_keyboard_input_device,
         description='Terminal device used by remote keyboard control')
 
-    # 中文注释：RViz 使用独立 Launch，支持有命名空间和无命名空间两种配置。
     rviz_cmd = IncludeLaunchDescription(
         PythonLaunchDescriptionSource(
             os.path.join(launch_dir, 'rviz_launch.py')),
@@ -182,7 +166,6 @@ def generate_launch_description():
                           'use_namespace': use_namespace,
                           'rviz_config': rviz_config_file}.items())
 
-    # 中文注释：地图服务器发布静态 /map，由独立 Lifecycle Manager 负责激活。
     map_server_cmd = Node(
         package='nav2_map_server',
         executable='map_server',
@@ -204,7 +187,6 @@ def generate_launch_description():
                     {'autostart': autostart},
                     {'node_names': ['map_server']}])
 
-    # 中文注释：非组合模式为每个 Nav2 服务器创建独立进程，便于诊断和单独重启。
     load_nodes = GroupAction(
         condition=IfCondition(PythonExpression(['not ', use_composition])),
         actions=[
@@ -241,7 +223,6 @@ def generate_launch_description():
                 parameters=[configured_params],
                 arguments=['--ros-args', '--log-level', log_level],
                 remappings=remappings),
-            # 中文注释：规控恢复由 regulated_navigator 清图重规划，不加载 behavior_server。
             Node(
                 package='nav2_velocity_smoother',
                 executable='velocity_smoother',
@@ -254,7 +235,6 @@ def generate_launch_description():
                 remappings=remappings +
                 [('cmd_vel', 'cmd_vel_nav'),
                  ('cmd_vel_smoothed', smoothed_cmd_vel_topic)]),
-            # 中文注释：停用非组合模式的 Collision Monitor，速度由 Velocity Smoother 直接发布到 /cmd_vel。
             # Node(
             #     package='nav2_collision_monitor',
             #     executable='collision_monitor',
@@ -307,7 +287,6 @@ def generate_launch_description():
                             {'node_names': lifecycle_nodes}]),
         ])
 
-    # 中文注释：组合模式把标准 Nav2 组件装入已有容器，自定义导航器和 controlpub 仍保持独立进程。
     load_composable_nodes = LoadComposableNodes(
         condition=IfCondition(use_composition),
         target_container=container_name_full,
@@ -333,7 +312,6 @@ def generate_launch_description():
                 name='smoother_server',
                 parameters=[configured_params],
                 remappings=remappings),
-            # 中文注释：组合模式同样不加载恢复行为和路点组件，保证两种启动方式一致。
             ComposableNode(
                 package='nav2_velocity_smoother',
                 plugin='nav2_velocity_smoother::VelocitySmoother',
@@ -342,7 +320,6 @@ def generate_launch_description():
                 remappings=remappings +
                 [('cmd_vel', 'cmd_vel_nav'),
                  ('cmd_vel_smoothed', smoothed_cmd_vel_topic)]),
-            # 中文注释：停用组合模式的 Collision Monitor，速度由 Velocity Smoother 直接发布到 /cmd_vel。
             # ComposableNode(
             #     package='nav2_collision_monitor',
             #     plugin='nav2_collision_monitor::CollisionMonitor',
@@ -366,7 +343,6 @@ def generate_launch_description():
                              'node_names': lifecycle_nodes}]),
         ])
 
-    # 中文注释：组合模式下单独启动自定义 Lifecycle 导航器，负责三模式中的导航分支。
     start_regulated_navigator_cmd = Node(
         condition=IfCondition(use_composition),
         package='nav2_regulated_modules',
@@ -383,7 +359,6 @@ def generate_launch_description():
         arguments=['--ros-args', '--log-level', log_level],
         remappings=remappings)
 
-    # 中文注释：组合模式下单独启动底盘消息转换，保证 /control_to_uart 只有一个发布源。
     start_controlpub_cmd = Node(
         condition=IfCondition(use_composition),
         package='controlpub',
@@ -393,14 +368,12 @@ def generate_launch_description():
         parameters=[{'input_topic': '/cmd_vel'},
                     {'output_topic': '/control_to_uart'}])
 
-    # 中文注释：Collision Monitor 停用后不再启动碰撞边界可视化节点，保留注释便于后续恢复。
     # collision_boundary_visualizer_cmd = Node(
     #     package='nav2_regulated_modules',
     #     executable='collision_boundary_visualizer_node',
     #     name='collision_boundary_visualizer',
     #     output='screen')
 
-    # 中文注释：遥控模式直接复用键盘节点，绝不同时启动 controlpub 和自动规控链。
     remote_control_cmd = Node(
         condition=IfCondition(is_remote),
         package='myagv_keyboard_control',
@@ -411,7 +384,6 @@ def generate_launch_description():
         parameters=[configured_params, {'input_device': keyboard_input_device,
                      'output_topic': '/control_to_uart'}])
 
-    # 中文注释：自主规划和固定路径共享控制安全链，仅由 regulated_navigator 决定是否调用 Planner。
     navigation_group = GroupAction(
         condition=IfCondition(is_navigation),
         actions=[
@@ -425,7 +397,6 @@ def generate_launch_description():
             # collision_boundary_visualizer_cmd,
         ])
 
-    # 中文注释：按“环境变量→参数声明→互斥业务分支”的顺序组装最终 LaunchDescription。
     ld = LaunchDescription()
 
     ld.add_action(stdout_linebuf_envvar)

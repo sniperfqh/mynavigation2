@@ -2,38 +2,24 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>nav2_common</name>
-  <!-- 中文：包名是下游 Launch 和 CMake 通过 find_package()、Python import 使用的稳定标识。 -->
   <version>1.1.20</version>
-  <!-- 中文：版本号随 Nav2 发布节奏变化，用于依赖解析和安装索引中的版本标识。 -->
   <description>Common support functionality used throughout the navigation 2 stack</description>
-  <!-- 中文：本包提供跨导航功能包共享的 Launch Substitution、参数改写和 CMake 构建约定。 -->
   <maintainer email="carl.r.delsey@intel.com">Carl Delsey</maintainer>
-  <!-- 中文：维护者字段用于 ROS 包索引和问题追踪，不参与运行时数据流。 -->
   <license>Apache-2.0</license>
-  <!-- 中文：所有安装与再分发内容遵循 Apache-2.0 许可证。 -->
 
   <depend>launch</depend>
-  <!-- 中文：提供 LaunchContext、Substitution 和条件求值等运行时基础类型。 -->
   <depend>launch_ros</depend>
-  <!-- 中文：声明与 ROS 2 节点启动集成所需的 Launch ROS 扩展依赖。 -->
   <depend>osrf_pycommon</depend>
-  <!-- 中文：保留 ROS 2 Python 公共工具依赖，满足该包及其下游环境的运行时约束。 -->
   <depend>rclpy</depend>
-  <!-- 中文：声明 ROS 2 Python 客户端库依赖，保证导出的 Launch 工具运行环境完整。 -->
   <depend>python3-yaml</depend>
-  <!-- 中文：RewrittenYaml、HasNodeParams 和 ParseMultiRobotPose 使用 PyYAML 解析配置。 -->
 
   <buildtool_depend>ament_cmake_core</buildtool_depend>
-  <!-- 中文：构建阶段使用 ament_cmake 注册包、导出配置和安装目录。 -->
 
   <build_depend>ament_cmake_python</build_depend>
-  <!-- 中文：构建阶段使用 ament_cmake_python 安装 nav2_common Python 包。 -->
 
   <buildtool_export_depend>ament_cmake_core</buildtool_export_depend>
-  <!-- 中文：把 ament CMake 核心能力作为构建工具导出给读取本包配置的下游环境。 -->
 
   <export>
-    <!-- 中文：声明本包采用 ament_cmake 构建类型，colcon 据此选择对应构建扩展。 -->
     <build_type>ament_cmake</build_type>
   </export>
 </package>

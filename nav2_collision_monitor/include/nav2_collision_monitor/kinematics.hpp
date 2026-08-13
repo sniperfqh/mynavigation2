@@ -27,8 +27,6 @@ namespace nav2_collision_monitor
  * origin to the non-existing in ROS frame, which origin is equal to pose
  * @param pose Origin of the new frame
  * @param points Array of points whose coordinates will be transformed
- * 中文：把世界／历史坐标中的点变换到以 pose 为原点、以 pose.theta 为 x 轴方向的局部帧。
- * 中文：函数原地修改 points，使用二维刚体变换的逆旋转；碰撞预测每个时间步都会调用它。
  */
 void transformPoints(const Pose & pose, std::vector<Point> & points);
 
@@ -40,8 +38,6 @@ void transformPoints(const Pose & pose, std::vector<Point> & points);
  * @param pose Pose to be projected
  * @param velocity Velocity at which the pose to be moved. It is also being rotated
  * on according twist angle.
- * 中文：按离散时间步推进机器人位置与朝向，并同步旋转线速度，近似连续时间的平面运动。
- * 中文：dt 应足够小；过大的步长会让 APPROACH 模型漏掉两个采样时刻之间的碰撞。
  */
 void projectState(const double & dt, Pose & pose, Velocity & velocity);
 

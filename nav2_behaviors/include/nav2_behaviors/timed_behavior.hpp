@@ -51,7 +51,6 @@ using namespace std::chrono_literals;  //NOLINT
 /**
  * @class nav2_behaviors::Behavior
  * @brief An action server Behavior base class implementing the action server and basic factory.
-  * 中文：实现 action server 和基础工厂逻辑的 Behavior 基类。
  */
 template<typename ActionT>
 class TimedBehavior : public nav2_core::Behavior
@@ -61,7 +60,6 @@ public:
 
   /**
    * @brief A TimedBehavior constructor
-   * 中文：TimedBehavior 构造函数。
    */
   TimedBehavior()
   : action_server_(nullptr),
@@ -74,50 +72,36 @@ public:
   virtual ~TimedBehavior() = default;
 
   // Derived classes can override this method to catch the command and perform some checks
-  // 中文：派生类可以重写该方法以接收命令并执行检查。
   // before getting into the main loop. The method will only be called
-  // 中文：进入主循环前调用；该方法只会被调用
   // once and should return SUCCEEDED otherwise behavior will return FAILED.
-  // 中文：一次，并且应返回 SUCCEEDED，否则 behavior 会返回 FAILED。
   virtual Status onRun(const std::shared_ptr<const typename ActionT::Goal> command) = 0;
 
 
   // This is the method derived classes should mainly implement
-  // 中文：这是派生类主要需要实现的方法。
   // and will be called cyclically while it returns RUNNING.
-  // 中文：当其返回 RUNNING 时会被周期性调用。
   // Implement the behavior such that it runs some unit of work on each call
-  // 中文：实现 behavior 时，每次调用应执行一个工作单元，
   // and provides a status. The Behavior will finish once SUCCEEDED is returned
-  // 中文：并返回状态；一旦返回 SUCCEEDED，Behavior 即结束。
   // It's up to the derived class to define the final commanded velocity.
-  // 中文：最终命令速度由派生类定义。
   virtual Status onCycleUpdate() = 0;
 
   // an opportunity for derived classes to do something on configuration
-  // 中文：为派生类在配置阶段执行自定义逻辑提供机会。
   // if they chose
-  // 中文：如果派生类选择这样做。
   virtual void onConfigure()
   {
   }
 
   // an opportunity for derived classes to do something on cleanup
-  // 中文：为派生类在 cleanup 阶段执行自定义逻辑提供机会。
   // if they chose
-  // 中文：如果派生类选择这样做。
   virtual void onCleanup()
   {
   }
 
   // an opportunity for a derived class to do something on action completion
-  // 中文：为派生类在 action 完成时执行自定义逻辑提供机会。
   virtual void onActionCompletion()
   {
   }
 
   // configure the server on lifecycle setup
-  // 中文：在 lifecycle setup 阶段配置 server。
   void configure(
     const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
     const std::string & name, std::shared_ptr<tf2_ros::Buffer> tf,
@@ -150,7 +134,6 @@ public:
   }
 
   // Cleanup server on lifecycle transition
-  // 中文：在 lifecycle 状态转换时清理 server。
   void cleanup() override
   {
     action_server_.reset();
@@ -159,7 +142,6 @@ public:
   }
 
   // Activate server on lifecycle transition
-  // 中文：在 lifecycle 状态转换时激活 server。
   void activate() override
   {
     LOG_INFO("Activating {}", behavior_name_.c_str());
@@ -170,7 +152,6 @@ public:
   }
 
   // Deactivate server on lifecycle transition
-  // 中文：在 lifecycle 状态转换时停用 server。
   void deactivate() override
   {
     vel_pub_->on_deactivate();
@@ -195,17 +176,13 @@ protected:
   rclcpp::Duration elasped_time_{0, 0};
 
   // Clock
-  // 中文：时钟。
   rclcpp::Clock::SharedPtr clock_;
 
   // Logger
-  // 中文：日志器。
   rclcpp::Logger logger_{rclcpp::get_logger("nav2_behaviors")};
 
   // Main execution callbacks for the action server implementation calling the Behavior's
-  // 中文：action server 实现的主执行回调，用于调用 Behavior 的
   // onRun and cycle functions to execute a specific behavior
-  // 中文：onRun 和 cycle 函数来执行具体 behavior。
   void execute()
   {
     LOG_INFO("Running {}", behavior_name_.c_str());
@@ -226,7 +203,6 @@ protected:
     auto start_time = clock_->now();
 
     // Initialize the ActionT result
-    // 中文：初始化 ActionT 结果。
     auto result = std::make_shared<typename ActionT::Result>();
 
     rclcpp::WallRate loop_rate(cycle_frequency_);
@@ -280,7 +256,6 @@ protected:
   }
 
   // Stop the robot with a commanded velocity
-  // 中文：通过命令速度让机器人停止。
   void stopRobot()
   {
     auto cmd_vel = std::make_unique<geometry_msgs::msg::Twist>();

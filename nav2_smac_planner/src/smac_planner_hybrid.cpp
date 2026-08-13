@@ -69,7 +69,6 @@ void SmacPlannerHybrid::configure(
   bool smooth_path;
 
   // General planner params
-  // 中文：读取 Hybrid-A* 参数，包含角度离散、最小转弯半径、启发式惩罚和平滑设置。
   nav2_util::declare_parameter_if_not_declared(
     node, name + ".downsample_costmap", rclcpp::ParameterValue(false));
   node->get_parameter(name + ".downsample_costmap", _downsample_costmap);
@@ -163,7 +162,6 @@ void SmacPlannerHybrid::configure(
   }
 
   // convert to grid coordinates
-  // 中文：将米制参数转换成 costmap 栅格单位，供 Hybrid-A* 搜索和启发式表使用。
   if (!_downsample_costmap) {
     _downsampling_factor = 1;
   }
@@ -186,7 +184,6 @@ void SmacPlannerHybrid::configure(
   }
 
   // Initialize collision checker
-  // 中文：Hybrid-A* 在 SE2 状态中搜索，需要结合 footprint 和朝向进行碰撞检测。
   _collision_checker = GridCollisionChecker(_costmap, _angle_quantizations, node);
   _collision_checker.setFootprint(
     _costmap_ros->getRobotFootprint(),
@@ -194,7 +191,6 @@ void SmacPlannerHybrid::configure(
     findCircumscribedCost(_costmap_ros));
 
   // Initialize A* template
-  // 中文：初始化 NodeHybrid A*，搜索状态包含 x/y/theta，并按 DUBIN 或 REEDS_SHEPP 运动模型扩展。
   _a_star = std::make_unique<AStarAlgorithm<NodeHybrid>>(_motion_model, _search_info);
   _a_star->initialize(
     _allow_unknown,
@@ -205,7 +201,6 @@ void SmacPlannerHybrid::configure(
     _angle_quantizations);
 
   // Initialize path smoother
-  // 中文：Hybrid-A* 可选内置 smoother，用于进一步平滑满足曲率约束的搜索结果。
   if (smooth_path) {
     SmootherParams params;
     params.get(node, name);
@@ -299,7 +294,6 @@ nav_msgs::msg::Path SmacPlannerHybrid::createPlan(
   std::unique_lock<nav2_costmap_2d::Costmap2D::mutex_t> lock(*(_costmap->getMutex()));
 
   // Downsample costmap, if required
-  // 中文：可选降采样 costmap，用更粗分辨率降低 Hybrid-A* 搜索规模。
   nav2_costmap_2d::Costmap2D * costmap = _costmap;
   if (_costmap_downsampler) {
     costmap = _costmap_downsampler->downsample(_downsampling_factor);
@@ -307,7 +301,6 @@ nav_msgs::msg::Path SmacPlannerHybrid::createPlan(
   }
 
   // Set collision checker and costmap information
-  // 中文：每次规划前刷新 footprint，确保碰撞检测使用最新机器人外形。
   _collision_checker.setFootprint(
     _costmap_ros->getRobotFootprint(),
     _costmap_ros->getUseRadius(),
@@ -315,7 +308,6 @@ nav_msgs::msg::Path SmacPlannerHybrid::createPlan(
   _a_star->setCollisionChecker(&_collision_checker);
 
   // Set starting point, in A* bin search coordinates
-  // 中文：将起点转换为 x/y/theta 离散状态，其中 theta 会映射到角度 bin。
   unsigned int mx_start, my_start, mx_goal, my_goal;
   if (!costmap->worldToMap(start.pose.position.x, start.pose.position.y, mx_start, my_start)) {
     throw std::runtime_error("Start pose is out of costmap!");
@@ -334,7 +326,6 @@ nav_msgs::msg::Path SmacPlannerHybrid::createPlan(
   _a_star->setStart(mx_start, my_start, start_orientation_bin_int);
 
   // Set goal point, in A* bin search coordinates
-  // 中文：将目标点转换为 x/y/theta 离散状态，Hybrid-A* 会尝试满足目标朝向。
   if (!costmap->worldToMap(goal.pose.position.x, goal.pose.position.y, mx_goal, my_goal)) {
     throw std::runtime_error("Goal pose is out of costmap!");
   }
@@ -363,7 +354,6 @@ nav_msgs::msg::Path SmacPlannerHybrid::createPlan(
   pose.pose.orientation.w = 1.0;
 
   // Corner case of start and goal being on the same cell
-  // 中文：起点、终点和朝向 bin 完全相同时直接返回单点路径。
   if (std::floor(mx_start) == std::floor(mx_goal) &&
     std::floor(my_start) == std::floor(my_goal) &&
     start_orientation_bin_int == goal_orientation_bin_int)
@@ -381,7 +371,6 @@ nav_msgs::msg::Path SmacPlannerHybrid::createPlan(
   }
 
   // Compute plan
-  // 中文：执行 Hybrid-A* 搜索，输出包含 x/y/theta 的状态序列。
   NodeHybrid::CoordinateVector path;
   int num_iterations = 0;
   std::string error;
@@ -410,7 +399,6 @@ nav_msgs::msg::Path SmacPlannerHybrid::createPlan(
   }
 
   // Convert to world coordinates
-  // 中文：把搜索结果从栅格状态转换为世界坐标和姿态，生成 nav_msgs/Path。
   plan.poses.reserve(path.size());
   for (int i = path.size() - 1; i >= 0; --i) {
     pose.pose = getWorldCoords(path[i].x, path[i].y, costmap);
@@ -434,7 +422,6 @@ nav_msgs::msg::Path SmacPlannerHybrid::createPlan(
 #endif
 
   // Smooth plan
-  // 中文：若启用 smoother 且搜索有效，在剩余时间内平滑 Hybrid-A* 路径。
   if (_smoother && num_iterations > 1) {
     _smoother->smooth(plan, costmap, time_remaining);
   }

@@ -21,7 +21,7 @@
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
-  SpdlogWrapper::init("nav2_smoother", "smoother_server"); // 模块名 + 日志文件名
+  SpdlogWrapper::init("nav2_smoother", "smoother_server");
   auto node = std::make_shared<nav2_smoother::SmootherServer>();
   rclcpp::spin(node->get_node_base_interface());
   rclcpp::shutdown();

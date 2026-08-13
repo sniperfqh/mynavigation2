@@ -36,8 +36,6 @@ BtNavigator::BtNavigator(rclcpp::NodeOptions options)
   LOG_INFO("Creating");
   LOG_INFO("Creating BT navigator action servers and behavior-tree plugin registry");
 
-  // 中文注释：BT Navigator 不直接写死导航流程，而是加载行为树节点库；
-  // XML 行为树中的 action、condition、control 节点都来自这些plugin
   const std::vector<std::string> plugin_libs = {
     "nav2_compute_path_to_pose_action_bt_node",
     "nav2_compute_path_through_poses_action_bt_node",
@@ -125,11 +123,8 @@ BtNavigator::on_configure(const rclcpp_lifecycle::State & /*state*/)
   odom_topic_ = get_parameter("odom_topic").as_string();
 
   // Libraries to pull plugins (BT Nodes) from
-  // 中文：Libraries to pull 插件。s (BT Nodes) from
   auto plugin_lib_names = get_parameter("plugin_lib_names").as_string_array();
 
-  // 中文注释：单目标点导航和多目标点导航分别由两个 navigator 实现，
-  // 它们共享 TF、速度估计、插件互斥器和 BT 插件库。
   pose_navigator_ = std::make_unique<nav2_bt_navigator::NavigateToPoseNavigator>();
   poses_navigator_ = std::make_unique<nav2_bt_navigator::NavigateThroughPosesNavigator>();
 
@@ -139,10 +134,7 @@ BtNavigator::on_configure(const rclcpp_lifecycle::State & /*state*/)
   feedback_utils.robot_frame = robot_frame_;
   feedback_utils.transform_tolerance = transform_tolerance_;
 
-  // 中文注释：反馈依赖当前机器人位姿和速度；OdomSmoother 用短时间窗口平滑里程计，
-  // 避免 BT feedback 中的速度抖动直接暴露给上层。
   // Odometry smoother object for getting current speed
-  // 中文：用于获取当前速度的里程计平滑器对象。
   odom_smoother_ = std::make_shared<nav2_util::OdomSmoother>(shared_from_this(), 0.3, odom_topic_);
 
   if (!pose_navigator_->on_configure(
@@ -171,7 +163,6 @@ BtNavigator::on_activate(const rclcpp_lifecycle::State & /*state*/)
   }
 
   // create bond connection
-  // 中文：创建 bond 连接。
   createBond();
 
   return nav2_util::CallbackReturn::SUCCESS;
@@ -187,7 +178,6 @@ BtNavigator::on_deactivate(const rclcpp_lifecycle::State & /*state*/)
   }
 
   // destroy bond connection
-  // 中文：销毁 bond 连接。
   destroyBond();
 
   return nav2_util::CallbackReturn::SUCCESS;
@@ -225,9 +215,6 @@ BtNavigator::on_shutdown(const rclcpp_lifecycle::State & /*state*/)
 #include "rclcpp_components/register_node_macro.hpp"
 
 // Register the component with class_loader.
-// 中文：将组件注册到 class_loader。
 // This acts as a sort of entry point, allowing the component to be discoverable when its library
-// 中文：这相当于组件入口，使组件所在库被加载时可以被发现。
 // is being loaded into a running process.
-// 中文：当组件库被加载到运行中的进程时可被发现。
 RCLCPP_COMPONENTS_REGISTER_NODE(nav2_bt_navigator::BtNavigator)

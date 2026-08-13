@@ -27,22 +27,17 @@
 
 using namespace std::chrono_literals;
 
-// 中文：本文件验证两个无 ROS 业务状态的二维运动工具：坐标系逆变换和离散位姿投影。
-// 中文：测试使用几何解析值与 EXPECT_NEAR 比较，重点覆盖旋转、平移、角速度和线速度同步更新。
 static constexpr double EPSILON = std::numeric_limits<float>::epsilon();
 
 class RclCppFixture
 {
 public:
-  // 中文：为使用 rclcpp::Time 和基础 ROS 类型建立一次全局初始化环境。
   RclCppFixture() {rclcpp::init(0, nullptr);}
-  // 中文：测试结束后关闭全局 ROS 上下文，避免影响其他 GTest。
   ~RclCppFixture() {rclcpp::shutdown();}
 };
 RclCppFixture g_rclcppfixture;
 
 TEST(KinematicsTest, testTransformPoints) {
-  // 中文：验证先平移再逆旋转的点坐标变换，覆盖位于原点前后两侧的两个点。
   // Transform: move frame to (2.0, 1.0) coordinate and rotate it on 30 degrees
   const nav2_collision_monitor::Pose tf{2.0, 1.0, M_PI / 6.0};
   // Add two points in the basic frame
@@ -69,7 +64,6 @@ TEST(KinematicsTest, testTransformPoints) {
 }
 
 TEST(KinematicsTest, testProjectState) {
-  // 中文：验证单位时间内的位置平移、朝向旋转以及线速度随角度同步旋转。
   //     Y                                Y
   //     ^                                ^
   //     '                                '

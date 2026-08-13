@@ -101,7 +101,6 @@ void Costmap2DPublisher::prepareGrid() {
   std::unique_lock<Costmap2D::mutex_t> lock(*(costmap_->getMutex()));
   // Output layer 1: translated OccupancyGrid for visualization. Internal cost values
   // 0-255 are mapped to -1..100 for nav_msgs/msg/OccupancyGrid consumers.
-  // 中文：输出层 1：给 RViz/通用消费者的 OccupancyGrid，把内部 0-255 代价转换为 -1..100。
   grid_resolution = costmap_->getResolution();
   grid_width = costmap_->getSizeInCellsX();
   grid_height = costmap_->getSizeInCellsY();
@@ -137,7 +136,6 @@ void Costmap2DPublisher::prepareGrid() {
 void Costmap2DPublisher::prepareCostmap() {
   std::unique_lock<Costmap2D::mutex_t> lock(*(costmap_->getMutex()));
   // Output layer 2: raw Nav2 costmap. This preserves internal 0-255 costs for Nav2 tools.
-  // 中文：输出层 2：Nav2 raw Costmap，保留内部 0-255 代价值。
   double resolution = costmap_->getResolution();
 
   costmap_raw_ = std::make_unique<nav2_msgs::msg::Costmap>();
@@ -186,7 +184,6 @@ void Costmap2DPublisher::publishCostmap() {
     if (costmap_update_pub_->get_subscription_count() > 0) {
       std::unique_lock<Costmap2D::mutex_t> lock(*(costmap_->getMutex()));
       // Publish Just an Update
-      // 中文：输出层 3：只发布本轮变化窗口，降低大地图周期传输开销。
       auto update = std::make_unique<map_msgs::msg::OccupancyGridUpdate>();
       update->header.stamp = rclcpp::Time();
       update->header.frame_id = global_frame_;

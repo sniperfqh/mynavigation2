@@ -13,7 +13,5 @@
 # limitations under the License.
 
 set(AMENT_BUILD_CONFIGURATION_KEYWORD_SEPARATOR ":")
-# 中文：让 ament 的构建配置关键字使用冒号分隔，保持导出的配置与 ament 约定一致。
 
 include("${nav2_common_DIR}/nav2_package.cmake")
-# 中文：下游 find_package(nav2_common) 时加载公开的 nav2_package() 宏，后续 CMakeLists 可直接调用。

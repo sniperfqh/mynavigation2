@@ -44,8 +44,6 @@ SmootherServer::SmootherServer(const rclcpp::NodeOptions & options)
   LOG_INFO("Creating smoother server");
   LOG_INFO("Smoother server loads path smoother plugins and collision checking inputs");
 
-  // 中文注释：SmootherServer 是全局路径的后处理节点；它不负责重新规划，
-  // 只接收 planner_server 生成的 Path，并按 smoother_id 调用对应平滑plugin
   declare_parameter(
     "costmap_topic", rclcpp::ParameterValue(
       std::string(
@@ -74,8 +72,6 @@ SmootherServer::on_configure(const rclcpp_lifecycle::State &)
 
   auto node = shared_from_this();
 
-  // 中文注释：smoother_plugins 决定本节点可用的平滑算法集合；
-  // 默认 simple_smoother 只做轻量级路径形状优化，配置失败会阻止节点进入 active。
   get_parameter("smoother_plugins", smoother_ids_);
   if (smoother_ids_ == default_ids_) {
     for (size_t i = 0; i < default_ids_.size(); ++i) {
@@ -114,13 +110,9 @@ SmootherServer::on_configure(const rclcpp_lifecycle::State &)
   }
 
   // Initialize pubs & subs
-  // 中文：初始化发布器和订阅器。
   plan_publisher_ = create_publisher<nav_msgs::msg::Path>("plan_smoothed", 1);
 
-  // 中文注释：BT Navigator 可通过 SmoothPath action 请求路径平滑；
-  // 输出发布到 plan_smoothed，供 RViz/调试观察平滑后的路径。
   // Create the action server that we implement with our smoothPath method
-  // 中文：创建由 smoothPath 方法实现的 action server。
   action_server_ = std::make_unique<ActionServer>(
     shared_from_this(),
     "smooth_path",
@@ -180,7 +172,6 @@ SmootherServer::on_activate(const rclcpp_lifecycle::State &)
   action_server_->activate();
 
   // create bond connection
-  // 中文：创建 bond 连接。
   createBond();
 
   return nav2_util::CallbackReturn::SUCCESS;
@@ -199,7 +190,6 @@ SmootherServer::on_deactivate(const rclcpp_lifecycle::State &)
   plan_publisher_->on_deactivate();
 
   // destroy bond connection
-  // 中文：销毁 bond 连接。
   destroyBond();
 
   return nav2_util::CallbackReturn::SUCCESS;
@@ -211,7 +201,6 @@ SmootherServer::on_cleanup(const rclcpp_lifecycle::State &)
   LOG_INFO("Cleaning up");
 
   // Cleanup the helper classes
-  // 中文：清理辅助类。
   SmootherMap::iterator it;
   for (it = smoothers_.begin(); it != smoothers_.end(); ++it) {
     it->second->cleanup();
@@ -219,7 +208,6 @@ SmootherServer::on_cleanup(const rclcpp_lifecycle::State &)
   smoothers_.clear();
 
   // Release any allocated resources
-  // 中文：释放已分配的资源。
   action_server_.reset();
   plan_publisher_.reset();
   transform_listener_.reset();
@@ -292,10 +280,7 @@ void SmootherServer::smoothPlan()
       "Smoothing path with {} poses using smoother {}",
       goal->path.poses.size(), current_smoother_.c_str());
 
-    // 中文注释：插件只修改 result->path，本节点负责统计耗时、发布调试路径，
-    // 并按需用 costmap/footprint 对平滑结果做碰撞检查。
     // Perform smoothing
-    // 中文：执行路径平滑。
     result->path = goal->path;
     result->was_completed = smoothers_[current_smoother_]->smooth(
       result->path, goal->max_smoothing_duration);
@@ -308,7 +293,6 @@ void SmootherServer::smoothPlan()
     plan_publisher_->publish(result->path);
 
     // Check for collisions
-    // 中文：检查碰撞。
     if (goal->check_for_collisions) {
       LOG_INFO("Checking smoothed path collision state before returning result");
       geometry_msgs::msg::Pose2D pose2d;
@@ -354,9 +338,6 @@ void SmootherServer::smoothPlan()
 #include "rclcpp_components/register_node_macro.hpp"
 
 // Register the component with class_loader.
-// 中文：将组件注册到 class_loader。
 // This acts as a sort of entry point, allowing the component to be discoverable when its library
-// 中文：这相当于组件入口，使组件所在库被加载时可以被发现。
 // is being loaded into a running process.
-// 中文：当组件库被加载到运行中的进程时可被发现。
 RCLCPP_COMPONENTS_REGISTER_NODE(nav2_smoother::SmootherServer)

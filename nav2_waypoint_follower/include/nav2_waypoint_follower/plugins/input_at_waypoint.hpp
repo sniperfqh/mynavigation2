@@ -29,7 +29,6 @@ namespace nav2_waypoint_follower
 
 /**
  * @brief Simple plugin based on WaypointTaskExecutor, lets robot to wait for a
-  * 中文：基于 WaypointTaskExecutor 的简单插件，让机器人等待一段时间。
  *        user input at waypoint arrival.
  */
 class InputAtWaypoint : public nav2_core::WaypointTaskExecutor
@@ -37,25 +36,20 @@ class InputAtWaypoint : public nav2_core::WaypointTaskExecutor
 public:
 /**
  * @brief Construct a new Input At Waypoint Arrival object
-  * 中文：构造新的 InputAtWaypointArrival 对象。
  *
  */
   InputAtWaypoint();
 
   /**
    * @brief Destroy the Input At Waypoint Arrival object
-   * 中文：销毁 InputAtWaypointArrival 对象。
    *
    */
   ~InputAtWaypoint();
 
   /**
    * @brief declares and loads parameters used
-   * 中文：声明并加载使用到的参数。
    * @param parent parent node
-   * 中文：父节点。
    * @param plugin_name name of plugin
-   * 中文：插件名称。
    */
   void initialize(
     const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
@@ -63,11 +57,9 @@ public:
 
   /**
    * @brief Processor
-   * 中文：处理器。
    * @param curr_pose current pose of the robot
    * @param curr_waypoint_index current waypoint, that robot just arrived
    * @return if task execution failed
-   * 中文：任务执行失败时返回 false。
    */
   bool processAtWaypoint(
     const geometry_msgs::msg::PoseStamped & curr_pose, const int & curr_waypoint_index);
@@ -75,7 +67,6 @@ public:
 protected:
   /**
    * @brief Processor callback
-   * 中文：处理器回调。
    * @param msg empty message
    */
   void Cb(const std_msgs::msg::Empty::SharedPtr msg);

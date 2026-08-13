@@ -27,7 +27,6 @@
 #include "nav2_util/odometry_utils.hpp"
 #include "nav2_util/robot_utils.hpp"
 // spdlog wrapper for module-specific logging
-// 中文：用于模块专属日志的 spdlog wrapper。
 #include "spdlog_wrapper.hpp"
 
 namespace nav2_velocity_smoother
@@ -43,7 +42,6 @@ public:
   /**
    * @brief A constructor for nav2_velocity_smoother::VelocitySmoother
    * @param options Additional options to control creation of the node.
-   * 中文：用于控制节点创建的附加选项。
    */
   explicit VelocitySmoother(const rclcpp::NodeOptions & options = rclcpp::NodeOptions());
 
@@ -78,52 +76,33 @@ public:
     const double accel, const double decel, const double eta);
 
 protected:
-  /**
-   * @brief 配置参数和成员variables
-   * @param state LifeCycle Node's state
-   * 中文：Lifecycle 节点状态。
-   * @return Success or Failure
-   * 中文：成功或失败。
-   */
   nav2_util::CallbackReturn on_configure(const rclcpp_lifecycle::State & state) override;
 
   /**
    * @brief Activates member variables
-   * 中文：激活成员变量。
    * @param state LifeCycle Node's state
-   * 中文：Lifecycle 节点状态。
    * @return Success or Failure
-   * 中文：成功或失败。
    */
   nav2_util::CallbackReturn on_activate(const rclcpp_lifecycle::State & state) override;
 
   /**
    * @brief Deactivates member variables
-   * 中文：停用成员变量。
    * @param state LifeCycle Node's state
-   * 中文：Lifecycle 节点状态。
    * @return Success or Failure
-   * 中文：成功或失败。
    */
   nav2_util::CallbackReturn on_deactivate(const rclcpp_lifecycle::State & state) override;
 
   /**
    * @brief Calls clean up states and resets member variables.
-   * 中文：调用 cleanup 状态并重置成员变量。
    * @param state LifeCycle Node's state
-   * 中文：Lifecycle 节点状态。
    * @return Success or Failure
-   * 中文：成功或失败。
    */
   nav2_util::CallbackReturn on_cleanup(const rclcpp_lifecycle::State & state) override;
 
   /**
    * @brief Called when in Shutdown state
-   * 中文：进入 Shutdown 状态时调用。
    * @param state LifeCycle Node's state
-   * 中文：Lifecycle 节点状态。
    * @return Success or Failure
-   * 中文：成功或失败。
    */
   nav2_util::CallbackReturn on_shutdown(const rclcpp_lifecycle::State & state) override;
 
@@ -140,7 +119,6 @@ protected:
 
   /**
    * @brief Dynamic reconfigure callback
-   * @param parameters 要修改的参数列表。
    */
   rcl_interfaces::msg::SetParametersResult dynamicParametersCallback(
     std::vector<rclcpp::Parameter> parameters);

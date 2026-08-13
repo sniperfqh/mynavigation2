@@ -70,7 +70,6 @@ MapServer::MapServer(const rclcpp::NodeOptions & options)
   LOG_INFO("Creating MapServer lifecycle node");
 
   // Declare the node parameters
-  // 中文：声明地图文件、地图话题和地图坐标系参数，后续 configure 阶段读取。
   declare_parameter("yaml_filename", rclcpp::PARAMETER_STRING);
   declare_parameter("topic_name", "map");
   declare_parameter("frame_id", "map");
@@ -90,9 +89,7 @@ MapServer::on_configure(const rclcpp_lifecycle::State & /*state*/)
   // 1. YAML metadata layer: file path, resolution, origin, thresholds, mode.
   // 2. Image pixel layer: grayscale/alpha pixels from pgm/png/bmp files.
   // 3. OccupancyGrid layer: ROS message cached in msg_, served and published to Nav2.
-  // 中文：MapServer 串联地图三层结构：YAML 元数据层 -> image 像素层 -> OccupancyGrid 消息层。
   // Get the name of the YAML file to use (can be empty if no initial map should be used)
-  // 中文：读取 YAML 地图文件参数；为空时不预加载地图，只等待 load_map 服务动态加载。
   std::string yaml_filename = get_parameter("yaml_filename").as_string();
   std::string topic_name = get_parameter("topic_name").as_string();
   frame_id_ = get_parameter("frame_id").as_string();
@@ -101,11 +98,9 @@ MapServer::on_configure(const rclcpp_lifecycle::State & /*state*/)
     yaml_filename.c_str(), topic_name.c_str(), frame_id_.c_str());
 
   // only try to load map if parameter was set
-  // 中文：配置阶段如果指定 yaml_filename，则立即走 YAML -> image -> OccupancyGrid 数据流。
   if (!yaml_filename.empty()) {
     // Shared pointer to LoadMap::Response is also should be initialized
     // in order to avoid null-pointer dereference
-    // 中文：复用 LoadMap 响应结构承载加载结果，避免空指针并统一状态码。
     std::shared_ptr<nav2_msgs::srv::LoadMap::Response> rsp =
       std::make_shared<nav2_msgs::srv::LoadMap::Response>();
 
@@ -125,23 +120,19 @@ MapServer::on_configure(const rclcpp_lifecycle::State & /*state*/)
   }
 
   // Make name prefix for services
-  // 中文：服务名带节点名前缀，例如 map_server/map 和 map_server/load_map。
   const std::string service_prefix = get_name() + std::string("/");
 
   // Create a service that provides the occupancy grid
-  // 中文：GetMap 服务直接返回当前缓存的 OccupancyGrid。
   occ_service_ = create_service<nav_msgs::srv::GetMap>(
     service_prefix + std::string(service_name_),
     std::bind(&MapServer::getMapCallback, this, _1, _2, _3));
 
   // Create a publisher using the QoS settings to emulate a ROS1 latched topic
-  // 中文：transient_local + reliable 让新订阅者也能收到最近一次发布的地图。
   occ_pub_ = create_publisher<nav_msgs::msg::OccupancyGrid>(
     topic_name,
     rclcpp::QoS(rclcpp::KeepLast(1)).transient_local().reliable());
 
   // Create a service that loads the occupancy grid from a file
-  // 中文：LoadMap 服务运行期重新读取 YAML/图像，更新缓存并发布新地图。
   load_map_service_ = create_service<nav2_msgs::srv::LoadMap>(
     service_prefix + std::string(load_map_service_name_),
     std::bind(&MapServer::loadMapCallback, this, _1, _2, _3));
@@ -156,7 +147,6 @@ MapServer::on_activate(const rclcpp_lifecycle::State & /*state*/)
   LOG_INFO("Activating MapServer lifecycle node");
 
   // Publish the map using the latched topic
-  // 中文：激活发布器；如果配置阶段已加载地图，则立即发布一次缓存地图。
   occ_pub_->on_activate();
   if (map_available_) {
     auto occ_grid = std::make_unique<nav_msgs::msg::OccupancyGrid>(msg_);
@@ -169,7 +159,6 @@ MapServer::on_activate(const rclcpp_lifecycle::State & /*state*/)
   }
 
   // create bond connection
-  // 中文：创建 lifecycle bond，供 lifecycle_manager 监控节点存活。
   createBond();
 
   return nav2_util::CallbackReturn::SUCCESS;
@@ -184,7 +173,6 @@ MapServer::on_deactivate(const rclcpp_lifecycle::State & /*state*/)
   occ_pub_->on_deactivate();
 
   // destroy bond connection
-  // 中文：退出 active 状态时断开 lifecycle bond。
   destroyBond();
 
   return nav2_util::CallbackReturn::SUCCESS;
@@ -219,7 +207,6 @@ void MapServer::getMapCallback(
   std::shared_ptr<nav_msgs::srv::GetMap::Response> response)
 {
   // if not in ACTIVE state, ignore request
-  // 中文：生命周期未激活时不返回地图，避免外部拿到未准备好的缓存数据。
   if (get_current_state().id() != lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE) {
     RCLCPP_WARN(
       get_logger(),
@@ -240,7 +227,6 @@ void MapServer::loadMapCallback(
   std::shared_ptr<nav2_msgs::srv::LoadMap::Response> response)
 {
   // if not in ACTIVE state, ignore request
-  // 中文：LoadMap 只允许 active 状态处理，保证发布器和服务都已完成生命周期激活。
   if (get_current_state().id() != lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE) {
     RCLCPP_WARN(
       get_logger(),
@@ -250,7 +236,6 @@ void MapServer::loadMapCallback(
   }
   RCLCPP_INFO(get_logger(), "Handling LoadMap request");
   // Load from file
-  // 中文：服务请求携带 map_url；读取成功后更新 msg_ 缓存并发布到地图话题。
   LOG_INFO("Handling LoadMap request map_url='{}'", request->map_url.c_str());
   if (loadMapResponseFromYaml(request->map_url, response)) {
     auto occ_grid = std::make_unique<nav_msgs::msg::OccupancyGrid>(msg_);
@@ -285,7 +270,6 @@ bool MapServer::loadMapResponseFromYaml(
       return false;
     case LOAD_MAP_SUCCESS:
       // Correcting msg_ header when it belongs to specific node
-      // 中文：底层 map_io 默认 frame_id 为 map，这里按节点参数修正 header 和加载时间。
       updateMsgHeader();
 
       map_available_ = true;
@@ -303,7 +287,6 @@ bool MapServer::loadMapResponseFromYaml(
 
 void MapServer::updateMsgHeader()
 {
-  // 中文：将地图加载时间和消息时间戳刷新为当前节点时间。
   msg_.info.map_load_time = now();
   msg_.header.frame_id = frame_id_;
   msg_.header.stamp = now();

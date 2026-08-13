@@ -50,7 +50,6 @@ MapSaver::MapSaver(const rclcpp::NodeOptions & options)
   LOG_INFO("Creating MapSaver lifecycle node");
 
   // Declare the node parameters
-  // 中文：声明保存超时、默认阈值和订阅 QoS 参数。
   declare_parameter("save_map_timeout", 2.0);
   declare_parameter("free_thresh_default", 0.25);
   declare_parameter("occupied_thresh_default", 0.65);
@@ -68,7 +67,6 @@ MapSaver::on_configure(const rclcpp_lifecycle::State & /*state*/)
   LOG_INFO("Configuring MapSaver lifecycle node");
 
   // Make name prefix for services
-  // 中文：保存地图服务名带节点名前缀，例如 map_saver/save_map。
   const std::string service_prefix = get_name() + std::string("/");
 
   save_map_timeout_ = std::make_shared<rclcpp::Duration>(
@@ -82,7 +80,6 @@ MapSaver::on_configure(const rclcpp_lifecycle::State & /*state*/)
     map_subscribe_transient_local_);
 
   // Create a service that saves the occupancy grid from map topic to a file
-  // 中文：SaveMap 服务收到请求后，临时订阅地图话题并写出图片与 YAML。
   save_map_service_ = create_service<nav2_msgs::srv::SaveMap>(
     service_prefix + save_map_service_name_,
     std::bind(&MapSaver::saveMapCallback, this, _1, _2, _3));
@@ -97,7 +94,6 @@ MapSaver::on_activate(const rclcpp_lifecycle::State & /*state*/)
   LOG_INFO("Activating MapSaver lifecycle node");
 
   // create bond connection
-  // 中文：创建 lifecycle bond，供 lifecycle_manager 监控节点存活。
   createBond();
 
   return nav2_util::CallbackReturn::SUCCESS;
@@ -110,7 +106,6 @@ MapSaver::on_deactivate(const rclcpp_lifecycle::State & /*state*/)
   LOG_INFO("Deactivating MapSaver lifecycle node");
 
   // destroy bond connection
-  // 中文：退出 active 状态时断开 lifecycle bond。
   destroyBond();
 
   return nav2_util::CallbackReturn::SUCCESS;
@@ -141,7 +136,6 @@ void MapSaver::saveMapCallback(
   std::shared_ptr<nav2_msgs::srv::SaveMap::Response> response)
 {
   // Set input arguments and call saveMapTopicToFile()
-  // 中文：将 SaveMap 服务请求转换为 SaveParameters，再进入订阅地图并落盘的数据流。
   LOG_INFO(
     "Handling SaveMap request map_topic='{}', map_url='{}', image_format='{}', map_mode='{}'",
     request->map_topic.c_str(), request->map_url.c_str(), request->image_format.c_str(),
@@ -171,7 +165,6 @@ bool MapSaver::saveMapTopicToFile(
   const SaveParameters & save_parameters)
 {
   // Local copies of map_topic and save_parameters that could be changed
-  // 中文：保存流程会补默认话题、默认阈值和默认格式，因此先复制请求参数。
   std::string map_topic_loc = map_topic;
   SaveParameters save_parameters_loc = save_parameters;
 
@@ -181,7 +174,6 @@ bool MapSaver::saveMapTopicToFile(
 
   try {
     // Correct map_topic_loc if necessary
-    // 中文：未指定地图话题时默认订阅 map。
     if (map_topic_loc == "") {
       map_topic_loc = "map";
       RCLCPP_WARN(
@@ -190,7 +182,6 @@ bool MapSaver::saveMapTopicToFile(
     }
 
     // Set default for MapSaver node thresholds parameters
-    // 中文：服务请求未提供阈值时使用节点参数中的默认值。
     if (save_parameters_loc.free_thresh == 0.0) {
       RCLCPP_WARN(
         get_logger(),
@@ -209,7 +200,6 @@ bool MapSaver::saveMapTopicToFile(
     std::promise<nav_msgs::msg::OccupancyGrid::SharedPtr> prom;
     std::future<nav_msgs::msg::OccupancyGrid::SharedPtr> future_result = prom.get_future();
     // A callback function that receives map message from subscribed topic
-    // 中文：临时订阅回调只负责把收到的地图消息交给 future，主流程等待它完成。
     auto mapCallback = [&prom](
       const nav_msgs::msg::OccupancyGrid::SharedPtr msg) -> void {
         LOG_INFO(
@@ -226,7 +216,6 @@ bool MapSaver::saveMapTopicToFile(
     }
 
     // Create new CallbackGroup for map_sub
-    // 中文：为临时地图订阅创建独立 callback group，避免服务回调阻塞自身 executor。
     auto callback_group = create_callback_group(
       rclcpp::CallbackGroupType::MutuallyExclusive,
       false);
@@ -238,7 +227,6 @@ bool MapSaver::saveMapTopicToFile(
     LOG_INFO("MapSaver subscribed to map topic '{}'", map_topic_loc.c_str());
 
     // Create SingleThreadedExecutor to spin map_sub in callback_group
-    // 中文：单线程 executor 只 spin 这个临时订阅，直到收到地图或超时。
     rclcpp::executors::SingleThreadedExecutor executor;
     executor.add_callback_group(callback_group, get_node_base_interface());
     // Spin until map message received
@@ -249,10 +237,8 @@ bool MapSaver::saveMapTopicToFile(
       return false;
     }
     // map_sub is no more needed
-    // 中文：地图已收到，释放临时订阅，后续只进行文件写入。
     map_sub.reset();
     // Map message received. Saving it to file
-    // 中文：将 OccupancyGrid 转换为图像文件和 YAML 元数据文件。
     nav_msgs::msg::OccupancyGrid::SharedPtr map_msg = future_result.get();
     if (saveMapToFile(*map_msg, save_parameters_loc)) {
       RCLCPP_INFO(get_logger(), "Map saved successfully");

@@ -31,7 +31,6 @@ def main():
     navigator = BasicNavigator()
 
     # Set our demo's initial pose
-    # 中文注解：设置 AMCL 初始定位。
     initial_pose = PoseStamped()
     initial_pose.header.frame_id = 'map'
     initial_pose.header.stamp = navigator.get_clock().now().to_msg()
@@ -42,29 +41,22 @@ def main():
     navigator.setInitialPose(initial_pose)
 
     # Activate navigation, if not autostarted. This should be called after setInitialPose()
-    # 中文注解：如果手动启动 lifecycle，必须先设置初始位姿。
     # or this will initialize at the origin of the map and update the costmap with bogus readings.
-    # 中文注解：否则会以地图原点初始化并污染 costmap。
     # If autostart, you should `waitUntilNav2Active()` instead.
-    # 中文注解：autostart 场景等待 Nav2 active 即可。
     # navigator.lifecycleStartup()
 
     # Wait for navigation to fully activate, since autostarting nav2
-    # 中文注解：等待 waypoint_follower 等 Nav2 节点可用。
     navigator.waitUntilNav2Active()
 
     # If desired, you can change or load the map as well
-    # 中文注解：可选地图切换入口。
     # navigator.changeMap('/path/to/map.yaml')
 
     # You may use the navigator to clear or obtain costmaps
-    # 中文注解：可选 costmap 清理和读取入口。
     # navigator.clearAllCostmaps()  # also have clearLocalCostmap() and clearGlobalCostmap()
     # global_costmap = navigator.getGlobalCostmap()
     # local_costmap = navigator.getLocalCostmap()
 
     # set our demo's goal poses to follow
-    # 中文注解：创建 waypoint 列表，followWaypoints 会按顺序执行。
     goal_poses = []
     goal_pose1 = PoseStamped()
     goal_pose1.header.frame_id = 'map'
@@ -76,7 +68,6 @@ def main():
     goal_poses.append(goal_pose1)
 
     # additional goals can be appended
-    # 中文注解：继续追加后续 waypoint。
     goal_pose2 = PoseStamped()
     goal_pose2.header.frame_id = 'map'
     goal_pose2.header.stamp = navigator.get_clock().now().to_msg()
@@ -95,7 +86,6 @@ def main():
     goal_poses.append(goal_pose3)
 
     # sanity check a valid path exists
-    # 中文注解：可选规划检查，确认首个 waypoint 可达。
     # path = navigator.getPath(initial_pose, goal_pose1)
 
     nav_start = navigator.get_clock().now()
@@ -110,7 +100,6 @@ def main():
         ################################################
 
         # Do something with the feedback
-        # 中文注解：读取当前执行到第几个 waypoint。
         i = i + 1
         feedback = navigator.getFeedback()
         if feedback and i % 5 == 0:
@@ -119,12 +108,10 @@ def main():
             now = navigator.get_clock().now()
 
             # Some navigation timeout to demo cancellation
-            # 中文注解：演示超时取消 waypoint 任务。
             if now - nav_start > Duration(seconds=600.0):
                 navigator.cancelTask()
 
             # Some follow waypoints request change to demo preemption
-            # 中文注解：演示用新 waypoint 队列抢占当前任务。
             if now - nav_start > Duration(seconds=35.0):
                 goal_pose4 = PoseStamped()
                 goal_pose4.header.frame_id = 'map'
@@ -138,7 +125,6 @@ def main():
                 navigator.followWaypoints(goal_poses)
 
     # Do something depending on the return code
-    # 中文注解：根据 action 最终状态处理结果。
     result = navigator.getResult()
     if result == TaskResult.SUCCEEDED:
         print('Goal succeeded!')

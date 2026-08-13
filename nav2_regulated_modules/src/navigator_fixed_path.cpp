@@ -11,7 +11,6 @@
 namespace nav2_regulated_modules
 {
 
-// 中文注释：校验固定 Path，并把每个 Pose 统一变换到导航全局坐标系后返回新路径。
 std::optional<nav_msgs::msg::Path> RegulatedNavigator::prepareFixedPath(const nav_msgs::msg::Path & input) {
   if (input.poses.size() < 2 || input.header.frame_id.empty()) {
     LOG_ERROR("固定路径至少需要两个有效路径点，并且必须提供坐标系");
@@ -47,7 +46,6 @@ std::optional<nav_msgs::msg::Path> RegulatedNavigator::prepareFixedPath(const na
   return output;
 }
 
-// 中文注释：只在固定路径模式和激活状态接受结构有效的完整 Path，TF 转换留到 Accepted 回调处理。
 rclcpp_action::GoalResponse RegulatedNavigator::handleFixedPathGoal(const rclcpp_action::GoalUUID &, const std::shared_ptr<const FollowFixedPath::Goal> goal) {
   if (operation_mode_ != NavigationMode::FIXED_PATH) {
     LOG_WARN("当前模式不接受固定路径 Action Goal");
@@ -68,7 +66,6 @@ rclcpp_action::GoalResponse RegulatedNavigator::handleFixedPathGoal(const rclcpp
   return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
 
-// 中文注释：固定路径取消只设置请求标志，避免在 Action 回调中重入下游取消和任务复位。
 rclcpp_action::CancelResponse RegulatedNavigator::handleFixedPathCancel(const std::shared_ptr<FixedPathHandle> goal) {
   if (goal == active_fixed_path_goal_) {
     cancel_requested_ = true;
@@ -77,7 +74,6 @@ rclcpp_action::CancelResponse RegulatedNavigator::handleFixedPathCancel(const st
   return rclcpp_action::CancelResponse::ACCEPT;
 }
 
-// 中文注释：先完成新路径变换和下游可用性检查，再抢占旧任务并启动新的固定路径 Action。
 void RegulatedNavigator::handleFixedPathAccepted(const std::shared_ptr<FixedPathHandle> goal) {
   const auto prepared_path = prepareFixedPath(goal->get_goal()->path);
   if (!prepared_path) {
@@ -109,7 +105,6 @@ void RegulatedNavigator::handleFixedPathAccepted(const std::shared_ptr<FixedPath
   sendFollowPath(*prepared_path);
 }
 
-// 中文注释：恢复固定路径时重发已保存 Path；自主任务则重新进入规划链。
 void RegulatedNavigator::resumeCurrentTask() {
   if (task_.type == TaskType::FIXED_PATH) {
     if (task_.active_path.poses.empty()) {

@@ -29,8 +29,6 @@ namespace nav2_collision_monitor
 
 /**
  * @brief Implementation for laser scanner source
- * 中文：LaserScan 适配器，按 angle_min、angle_increment 和有效 range 生成二维射线端点。
- * 中文：输出点统一变换到机器人 base frame，供 Polygon／Circle 统计区域内障碍点。
  */
 class Scan : public Source
 {
@@ -56,7 +54,6 @@ public:
   /**
    * @brief Data source configuration routine. Obtains ROS-parameters
    * and creates laser scanner subscriber.
-   * 中文：复用 Source 的通用参数读取，采用 SensorDataQoS 创建订阅器；LaserScan 没有额外参数。
    */
   void configure();
 
@@ -65,7 +62,6 @@ public:
    * @param curr_time Current node time for data interpolation
    * @param data Array where the data from source to be added.
    * Added data is transformed to base_frame_id_ coordinate system at curr_time.
-   * 中文：过滤尚未收到、已过期和超出量程的射线，再通过 TF 将有效极坐标点投影到 base frame。
    */
   void getData(const rclcpp::Time & curr_time, std::vector<Point> & data) const;
 

@@ -31,7 +31,6 @@ def main():
     navigator = BasicNavigator()
 
     # Set our demo's initial pose
-    # 中文注解：设置机器人在 map 坐标系下的初始定位。
     initial_pose = PoseStamped()
     initial_pose.header.frame_id = 'map'
     initial_pose.header.stamp = navigator.get_clock().now().to_msg()
@@ -42,11 +41,9 @@ def main():
     navigator.setInitialPose(initial_pose)
 
     # Wait for navigation to fully activate, since autostarting nav2
-    # 中文注解：等待 Nav2 全部启动完成，避免 action server 尚未可用。
     navigator.waitUntilNav2Active()
 
     # Go to our demos first goal pose
-    # 中文注解：构造目标点，只用于规划路径，不直接触发导航。
     goal_pose = PoseStamped()
     goal_pose.header.frame_id = 'map'
     goal_pose.header.stamp = navigator.get_clock().now().to_msg()
@@ -55,12 +52,10 @@ def main():
     goal_pose.pose.orientation.w = 1.0
 
     # Get the path, smooth it
-    # 中文注解：调用 planner_server 生成路径，再调用 smoother_server 平滑路径。
     path = navigator.getPath(initial_pose, goal_pose)
     smoothed_path = navigator.smoothPath(path)
 
     # Follow path
-    # 中文注解：把平滑后的路径发送给 controller_server 执行。
     navigator.followPath(smoothed_path, controller_id='DWB')
 
     i = 0
@@ -72,7 +67,6 @@ def main():
         ################################################
 
         # Do something with the feedback
-        # 中文注解：周期性读取 action feedback，可用于 UI、日志或任务调度。
         i += 1
         feedback = navigator.getFeedback()
         if feedback and i % 5 == 0:
@@ -82,7 +76,6 @@ def main():
                   '{0:.3f}'.format(feedback.speed))
 
     # Do something depending on the return code
-    # 中文注解：根据 Nav2 action 结束状态做业务分支处理。
     result = navigator.getResult()
     if result == TaskResult.SUCCEEDED:
         print('Goal succeeded!')

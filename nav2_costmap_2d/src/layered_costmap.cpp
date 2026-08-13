@@ -109,7 +109,6 @@ bool LayeredCostmap::isOutofBounds(double robot_x, double robot_y) {
 void LayeredCostmap::updateMap(double robot_x, double robot_y, double robot_yaw) {
   // Data flow: robot pose drives rolling-window origin and layer bounds; each plugin then writes
   // costs into the active update window, and filters optionally post-process the result.
-  // 中文：数据流：机器人位姿决定滚动窗口和更新范围，插件逐层写代价，filter 可选做后处理。
   // Lock for the remainder of this function, some plugins (e.g. VoxelLayer)
   // implement thread unsafe updateBounds() functions.
   std::unique_lock<Costmap2D::mutex_t> lock(*(combined_costmap_.getMutex()));
@@ -177,7 +176,6 @@ void LayeredCostmap::updateMap(double robot_x, double robot_y, double robot_yaw)
 
   if (filters_.size() == 0) {
     // If there are no filters enabled just update costmap sequentially by each plugin
-    // 中文：无 filter 时，所有插件直接写入 combined_costmap_，它就是最终 master costmap。
     combined_costmap_.resetMap(x0, y0, xn, yn);
     for (vector<std::shared_ptr<Layer>>::iterator plugin = plugins_.begin(); plugin != plugins_.end(); ++plugin)
     {
@@ -186,7 +184,6 @@ void LayeredCostmap::updateMap(double robot_x, double robot_y, double robot_yaw)
   } else {
     // Costmap Filters enabled
     // 1. Update costmap by plugins
-    // 中文：有 filter 时，插件先写 primary_costmap_，避免 filter 结果反过来影响下一轮插件输入。
     primary_costmap_.resetMap(x0, y0, xn, yn);
     for (vector<std::shared_ptr<Layer>>::iterator plugin = plugins_.begin(); plugin != plugins_.end(); ++plugin)
     {
@@ -195,7 +192,6 @@ void LayeredCostmap::updateMap(double robot_x, double robot_y, double robot_yaw)
 
     // 2. Copy processed costmap window to a final costmap.
     // primary_costmap_ remain to be untouched for further usage by plugins.
-    // 中文：把插件融合结果复制到 combined_costmap_，后续 filter 只处理最终输出层。
     if (!combined_costmap_.copyWindow(primary_costmap_, x0, y0, xn, yn, x0, y0)) {
       RCLCPP_ERROR(rclcpp::get_logger("nav2_costmap_2d"), "Can not copy costmap (%i,%i)..(%i,%i) window", x0, y0, xn, yn);
       throw std::runtime_error{"Can not copy costmap"};
@@ -203,7 +199,6 @@ void LayeredCostmap::updateMap(double robot_x, double robot_y, double robot_yaw)
 
     // 3. Apply filters over the plugins in order to make filters' work
     // not being considered by plugins on next updateMap() calls
-    // 中文：filter 后处理可实现 keepout、speed limit 等语义约束。
     for (vector<std::shared_ptr<Layer>>::iterator filter = filters_.begin(); filter != filters_.end(); ++filter)
     {
       (*filter)->updateCosts(combined_costmap_, x0, y0, xn, yn);

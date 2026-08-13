@@ -39,8 +39,6 @@ ControllerServer::ControllerServer(const rclcpp::NodeOptions & options) : nav2_u
   LOG_INFO("get_namespace(),{}", get_namespace());
   LOG_INFO("Controller server owns local_costmap and loads progress, goal-checker and controller plugins");
 
-  // 中文注释：ControllerServer 负责局部控制闭环；进度检查、到达判定和控制器
-  // 都是插件，默认组合是 SimpleProgressChecker、SimpleGoalChecker 和 DWBLocalPlanner。
   declare_parameter("controller_frequency", 20.0);
 
   declare_parameter("progress_checker_plugin", default_progress_checker_id_);
@@ -56,7 +54,6 @@ ControllerServer::ControllerServer(const rclcpp::NodeOptions & options) : nav2_u
   declare_parameter("publish_zero_velocity", rclcpp::ParameterValue(true));
 
   // The costmap node is used in the implementation of the controller
-  // 中文：costmap 节点用于控制器实现。
   costmap_ros_ = std::make_shared<nav2_costmap_2d::Costmap2DROS>("local_costmap", std::string{get_namespace()}, "local_costmap");
 }
 
@@ -107,15 +104,10 @@ nav2_util::CallbackReturn ControllerServer::on_configure(const rclcpp_lifecycle:
   get_parameter("failure_tolerance", failure_tolerance_);
   get_parameter("publish_zero_velocity", publish_zero_velocity_);
 
-  // 中文注释：局部 costmap 在 controller 内部运行，用于实时避障和轨迹评分；
-  // 独立线程保证 costmap 更新不阻塞 action 执行回调。
   costmap_ros_->configure();
   // Launch a thread to run the costmap node
-  // 中文：启动线程运行 costmap 节点。
   costmap_thread_ = std::make_unique<nav2_util::NodeThread>(costmap_ros_);
 
-  // 中文注释：progress checker 判断机器人是否持续取得进展，
-  // 防止局部控制器长时间原地卡住但 action 不失败。
   try {
     progress_checker_type_ = nav2_util::get_plugin_type_param(node, progress_checker_id_);
     progress_checker_ = progress_checker_loader_.createUniqueInstance(progress_checker_type_);
@@ -126,7 +118,6 @@ nav2_util::CallbackReturn ControllerServer::on_configure(const rclcpp_lifecycle:
     return nav2_util::CallbackReturn::FAILURE;
   }
 
-  // 中文注释：goal checker 定义“到达目标”的几何容差，可按任务切换不同判定策略。
   for (size_t i = 0; i != goal_checker_ids_.size(); i++) {
     try {
       goal_checker_types_[i] = nav2_util::get_plugin_type_param(node, goal_checker_ids_[i]);
@@ -146,8 +137,6 @@ nav2_util::CallbackReturn ControllerServer::on_configure(const rclcpp_lifecycle:
 
   LOG_INFO("Controller Server has {} goal checkers available.", goal_checker_ids_concat_.c_str());
 
-  // 中文注释：controller 插件把全局路径、局部 costmap、TF 和里程计转换成 cmd_vel。
-  // 这里仅完成插件加载和配置，真正控制循环在 follow_path action 中执行。
   for (size_t i = 0; i != controller_ids_.size(); i++) {
     try {
       controller_types_[i] = nav2_util::get_plugin_type_param(node, controller_ids_[i]);
@@ -170,14 +159,10 @@ nav2_util::CallbackReturn ControllerServer::on_configure(const rclcpp_lifecycle:
   odom_sub_ = std::make_unique<nav_2d_utils::OdomSubscriber>(node);
   vel_publisher_ = create_publisher<geometry_msgs::msg::Twist>("cmd_vel", 1);
 
-  // 中文注释：BT Navigator 通过 follow_path action 驱动控制器；
-  // action 生命周期决定控制循环何时开始、取消和结束。
   // Create the action server that we implement with our followPath method
-  // 中文：创建由 followPath 方法实现的 action server。
   action_server_ = std::make_unique<ActionServer>(shared_from_this(), "follow_path", std::bind(&ControllerServer::computeControl, this), nullptr, std::chrono::milliseconds(500), true);
 
   // Set subscribtion to the speed limiting topic
-  // 中文：设置速度限制 topic 订阅。
   speed_limit_sub_ = create_subscription<nav2_msgs::msg::SpeedLimit>(speed_limit_topic, rclcpp::QoS(10), std::bind(&ControllerServer::speedLimitCallback, this, std::placeholders::_1));
 
   return nav2_util::CallbackReturn::SUCCESS;
@@ -197,11 +182,9 @@ nav2_util::CallbackReturn ControllerServer::on_activate(const rclcpp_lifecycle::
 
   auto node = shared_from_this();
   // Add callback for dynamic parameters
-  // 中文：添加动态参数回调。
   dyn_params_handler_ = node->add_on_set_parameters_callback(std::bind(&ControllerServer::dynamicParametersCallback, this, _1));
 
   // create bond connection
-  // 中文：创建 bond 连接。
   createBond();
 
   return nav2_util::CallbackReturn::SUCCESS;
@@ -218,15 +201,10 @@ nav2_util::CallbackReturn ControllerServer::on_deactivate(const rclcpp_lifecycle
 
   /*
    * The costmap is also a lifecycle node, so it may have already fired on_deactivate
-   * 中文：costmap 也是 lifecycle node，因此可能已经触发过 on_deactivate。
    * via rcl preshutdown cb. Despite the rclcpp docs saying on_shutdown callbacks fire
-   * 中文：这是通过 rcl preshutdown 回调触发的。尽管 rclcpp 文档说明 on_shutdown 回调会
    * in the order added, the preshutdown callbacks clearly don't per se, due to using an
-   * 中文：按添加顺序触发，但 preshutdown 回调显然并非如此，因为底层使用了
    * unordered_set iteration. Once this issue is resolved, we can maybe make a stronger
-   * 中文：unordered_set 迭代。该问题解决后，也许可以做出更强的
    * ordering assumption: https://github.com/ros2/rclcpp/issues/2096
-   * 中文：顺序假设：https://github.com/ros2/rclcpp/issues/2096
    */
   costmap_ros_->deactivate();
 
@@ -235,7 +213,6 @@ nav2_util::CallbackReturn ControllerServer::on_deactivate(const rclcpp_lifecycle
   dyn_params_handler_.reset();
 
   // destroy bond connection
-  // 中文：销毁 bond 连接。
   destroyBond();
 
   return nav2_util::CallbackReturn::SUCCESS;
@@ -245,7 +222,6 @@ nav2_util::CallbackReturn ControllerServer::on_cleanup(const rclcpp_lifecycle::S
   LOG_INFO("Cleaning up");
 
   // Cleanup the helper classes
-  // 中文：清理辅助类。
   ControllerMap::iterator it;
   for (it = controllers_.begin(); it != controllers_.end(); ++it) {
     it->second->cleanup();
@@ -258,7 +234,6 @@ nav2_util::CallbackReturn ControllerServer::on_cleanup(const rclcpp_lifecycle::S
 
 
   // Release any allocated resources
-  // 中文：释放已分配的资源。
   action_server_.reset();
   odom_sub_.reset();
   costmap_thread_.reset();
@@ -350,7 +325,6 @@ void ControllerServer::computeControl() {
       }
 
       // Don't compute a trajectory until costmap is valid (after clear costmap)
-      // 中文：在 costmap 有效前不要计算轨迹（例如清除 costmap 之后）。
       rclcpp::Rate r(100);
       while (!costmap_ros_->isCurrent()) {
         r.sleep();
@@ -390,7 +364,6 @@ void ControllerServer::computeControl() {
   }
 
   // TODO(orduno) #861 Handle a pending preemption and set controller name
-  // 中文：TODO(orduno) #861 处理待处理的抢占请求并设置控制器名称。
   action_server_->succeeded_current();
 }
 
@@ -453,7 +426,6 @@ void ControllerServer::computeAndPublishVelocity() {
   feedback->speed = std::hypot(cmd_vel_2d.twist.linear.x, cmd_vel_2d.twist.linear.y);
 
   // Find the closest pose to current pose on global path
-  // 中文：在全局路径上查找距离当前位姿最近的位姿。
   nav_msgs::msg::Path & current_path = current_path_;
   auto find_closest_pose_idx = [&pose, &current_path]() {size_t closest_pose_idx = 0; double curr_min_dist = std::numeric_limits<double>::max(); for (size_t curr_idx = 0; curr_idx < current_path.poses.size(); ++curr_idx) {double curr_dist = nav2_util::geometry_utils::euclidean_distance(pose, current_path.poses[curr_idx]); if (curr_dist < curr_min_dist) {curr_min_dist = curr_dist; closest_pose_idx = curr_idx;}} return closest_pose_idx;};
 
@@ -549,9 +521,7 @@ rcl_interfaces::msg::SetParametersResult ControllerServer::dynamicParametersCall
     const auto & name = parameter.get_name();
 
     // If we are trying to change the parameter of a plugin we can just skip it at this point
-    // 中文：如果正在尝试修改某个插件的参数，此处可以直接跳过。
     // as they handle parameter changes themselves and don't need to lock the mutex
-    // 中文：因为插件会自行处理参数变化，不需要锁住该 mutex。
     if (name.find('.') != std::string::npos) {
       continue;
     }
@@ -589,9 +559,6 @@ rcl_interfaces::msg::SetParametersResult ControllerServer::dynamicParametersCall
 #include "rclcpp_components/register_node_macro.hpp"
 
 // Register the component with class_loader.
-// 中文：将组件注册到 class_loader。
 // This acts as a sort of entry point, allowing the component to be discoverable when its library
-// 中文：这相当于组件入口，使组件所在库被加载时可以被发现。
 // is being loaded into a running process.
-// 中文：当组件库被加载到运行中的进程时可被发现。
 RCLCPP_COMPONENTS_REGISTER_NODE(nav2_controller::ControllerServer)

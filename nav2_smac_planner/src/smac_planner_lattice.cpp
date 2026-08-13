@@ -64,7 +64,6 @@ void SmacPlannerLattice::configure(
   LOG_INFO("Configuring SmacPlannerLattice plugin {}", name.c_str());
 
   // General planner params
-  // 中文：读取 State Lattice 参数，包括 motion primitive 文件、搜索惩罚和解析扩展设置。
   double analytic_expansion_max_length_m;
   bool smooth_path;
 
@@ -85,7 +84,6 @@ void SmacPlannerLattice::configure(
   node->get_parameter(name + ".smooth_path", smooth_path);
 
   // Default to a well rounded model: 16 bin, 0.4m turning radius, ackermann model
-  // 中文：默认使用内置 ackermann motion primitives；配置中可切换到 diff/omni 等 primitive 文件。
   nav2_util::declare_parameter_if_not_declared(
     node, name + ".lattice_filepath", rclcpp::ParameterValue(
       ament_index_cpp::get_package_share_directory("nav2_smac_planner") +
@@ -167,7 +165,6 @@ void SmacPlannerLattice::configure(
   }
 
   // Initialize collision checker using 72 evenly sized bins instead of the lattice
-  // 中文：碰撞检测使用更密的 72 个角度 bin，以降低 primitive 中间点检测的朝向误差。
   // heading angles. This is done so that we have precomputed angles every 5 degrees.
   // If we used the sparse lattice headings (usually 16), then when we attempt to collision
   // check for intermediary points of the primitives, we're forced to round to one of the 16
@@ -181,7 +178,6 @@ void SmacPlannerLattice::configure(
     findCircumscribedCost(costmap_ros));
 
   // Initialize A* template
-  // 中文：初始化 NodeLattice A*，搜索分支由 lattice motion primitives 决定。
   _a_star = std::make_unique<AStarAlgorithm<NodeLattice>>(_motion_model, _search_info);
   _a_star->initialize(
     _allow_unknown,
@@ -192,7 +188,6 @@ void SmacPlannerLattice::configure(
     _metadata.number_of_headings);
 
   // Initialize path smoother
-  // 中文：State Lattice 可选平滑器会基于 primitive 的最小转弯半径处理输出路径。
   if (smooth_path) {
     SmootherParams params;
     params.get(node, name);
@@ -265,7 +260,6 @@ nav_msgs::msg::Path SmacPlannerLattice::createPlan(
   std::unique_lock<nav2_costmap_2d::Costmap2D::mutex_t> lock(*(_costmap->getMutex()));
 
   // Set collision checker and costmap information
-  // 中文：每次规划前刷新 footprint，并将碰撞检测器交给 State Lattice A*。
   _collision_checker.setFootprint(
     _costmap_ros->getRobotFootprint(),
     _costmap_ros->getUseRadius(),
@@ -273,7 +267,6 @@ nav_msgs::msg::Path SmacPlannerLattice::createPlan(
   _a_star->setCollisionChecker(&_collision_checker);
 
   // Set starting point, in A* bin search coordinates
-  // 中文：起点 yaw 会匹配到最接近的 lattice heading bin。
   unsigned int mx_start, my_start, mx_goal, my_goal;
   _costmap->worldToMap(start.pose.position.x, start.pose.position.y, mx_start, my_start);
   unsigned int start_bin =
@@ -282,7 +275,6 @@ nav_msgs::msg::Path SmacPlannerLattice::createPlan(
     mx_start, my_start, start_bin);
 
   // Set goal point, in A* bin search coordinates
-  // 中文：目标 yaw 同样匹配到 lattice heading bin，以满足终点姿态约束。
   _costmap->worldToMap(goal.pose.position.x, goal.pose.position.y, mx_goal, my_goal);
   unsigned int goal_bin =
     NodeLattice::motion_table.getClosestAngularBin(tf2::getYaw(goal.pose.orientation));
@@ -302,7 +294,6 @@ nav_msgs::msg::Path SmacPlannerLattice::createPlan(
   pose.pose.orientation.w = 1.0;
 
   // Corner case of start and goal being on the same cell
-  // 中文：起点、终点和 heading bin 完全一致时直接返回单点路径。
   if (std::floor(mx_start) == std::floor(mx_goal) &&
     std::floor(my_start) == std::floor(my_goal) &&
     start_bin == goal_bin)
@@ -320,7 +311,6 @@ nav_msgs::msg::Path SmacPlannerLattice::createPlan(
   }
 
   // Compute plan
-  // 中文：执行 State Lattice A* 搜索，路径由 motion primitive 连接形成。
   NodeLattice::CoordinateVector path;
   int num_iterations = 0;
   std::string error;
@@ -349,7 +339,6 @@ nav_msgs::msg::Path SmacPlannerLattice::createPlan(
   }
 
   // Convert to world coordinates
-  // 中文：将 lattice 状态序列转换为世界坐标；重复状态会被过滤，避免路径点冗余。
   plan.poses.reserve(path.size());
   geometry_msgs::msg::PoseStamped last_pose = pose;
   for (int i = path.size() - 1; i >= 0; --i) {
@@ -385,7 +374,6 @@ nav_msgs::msg::Path SmacPlannerLattice::createPlan(
 #endif
 
   // Smooth plan
-  // 中文：若启用 smoother，则在剩余时间内对 lattice 路径进行平滑。
   if (_smoother && num_iterations > 1) {
     _smoother->smooth(plan, _costmap, time_remaining);
   }

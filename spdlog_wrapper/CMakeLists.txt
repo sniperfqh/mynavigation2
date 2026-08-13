@@ -1,7 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 project(spdlog_wrapper)
 
-# 设置C和C++标准
 if(NOT CMAKE_C_STANDARD)
   set(CMAKE_C_STANDARD 99)
 endif()
@@ -48,7 +47,6 @@ install(DIRECTORY include/
 install(DIRECTORY config
   DESTINATION share/${PROJECT_NAME})
 
-# 生成并安装 CMake 导出文件
 ament_export_targets(${PROJECT_NAME}Targets HAS_LIBRARY_TARGET)
 ament_export_dependencies(rclcpp rcutils spdlog yaml-cpp)
 

@@ -24,7 +24,7 @@ int main(int argc, char ** argv)
   std::string node_name("map_server");
 
   rclcpp::init(argc, argv);
-  SpdlogWrapper::init("nav2_map_server", "map_server"); // 模块名 + 日志文件名
+  SpdlogWrapper::init("nav2_map_server", "map_server");
   auto node = std::make_shared<nav2_map_server::MapServer>();
   rclcpp::spin(node->get_node_base_interface());
   rclcpp::shutdown();

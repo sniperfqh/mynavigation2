@@ -49,7 +49,6 @@ class FootprintCollisionChecker:
 
     def __init__(self):
         """Initialize the FootprintCollisionChecker Object."""
-        # costmap_ 必须由 setCostmap() 注入；不在构造函数中绑定，便于复用 checker。
         self.costmap_ = None
         pass
 
@@ -68,13 +67,11 @@ class FootprintCollisionChecker:
 
         """
         # Track the maximum cost seen on the footprint boundary; 254 returns early.
-        # 中文注解：记录 footprint 边界上见过的最大代价；254 直接提前返回。
         footprint_cost = 0.0
         x1 = 0.0
         y1 = 0.0
 
         # The first point is the closed polygon start and the last edge connects back to it.
-        # 中文注解：第一个点作为闭合多边形的起点，最后还会连接回这个点。
         x0, y0 = self.worldToMapValidated(footprint.points[0].x, footprint.points[0].y)
 
         if x0 is None or y0 is None:
@@ -85,7 +82,6 @@ class FootprintCollisionChecker:
 
         for i in range(len(footprint.points) - 1):
             # Convert each edge endpoint to map cell coordinates; out-of-bounds is lethal.
-            # 中文注解：逐条边转换到 map cell 坐标，越界时按 lethal 处理。
             x1, y1 = self.worldToMapValidated(
                 footprint.points[i + 1].x, footprint.points[i + 1].y
             )
@@ -94,7 +90,6 @@ class FootprintCollisionChecker:
                 return LETHAL_OBSTACLE
 
             # Check the maximum cost among all sampled points on the current boundary edge.
-            # 中文注解：检查当前边界线段上所有采样点的最大 cost。
             footprint_cost = max(float(self.lineCost(x0, x1, y0, y1)), footprint_cost)
             x0 = x1
             y0 = y1
@@ -103,7 +98,6 @@ class FootprintCollisionChecker:
                 return footprint_cost
 
         # Close the final edge from the last point back to the first point.
-        # 中文注解：闭合最后一条边：最后一个点 -> 第一个点。
         return max(float(self.lineCost(xstart, x1, ystart, y1)), footprint_cost)
 
     def lineCost(self, x0, x1, y0, y1, step_size=0.5):
@@ -126,12 +120,10 @@ class FootprintCollisionChecker:
         """
         line_cost = 0.0
         point_cost = -1.0
-        # LineIterator 负责按 step_size 在 map 坐标中沿边界采样。
         line_iterator = LineIterator(x0, y0, x1, y1, step_size)
 
         while line_iterator.isValid():
             # Convert the sampled point to an integer cell before reading its cost.
-            # 中文注解：采样点转换成整数 cell 后读取代价。
             point_cost = self.pointCost(
                 int(line_iterator.getX()), int(line_iterator.getY())
             )
@@ -168,7 +160,6 @@ class FootprintCollisionChecker:
                 'Costmap not specified, use setCostmap to specify the costmap first'
             )
         # Reuse PyCostmap2D.worldToMap; callers are expected to pass in-map coordinates.
-        # 中文注解：这里沿用 PyCostmap2D 的 worldToMap；调用方负责传入地图范围内坐标。
         return self.costmap_.worldToMap(wx, wy)
 
     def pointCost(self, x: int, y: int):
@@ -225,7 +216,6 @@ class FootprintCollisionChecker:
 
         """
         # Rotate local footprint coordinates by theta, then translate them to pose (x, y).
-        # 中文注解：先按 theta 旋转 footprint 局部坐标，再平移到目标位姿 (x, y)。
         cos_th = cos(theta)
         sin_th = sin(theta)
         oriented_footprint = Polygon()

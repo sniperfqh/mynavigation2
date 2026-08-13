@@ -46,16 +46,13 @@ class PyCostmap2D:
 
         """
         # Map metadata: width and height are cell counts, resolution is meters per cell.
-        # 中文注解：地图元信息中宽高是 cell 数，resolution 是每个 cell 对应的米数。
         self.size_x = occupancy_map.info.width
         self.size_y = occupancy_map.info.height
         self.resolution = occupancy_map.info.resolution
-        # origin 是 map 坐标系下 cell(0, 0) 左下角对应的世界坐标。
         self.origin_x = occupancy_map.info.origin.position.x
         self.origin_y = occupancy_map.info.origin.position.y
         self.global_frame_id = occupancy_map.header.frame_id
         self.costmap_timestamp = occupancy_map.header.stamp
-        # ROS 消息中的 data 是一维数组，这里保持同样布局：index = y * width + x。
         self.costmap = np.array(occupancy_map.data, dtype=np.uint8)
 
     def getSizeInCellsX(self):
@@ -69,7 +66,6 @@ class PyCostmap2D:
     def getSizeInMetersX(self):
         """Get x axis map size in meters."""
         # Match Nav2 C++ Costmap2D semantics: last cell center plus half a cell.
-        # 中文注解：沿用 Nav2 C++ Costmap2D 语义：最后一个 cell 的中心点再加半格。
         return (self.size_x - 1 + 0.5) * self.resolution
 
     def getSizeInMetersY(self):
@@ -160,7 +156,6 @@ class PyCostmap2D:
             wy (float) [m]: world coordinate Y
 
         """
-        # map 坐标是 cell 索引，转换到世界坐标时取 cell 中心点。
         wx = self.origin_x + (mx + 0.5) * self.resolution
         wy = self.origin_y + (my + 0.5) * self.resolution
         return (wx, wy)
@@ -182,7 +177,6 @@ class PyCostmap2D:
 
         """
         # Use floor division to project continuous world coordinates into a cell.
-        # 中文注解：使用 floor division 将连续世界坐标落到对应 cell。
         mx = int((wx - self.origin_x) // self.resolution)
         my = int((wy - self.origin_y) // self.resolution)
         return (mx, my)
@@ -201,5 +195,4 @@ class PyCostmap2D:
             int: The index of the cell
 
         """
-        # Costmap 数据按行优先存储：先 y 行偏移，再加 x 列偏移。
         return my * self.size_x + mx

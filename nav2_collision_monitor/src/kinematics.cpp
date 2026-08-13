@@ -19,10 +19,7 @@
 namespace nav2_collision_monitor
 {
 
-// 中文：本文件只包含 Collision Monitor 的二维刚体运动工具，不依赖 ROS Topic 或生命周期状态。
-// 中文：Polygon 的 APPROACH 模式通过这两个函数在每个离散时间步预测机器人与障碍点的相对位置。
 void transformPoints(const Pose & pose, std::vector<Point> & points) {
-  // 中文：先平移到 pose 原点，再用 -theta 旋转，得到“站在预测机器人坐标系观察”的点坐标。
   const double cos_theta = std::cos(pose.theta);
   const double sin_theta = std::sin(pose.theta);
 
@@ -44,13 +41,11 @@ void transformPoints(const Pose & pose, std::vector<Point> & points) {
 }
 
 void projectState(const double & dt, Pose & pose, Velocity & velocity) {
-  // 中文：角速度在 dt 内造成的朝向增量，同时也是本时间步线速度坐标轴的旋转量。
   const double theta = velocity.tw * dt;
   const double cos_theta = std::cos(theta);
   const double sin_theta = std::sin(theta);
 
   // p' = p + vel*dt
-  // 中文：这里采用一阶离散积分，假设输入速度在一个小时间步内保持不变。
   // where:
   //   p - initial pose
   //   p' - projected pose
@@ -60,7 +55,6 @@ void projectState(const double & dt, Pose & pose, Velocity & velocity) {
   pose.theta = pose.theta + theta;
 
   // vel' = R*vel
-  // 中文：旋转线速度而不是重新计算其模长，使下一步模拟继续沿着更新后的机器人方向推进。
   // where:
   //   vel - initial velocity
   //   R - rotation matrix

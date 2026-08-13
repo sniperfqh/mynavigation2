@@ -20,7 +20,7 @@
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
-  SpdlogWrapper::init("nav2_lifecycle_manager", "lifecycle_manager"); // 模块名 + 日志文件名
+  SpdlogWrapper::init("nav2_lifecycle_manager", "lifecycle_manager");
   auto node = std::make_shared<nav2_lifecycle_manager::LifecycleManager>();
   rclcpp::spin(node);
   rclcpp::shutdown();

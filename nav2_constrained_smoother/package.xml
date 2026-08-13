@@ -2,48 +2,30 @@
 <?xml-model href="http://download.ros.org/schema/package_format3.xsd" schematypens="http://www.w3.org/2001/XMLSchema"?>
 <package format="3">
   <name>nav2_constrained_smoother</name>
-  <!-- 中文：包名同时用于 CMake、Pluginlib 和 ROS 2 资源索引。 -->
   <version>1.1.20</version>
-  <!-- 中文：版本号用于依赖解析和安装索引，不参与平滑运行时计算。 -->
   <description>Ceres constrained smoother</description>
-  <!-- 中文：本包提供基于 Ceres 的 nav2_core::Smoother 插件。 -->
   <maintainer email="vargovcik@robotechvision.com">Matej Vargovcik</maintainer>
   <maintainer email="stevenmacenski@gmail.com">Steve Macenski</maintainer>
   <license>Apache-2.0</license>
-  <!-- 中文：声明源码许可证，供 ROS 2 包索引和下游分发识别。 -->
 
-  <!-- 中文：构建系统使用 Ament CMake，负责编译共享库、安装头文件并导出插件。 -->
   <buildtool_depend>ament_cmake</buildtool_depend>
-  <!-- 中文：nav2_common 提供 Nav2 统一 CMake 构建宏。 -->
   <depend>nav2_common</depend>
-  <!-- 中文：角度工具用于测试和路径朝向质量断言。 -->
   <depend>angles</depend>
-  <!-- 中文：rclcpp 提供日志、参数和 ROS 运行时基础类型。 -->
   <depend>rclcpp</depend>
-  <!-- 中文：nav2_util 提供参数声明和几何辅助函数。 -->
   <depend>nav2_util</depend>
-  <!-- 中文：nav2_msgs 提供 Costmap 消息和 Nav2 相关接口。 -->
   <depend>nav2_msgs</depend>
-  <!-- 中文：nav2_costmap_2d 提供 Costmap、插值和足迹碰撞检查能力。 -->
   <depend>nav2_costmap_2d</depend>
-  <!-- 中文：nav2_core 提供 Smoother 插件抽象接口和异常类型。 -->
   <depend>nav2_core</depend>
-  <!-- 中文：pluginlib 负责运行时发现和实例化 ConstrainedSmoother。 -->
   <depend>pluginlib</depend>
-  <!-- 中文：Ceres 提供非线性最小二乘优化器及自动求导支持。 -->
   <depend>libceres-dev</depend>
 
-  <!-- 中文：以下测试依赖仅在测试配置和 GTest 目标中使用。 -->
   <test_depend>ament_lint_common</test_depend>
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_cmake_gtest</test_depend>
   <test_depend>ament_cmake_pytest</test_depend>
 
-  <!-- 中文：导出 Ament 构建类型和 nav2_core 插件描述文件的位置。 -->
   <export>
-    <!-- 中文：本包使用 Ament CMake 生成和安装 ROS 2 资源。 -->
     <build_type>ament_cmake</build_type>
-    <!-- 中文：Smoother Server 按该 XML 路径加载 ConstrainedSmoother 插件。 -->
     <nav2_core plugin="${prefix}/nav2_constrained_smoother.xml" />
   </export>
 </package>

@@ -1,6 +1,3 @@
-# 中文注释：完整 Nav2 RViz 配置，用于观察 TF、地图、激光、全局／局部代价地图和规划路径。
-# 中文注释：Navigation 2 面板负责 Lifecycle 与导航交互，RobotModel 默认关闭以适配无模型实车入口。
-# 中文注释：配置中的 Topic 必须与 regulated_modules.launch.py 和参数 YAML 保持一致。
 Panels:
   - Class: rviz_common/Displays
     Help Height: 0

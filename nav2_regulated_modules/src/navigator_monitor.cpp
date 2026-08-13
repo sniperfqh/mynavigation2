@@ -13,7 +13,6 @@ using namespace std::chrono_literals;
 namespace nav2_regulated_modules
 {
 
-// 中文注释：进入有限次数恢复：取消当前子 Goal、停车、异步清理双代价地图并设置等待截止时刻。
 void RegulatedNavigator::startRecovery(const std::string & reason) {
   if (task_.type == TaskType::NONE) {return;}
   if (task_.recovery_count >= max_recovery_rounds_) {
@@ -27,7 +26,6 @@ void RegulatedNavigator::startRecovery(const std::string & reason) {
   cancelSubGoals(true);
   stopRobot();
 
-  // 中文注释：删除 nav2_behaviors 后，恢复仅清理双 Costmap 并由定时器等待重新规划。
   auto request = std::make_shared<ClearCostmap::Request>();
   if (clear_local_client_->service_is_ready()) {
     clear_local_client_->async_send_request(request);
@@ -38,14 +36,12 @@ void RegulatedNavigator::startRecovery(const std::string & reason) {
   recovery_ready_time_ = now() + rclcpp::Duration::from_seconds(costmap_wait_duration_);
 }
 
-// 中文注释：周期驱动取消、清图等待、定位健康、进展检测、路点更新和自主重规划。
 void RegulatedNavigator::monitorTask() {
   if (!active_ || task_.type == TaskType::NONE) {return;}
   if (cancel_requested_) {
     cancelTask("收到外层导航取消请求");
     return;
   }
-  // 中文注释：代价地图清理后非阻塞等待更新，再从当前位置重新规划。
   if (task_.state == NavigationState::CLEARING_COSTMAP) {
     if (now() >= recovery_ready_time_) {
       resumeCurrentTask();
@@ -97,7 +93,6 @@ void RegulatedNavigator::monitorTask() {
   last_pose_ = current_pose;
   has_last_pose_ = true;
 
-  // 中文注释：直接使用 map->base_link 位移判断控制进展，不依赖 odom TF 或里程计消息。
   if (task_.state == NavigationState::CONTROLLING) {
     if (task_.last_progress_pose.header.frame_id.empty() || navigation_utils::poseDistance(current_pose, task_.last_progress_pose) >= progress_min_translation_)
     {
@@ -117,7 +112,6 @@ void RegulatedNavigator::monitorTask() {
   }
 }
 
-// 中文注释：从 TF 查询 global_frame 到 robot_base_frame 的最新位姿，成功时刷新定位心跳。
 bool RegulatedNavigator::lookupCurrentPose(geometry_msgs::msg::PoseStamped & pose) {
   try {
     const auto transform = tf_buffer_->lookupTransform(global_frame_, robot_base_frame_, tf2::TimePointZero, 50ms);
@@ -133,7 +127,6 @@ bool RegulatedNavigator::lookupCurrentPose(geometry_msgs::msg::PoseStamped & pos
   }
 }
 
-// 中文注释：多点导航中按距离移除已经通过的前置目标，始终保留最终目标。
 void RegulatedNavigator::updatePassedGoals(const geometry_msgs::msg::PoseStamped & current_pose) {
   if (task_.type != TaskType::THROUGH_POSES || task_.goals.size() <= 1) {return;}
   const auto previous_count = task_.goals.size();

@@ -54,7 +54,6 @@ class LineIterator():
 
         """
         # Keep input validation strict to avoid passing ROS messages or strings by mistake.
-        # 中文注解：输入校验保持严格，避免碰撞检测时把 ROS message 或字符串误传进来。
         if type(x0) not in [int, float]:
             raise TypeError("x0 must be a number (int or float)")
 
@@ -74,7 +73,6 @@ class LineIterator():
             raise ValueError("step_size must be a positive number")
 
         # Store endpoints, the current point, and step size; iteration starts at the origin.
-        # 中文注解：保存端点、当前点和步长；当前点从起点开始。
         self.x0_ = x0
         self.y0_ = y0
         self.x1_ = x1
@@ -84,7 +82,6 @@ class LineIterator():
         self.step_size_ = step_size
 
         # Non-vertical lines store slope and intercept; vertical lines only advance in y.
-        # 中文注解：非竖直线保存斜率和截距；竖直线只沿 y 推进，不需要 m/b。
         if x1 != x0 and y1 != y0:
             self.valid_ = True
             self.m_ = (y1-y0)/(x1-x0)
@@ -106,7 +103,6 @@ class LineIterator():
 
     def advance(self):
         """Advance to the next point in the line."""
-        # x 方向可推进时优先推进 x，并用直线方程重新计算 y。
         if self.x1_ > self.x0_:
             if self.x_ < self.x1_:
                 self.x_ = round(self.clamp(
@@ -123,7 +119,6 @@ class LineIterator():
                 self.valid_ = False
         else:
             # Vertical segments keep x fixed and advance only along y.
-            # 中文注解：竖直线段 x 不变，只按 y 的方向推进。
             if self.y1_ > self.y0_:
                 if self.y_ < self.y1_:
                     self.y_ = round(self.clamp(
@@ -166,7 +161,6 @@ class LineIterator():
     def get_line_length(self):
         """Get the length of the line."""
         # Return cmath.sqrt result to preserve the original implementation behavior.
-        # 中文注解：返回复数 sqrt 的结果，保留原实现行为；测试中会按该类型断言。
         return sqrt(pow(self.x1_ - self.x0_, 2) + pow(self.y1_ - self.y0_, 2))
 
     def clamp(self, n, min_n, max_n):
@@ -184,7 +178,6 @@ class LineIterator():
             n (float): input value clamped between given min and max
 
         """
-        # clamp 保证最后一步不会越过线段终点。
         if n < min_n:
             return min_n
         elif n > max_n:

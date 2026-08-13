@@ -32,7 +32,6 @@ def main():
     navigator = BasicNavigator()
 
     # Set our demo's initial pose
-    # 中文注解：设置仿真地图中的初始位姿，供 AMCL 初始化定位。
     initial_pose = PoseStamped()
     initial_pose.header.frame_id = 'map'
     initial_pose.header.stamp = navigator.get_clock().now().to_msg()
@@ -43,13 +42,11 @@ def main():
     navigator.setInitialPose(initial_pose)
 
     # Wait for navigation to fully activate, since autostarting nav2
-    # 中文注解：等待 Nav2 生命周期节点 active 后再发送 action goal。
     navigator.waitUntilNav2Active()
 
     navigator.assistedTeleop(time_allowance=20)
     while not navigator.isTaskComplete():
         # Publish twist commands to be filtered by the assisted teleop action
-        # 中文注解：真实应用中这里应发布人工速度指令，由 assisted teleop 做安全过滤。
         sleep(0.2)
         pass
 

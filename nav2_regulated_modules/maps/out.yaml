@@ -1,7 +1,6 @@
-# 中文注释：静态地图元数据，由 map_server 读取并与同目录 out.pgm 组合成 OccupancyGrid。
-image: out.pgm  # 中文参数：栅格灰度图文件，相对路径以本 YAML 所在目录为基准。
-resolution: 0.03  # 中文参数：每个像素代表 0.03 米。
-origin: [-61.3546, -39.8783, 0.0]  # 中文参数：地图左下角在 map 坐标系中的 x、y、yaw。
-negate: 0  # 中文参数：不反转图像黑白占用含义。
-occupied_thresh: 0.65  # 中文参数：占用概率不小于该阈值时标记为障碍。
-free_thresh: 0.196  # 中文参数：占用概率不大于该阈值时标记为自由空间。
+image: out.pgm
+resolution: 0.03
+origin: [-61.3546, -39.8783, 0.0]
+negate: 0
+occupied_thresh: 0.65
+free_thresh: 0.196

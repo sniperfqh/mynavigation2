@@ -20,7 +20,7 @@
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);
-  SpdlogWrapper::init("nav2_velocity_smoother", "velocity_smoother"); // 模块名 + 日志文件名
+  SpdlogWrapper::init("nav2_velocity_smoother", "velocity_smoother");
   auto node = std::make_shared<nav2_velocity_smoother::VelocitySmoother>();
   rclcpp::spin(node->get_node_base_interface());
   rclcpp::shutdown();

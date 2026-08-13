@@ -63,7 +63,6 @@ void SmacPlanner2D::configure(
   LOG_INFO("Configuring SmacPlanner2D plugin {}", name.c_str());
 
   // General planner params
-  // 中文：读取 SmacPlanner2D 的通用参数，后续会用这些参数初始化 2D A*、碰撞检测和平滑器。
   nav2_util::declare_parameter_if_not_declared(
     node, name + ".tolerance", rclcpp::ParameterValue(0.125));
   _tolerance = static_cast<float>(node->get_parameter(name + ".tolerance").as_double());
@@ -111,7 +110,6 @@ void SmacPlanner2D::configure(
   }
 
   // Initialize collision checker
-  // 中文：2D 规划器按圆形半径进行碰撞检测，适合圆形或近似圆形底盘。
   _collision_checker = GridCollisionChecker(_costmap, 1 /*for 2D, most be 1*/, node);
   _collision_checker.setFootprint(
     costmap_ros->getRobotFootprint(),
@@ -119,7 +117,6 @@ void SmacPlanner2D::configure(
     0.0 /*for 2D cost at inscribed isn't relevent*/);
 
   // Initialize A* template
-  // 中文：初始化 2D A* 搜索模板，搜索空间只包含 x/y 栅格，不搜索朝向维度。
   _a_star = std::make_unique<AStarAlgorithm<Node2D>>(_motion_model, _search_info);
   _a_star->initialize(
     _allow_unknown,
@@ -130,7 +127,6 @@ void SmacPlanner2D::configure(
     1.0 /*unused for 2D*/);
 
   // Initialize path smoother
-  // 中文：2D 路径默认经过 smoother，使栅格路径在发布前更平滑。
   SmootherParams params;
   params.get(node, name);
   params.holonomic_ = true;  // So smoother will treat this as a grid search
@@ -219,7 +215,6 @@ nav_msgs::msg::Path SmacPlanner2D::createPlan(
   std::unique_lock<nav2_costmap_2d::Costmap2D::mutex_t> lock(*(_costmap->getMutex()));
 
   // Downsample costmap, if required
-  // 中文：如果配置了降采样，先在低分辨率 costmap 上搜索以降低计算量。
   nav2_costmap_2d::Costmap2D * costmap = _costmap;
   if (_costmap_downsampler) {
     costmap = _costmap_downsampler->downsample(_downsampling_factor);
@@ -230,13 +225,11 @@ nav_msgs::msg::Path SmacPlanner2D::createPlan(
   _a_star->setCollisionChecker(&_collision_checker);
 
   // Set starting point
-  // 中文：将世界坐标下的起点转换为 costmap 栅格坐标，并写入 A* 起点。
   unsigned int mx_start, my_start, mx_goal, my_goal;
   costmap->worldToMap(start.pose.position.x, start.pose.position.y, mx_start, my_start);
   _a_star->setStart(mx_start, my_start, 0);
 
   // Set goal point
-  // 中文：将世界坐标下的目标点转换为 costmap 栅格坐标，并写入 A* 目标点。
   costmap->worldToMap(goal.pose.position.x, goal.pose.position.y, mx_goal, my_goal);
   _a_star->setGoal(mx_goal, my_goal, 0);
 
@@ -253,7 +246,6 @@ nav_msgs::msg::Path SmacPlanner2D::createPlan(
   pose.pose.orientation.w = 1.0;
 
   // Corner case of start and goal beeing on the same cell
-  // 中文：起点和终点落在同一栅格时直接返回单点路径，避免无意义搜索。
   if (mx_start == mx_goal && my_start == my_goal) {
     if (costmap->getCost(mx_start, my_start) == nav2_costmap_2d::LETHAL_OBSTACLE) {
       RCLCPP_WARN(_logger, "Failed to create a unique pose path because of obstacles");
@@ -271,7 +263,6 @@ nav_msgs::msg::Path SmacPlanner2D::createPlan(
   }
 
   // Compute plan
-  // 中文：执行 2D A* 搜索，返回的 path 是从 goal 回溯到 start 的栅格坐标序列。
   Node2D::CoordinateVector path;
   int num_iterations = 0;
   std::string error;
@@ -300,7 +291,6 @@ nav_msgs::msg::Path SmacPlanner2D::createPlan(
   }
 
   // Convert to world coordinates
-  // 中文：将 A* 输出的栅格路径反向转换为世界坐标，填充 nav_msgs/Path。
   plan.poses.reserve(path.size());
   for (int i = path.size() - 1; i >= 0; --i) {
     pose.pose = getWorldCoords(path[i].x, path[i].y, costmap);
@@ -323,7 +313,6 @@ nav_msgs::msg::Path SmacPlanner2D::createPlan(
 #endif
 
   // Smooth plan
-  // 中文：在剩余规划时间内对路径进行平滑，降低栅格路径的折线感。
   _smoother->smooth(plan, costmap, time_remaining);
 
   // If use_final_approach_orientation=true, interpolate the last pose orientation from the

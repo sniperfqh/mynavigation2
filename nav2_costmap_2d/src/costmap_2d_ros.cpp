@@ -135,8 +135,6 @@ nav2_util::CallbackReturn Costmap2DROS::on_configure(const rclcpp_lifecycle::Sta
   getParameters();
   LOG_INFO("Costmap2DROS '{}' configuring data flow: global_frame='{}', robot_base_frame='{}', size={}x{}m, resolution={}, rolling_window={}, track_unknown_space={}, update_frequency={}, publish_frequency={}, plugins={}, filters={}", name_.c_str(), global_frame_.c_str(), robot_base_frame_.c_str(), map_width_meters_, map_height_meters_, resolution_, rolling_window_, track_unknown_space_, map_update_frequency_, map_publish_frequency_, plugin_names_.size(), filter_names_.size());
 
-  // 中文注释：Costmap2DROS 是 costmap 的生命周期封装，内部的 LayeredCostmap
-  // 管理 static、obstacle、inflation 等插件层，并按顺序融合成最终代价地图。
   callback_group_ = create_callback_group(rclcpp::CallbackGroupType::MutuallyExclusive, false);
 
   // Create the costmap itself
@@ -153,8 +151,6 @@ nav2_util::CallbackReturn Costmap2DROS::on_configure(const rclcpp_lifecycle::Sta
   tf_buffer_->setCreateTimerInterface(timer_interface);
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
-  // 中文注释：插件加载顺序会影响代价地图结果；通常先放静态地图/障碍物层，
-  // 最后放膨胀层，把障碍物周围扩展为规划器可感知的安全边界。
   // Then load and add the plug-ins to the costmap
   for (unsigned int i = 0; i < plugin_names_.size(); ++i) {
     RCLCPP_INFO(get_logger(), "Using plugin \"%s\"", plugin_names_[i].c_str());
@@ -176,8 +172,6 @@ nav2_util::CallbackReturn Costmap2DROS::on_configure(const rclcpp_lifecycle::Sta
     LOG_INFO("Costmap2DROS '{}' initialized layer plugin '{}'", name_.c_str(), plugin_names_[i].c_str());
   }
   // and costmap filters as well
-  // 中文注释：filter 是 costmap 的后处理层，常用于 keepout zone、
-  // speed limit zone 等全局约束，不改变基础插件的数据来源。
   for (unsigned int i = 0; i < filter_names_.size(); ++i) {
     RCLCPP_INFO(get_logger(), "Using costmap filter \"%s\"", filter_names_[i].c_str());
     LOG_INFO("Costmap2DROS '{}' loading costmap filter '{}' type='{}'", name_.c_str(), filter_names_[i].c_str(), filter_types_[i].c_str());

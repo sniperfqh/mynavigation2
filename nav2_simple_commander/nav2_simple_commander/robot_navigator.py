@@ -61,17 +61,14 @@ class BasicNavigator(Node):
 
     def __init__(self, node_name='basic_navigator', namespace=''):
         super().__init__(node_name=node_name, namespace=namespace)
-        # initial_pose 会被 setInitialPose() 写入，并通过 /initialpose 交给 AMCL。
         self.initial_pose = PoseStamped()
         self.initial_pose.header.frame_id = 'map'
         # Track the current action handle, result future, feedback, and status.
-        # 中文注解：当前 action 的句柄、结果 future、反馈和状态；同一时刻只跟踪一个任务。
         self.goal_handle = None
         self.result_future = None
         self.feedback = None
         self.status = None
 
-        # AMCL pose 使用 transient local，确保订阅者能收到最近一次定位结果。
         amcl_pose_qos = QoSProfile(
           durability=QoSDurabilityPolicy.TRANSIENT_LOCAL,
           reliability=QoSReliabilityPolicy.RELIABLE,
@@ -79,7 +76,6 @@ class BasicNavigator(Node):
           depth=1)
 
         self.initial_pose_received = False
-        # Nav2 action clients：名称必须和 bringup 中的 action server 名称保持一致。
         self.nav_through_poses_client = ActionClient(self,
                                                      NavigateThroughPoses,
                                                      'navigate_through_poses')
@@ -94,16 +90,13 @@ class BasicNavigator(Node):
         self.spin_client = ActionClient(self, Spin, 'spin')
         self.backup_client = ActionClient(self, BackUp, 'backup')
         self.assisted_teleop_client = ActionClient(self, AssistedTeleop, 'assisted_teleop')
-        # AMCL 收到初始位姿后的回调用于解除 waitUntilNav2Active() 的等待。
         self.localization_pose_sub = self.create_subscription(PoseWithCovarianceStamped,
                                                               'amcl_pose',
                                                               self._amclPoseCallback,
                                                               amcl_pose_qos)
-        # /initialpose 是 RViz 2D Pose Estimate 和 AMCL 使用的标准初始定位话题。
         self.initial_pose_pub = self.create_publisher(PoseWithCovarianceStamped,
                                                       'initialpose',
                                                       10)
-        # Nav2 管理服务：地图切换、代价地图清空和代价地图读取。
         self.change_maps_srv = self.create_client(LoadMap, 'map_server/load_map')
         self.clear_costmap_global_srv = self.create_client(
             ClearEntireCostmap, 'global_costmap/clear_entirely_global_costmap')
@@ -140,14 +133,12 @@ class BasicNavigator(Node):
     def goThroughPoses(self, poses, behavior_tree=''):
         """Send a `NavThroughPoses` action request."""
         # Multi-pose navigation is handled by bt_navigator's /navigate_through_poses action.
-        # 中文注解：多目标点导航由 bt_navigator 的 /navigate_through_poses action 处理。
         self.debug("Waiting for 'NavigateThroughPoses' action server")
         while not self.nav_through_poses_client.wait_for_server(timeout_sec=1.0):
             self.info("'NavigateThroughPoses' action server not available, waiting...")
 
         goal_msg = NavigateThroughPoses.Goal()
         goal_msg.poses = poses
-        # behavior_tree 为空时使用 bt_navigator 参数中的默认 BT XML。
         goal_msg.behavior_tree = behavior_tree
 
         self.info(f'Navigating with {len(goal_msg.poses)} goals....')
@@ -161,14 +152,12 @@ class BasicNavigator(Node):
             return False
 
         # Store the result future for later isTaskComplete()/getResult() polling.
-        # 中文注解：保存 result_future，后续 isTaskComplete()/getResult() 会读取它。
         self.result_future = self.goal_handle.get_result_async()
         return True
 
     def goToPose(self, pose, behavior_tree=''):
         """Send a `NavToPose` action request."""
         # Single-goal navigation uses /navigate_to_pose for point-to-point tasks.
-        # 中文注解：单目标点导航使用 /navigate_to_pose，适合点到点任务。
         self.debug("Waiting for 'NavigateToPose' action server")
         while not self.nav_to_pose_client.wait_for_server(timeout_sec=1.0):
             self.info("'NavigateToPose' action server not available, waiting...")
@@ -194,7 +183,6 @@ class BasicNavigator(Node):
 
     def followWaypoints(self, poses):
         """Send a `FollowWaypoints` action request."""
-        # FollowWaypoints 会逐个执行 waypoint，并可接入 waypoint task executor。
         self.debug("Waiting for 'FollowWaypoints' action server")
         while not self.follow_waypoints_client.wait_for_server(timeout_sec=1.0):
             self.info("'FollowWaypoints' action server not available, waiting...")
@@ -290,7 +278,6 @@ class BasicNavigator(Node):
 
     def followPath(self, path, controller_id='', goal_checker_id=''):
         """Send a `FollowPath` action request."""
-        # FollowPath 直接交给 controller_server 执行已知 path，跳过全局规划。
         self.debug("Waiting for 'FollowPath' action server")
         while not self.follow_path_client.wait_for_server(timeout_sec=1.0):
             self.info("'FollowPath' action server not available, waiting...")
@@ -327,7 +314,6 @@ class BasicNavigator(Node):
             # task was cancelled or completed
             return True
         # Short polling lets callers read feedback or run application logic in their loop.
-        # 中文注解：短超时轮询让调用方能在循环里读取 feedback 或执行自己的业务逻辑。
         rclpy.spin_until_future_complete(self, self.result_future, timeout_sec=0.10)
         if self.result_future.result():
             self.status = self.result_future.result().status
@@ -358,7 +344,6 @@ class BasicNavigator(Node):
 
     def waitUntilNav2Active(self, navigator='bt_navigator', localizer='amcl'):
         """Block until the full navigation system is up and running."""
-        # AMCL active 后还要确认收到 amcl_pose，否则代价地图可能用错误 TF 初始化。
         self._waitForNodeToActivate(localizer)
         if localizer == 'amcl':
             self._waitForInitialPose()
@@ -379,7 +364,6 @@ class BasicNavigator(Node):
         goal_msg = ComputePathToPose.Goal()
         goal_msg.start = start
         goal_msg.goal = goal
-        # planner_id 为空时使用 planner_server 当前默认 planner 插件。
         goal_msg.planner_id = planner_id
         goal_msg.use_start = use_start
 
@@ -412,7 +396,6 @@ class BasicNavigator(Node):
     def getPathThroughPoses(self, start, goals, planner_id='', use_start=False):
         """Send a `ComputePathThroughPoses` action request."""
         # This API only plans through multiple goals; it does not command robot motion.
-        # 中文注解：该接口只规划穿过多目标点的路径，不会驱动机器人运动。
         self.debug("Waiting for 'ComputePathThroughPoses' action server")
         while not self.compute_path_through_poses_client.wait_for_server(timeout_sec=1.0):
             self.info("'ComputePathThroughPoses' action server not available, waiting...")
@@ -453,7 +436,6 @@ class BasicNavigator(Node):
 
         goal_msg = SmoothPath.Goal()
         goal_msg.path = path
-        # max_smoothing_duration 是 ROS Duration，避免 smoother 长时间阻塞任务链路。
         goal_msg.max_smoothing_duration = rclpyDuration(seconds=max_duration).to_msg()
         goal_msg.smoother_id = smoother_id
         goal_msg.check_for_collisions = check_for_collision
@@ -487,7 +469,6 @@ class BasicNavigator(Node):
 
     def changeMap(self, map_filepath):
         """Change the current static map in the map server."""
-        # map_filepath 通常是 map.yaml 的绝对路径，由 map_server 重新加载。
         while not self.change_maps_srv.wait_for_service(timeout_sec=1.0):
             self.info('change map service not available, waiting...')
         req = LoadMap.Request()
@@ -547,7 +528,6 @@ class BasicNavigator(Node):
         """Startup nav2 lifecycle system."""
         self.info('Starting up lifecycle nodes based on lifecycle_manager.')
         # Scan all lifecycle managers in the graph to support namespaced bringup.
-        # 中文注解：遍历当前 graph 中所有 lifecycle manager，适配带 namespace 的 bringup。
         for srv_name, srv_type in self.get_service_names_and_types():
             if srv_type[0] == 'nav2_msgs/srv/ManageLifecycleNodes':
                 self.info(f'Starting up {srv_name}')
@@ -573,7 +553,6 @@ class BasicNavigator(Node):
         """Shutdown nav2 lifecycle system."""
         self.info('Shutting down lifecycle nodes based on lifecycle_manager.')
         # Shutdown lifecycle nodes before examples exit to avoid stale Nav2 nodes.
-        # 中文注解：关闭生命周期节点，示例脚本退出前调用，避免仿真里残留 Nav2 节点。
         for srv_name, srv_type in self.get_service_names_and_types():
             if srv_type[0] == 'nav2_msgs/srv/ManageLifecycleNodes':
                 self.info(f'Shutting down {srv_name}')
@@ -589,7 +568,6 @@ class BasicNavigator(Node):
 
     def _waitForNodeToActivate(self, node_name):
         # Wait for the lifecycle node to become active before using its action/service APIs.
-        # 中文注解：等待 lifecycle node 进入 active；Nav2 server 未 active 时 action/service 不可靠。
         self.debug(f'Waiting for {node_name} to become active..')
         node_service = f'{node_name}/get_state'
         state_client = self.create_client(GetState, node_service)

@@ -46,9 +46,6 @@ PlannerServer::PlannerServer(const rclcpp::NodeOptions & options) : nav2_util::L
   LOG_INFO("Creating");
   LOG_INFO("Planner server owns global_costmap and loads global planner plugins");
 
-  // 中文注释：PlannerServer 只管理全局规划；具体算法由 planner_plugins 参数决定，
-  // 默认加载 NavfnPlanner，运行时通过 pluginlib 统一创建和生命周期管理。
-  // 声明该节点的parameters
   declare_parameter("planner_plugins", default_ids_);
   declare_parameter("selected_planner", rclcpp::ParameterValue(std::string("")));
   declare_parameter("expected_planner_frequency", 1.0);
@@ -81,14 +78,11 @@ nav2_util::CallbackReturn PlannerServer::on_configure(const rclcpp_lifecycle::St
   costmap_ros_->configure();
   costmap_ = costmap_ros_->getCostmap();
 
-  // 中文注释：全局 costmap 是规划算法的环境输入；这里先完成 costmap 生命周期配置，
-  // 再把同一份 costmap_ros_ 传给每个全局规划plugin
   if (!costmap_ros_->getUseRadius()) {
     collision_checker_ = std::make_unique<nav2_costmap_2d::FootprintCollisionChecker<nav2_costmap_2d::Costmap2D *>>(costmap_);
   }
 
   // Launch a thread to run the costmap node
-  // 中文：启动线程运行 costmap 节点。
   costmap_thread_ = std::make_unique<nav2_util::NodeThread>(costmap_ros_);
 
   RCLCPP_DEBUG(get_logger(), "Costmap size: %d,%d", costmap_->getSizeInCellsX(), costmap_->getSizeInCellsY());
@@ -99,8 +93,6 @@ nav2_util::CallbackReturn PlannerServer::on_configure(const rclcpp_lifecycle::St
 
   auto node = shared_from_this();
 
-  // 中文注释：每个 planner id 会映射到一个插件类型，例如 GridBased -> NavfnPlanner；
-  // 插件创建失败直接让生命周期配置失败，避免系统带着缺失规划器进入 active。
   for (size_t i = 0; i != planner_ids_.size(); i++) {
     try {
       planner_types_[i] = nav2_util::get_plugin_type_param(node, planner_ids_[i]);
@@ -139,13 +131,9 @@ nav2_util::CallbackReturn PlannerServer::on_configure(const rclcpp_lifecycle::St
   }
 
   // Initialize pubs & subs
-  // 中文：初始化发布器和订阅器。
   plan_publisher_ = create_publisher<nav_msgs::msg::Path>("plan", 1);
 
-  // 中文注释：对外提供两个 action：单目标点规划和多目标点串联规划；
-  // BT Navigator 会通过这些 action 调用 planner server
   // Create the action servers for path planning to a pose and through poses
-  // 中文：Create the action server。s for path planning to a pose and through poses
   action_server_pose_ = std::make_unique<ActionServerToPose>(shared_from_this(), "compute_path_to_pose", std::bind(&PlannerServer::computePlan, this), nullptr, std::chrono::milliseconds(500), true);
 
   action_server_poses_ = std::make_unique<ActionServerThroughPoses>(shared_from_this(), "compute_path_through_poses", std::bind(&PlannerServer::computePlanThroughPoses, this), nullptr, std::chrono::milliseconds(500), true);
@@ -172,11 +160,9 @@ nav2_util::CallbackReturn PlannerServer::on_activate(const rclcpp_lifecycle::Sta
   is_path_valid_service_ = node->create_service<nav2_msgs::srv::IsPathValid>("is_path_valid", std::bind(&PlannerServer::isPathValid, this, std::placeholders::_1, std::placeholders::_2));
 
   // Add callback for dynamic parameters
-  // 中文：添加动态参数回调。
   dyn_params_handler_ = node->add_on_set_parameters_callback(std::bind(&PlannerServer::dynamicParametersCallback, this, _1));
 
   // create bond connection
-  // 中文：创建 bond 连接。
   createBond();
 
   return nav2_util::CallbackReturn::SUCCESS;
@@ -191,15 +177,10 @@ nav2_util::CallbackReturn PlannerServer::on_deactivate(const rclcpp_lifecycle::S
 
   /*
    * The costmap is also a lifecycle node, so it may have already fired on_deactivate
-   * 中文：costmap 也是 lifecycle node，因此可能已经触发过 on_deactivate。
    * via rcl preshutdown cb. Despite the rclcpp docs saying on_shutdown callbacks fire
-   * 中文：这是通过 rcl preshutdown 回调触发的。尽管 rclcpp 文档说明 on_shutdown 回调会
    * in the order added, the preshutdown callbacks clearly don't per se, due to using an
-   * 中文：按添加顺序触发，但 preshutdown 回调显然并非如此，因为底层使用了
    * unordered_set iteration. Once this issue is resolved, we can maybe make a stronger
-   * 中文：unordered_set 迭代。该问题解决后，也许可以做出更强的
    * ordering assumption: https://github.com/ros2/rclcpp/issues/2096
-   * 中文：顺序假设：https://github.com/ros2/rclcpp/issues/2096
    */
   costmap_ros_->deactivate();
 
@@ -211,7 +192,6 @@ nav2_util::CallbackReturn PlannerServer::on_deactivate(const rclcpp_lifecycle::S
   dyn_params_handler_.reset();
 
   // destroy bond connection
-  // 中文：销毁 bond 连接。
   destroyBond();
 
   return nav2_util::CallbackReturn::SUCCESS;
@@ -317,7 +297,6 @@ void PlannerServer::computePlanThroughPoses() {
   auto start_time = this->now();
 
   // Initialize the ComputePathToPose goal and result
-  // 中文：Initialize the Compute生成的路径。ToPose goal and result
   auto goal = action_server_poses_->get_current_goal();
   auto result = std::make_shared<ActionThroughPoses::Result>();
   nav_msgs::msg::Path concat_path;
@@ -398,7 +377,6 @@ void PlannerServer::computePlan() {
   auto start_time = this->now();
 
   // Initialize the ComputePathToPose goal and result
-  // 中文：Initialize the Compute生成的路径。ToPose goal and result
   auto goal = action_server_pose_->get_current_goal();
   auto result = std::make_shared<ActionToPose::Result>();
 
@@ -583,9 +561,6 @@ rcl_interfaces::msg::SetParametersResult PlannerServer::dynamicParametersCallbac
 #include "rclcpp_components/register_node_macro.hpp"
 
 // Register the component with class_loader.
-// 中文：将组件注册到 class_loader。
 // This acts as a sort of entry point, allowing the component to be discoverable when its library
-// 中文：这相当于组件入口，使组件所在库被加载时可以被发现。
 // is being loaded into a running process.
-// 中文：当组件库被加载到运行中的进程时可被发现。
 RCLCPP_COMPONENTS_REGISTER_NODE(nav2_planner::PlannerServer)

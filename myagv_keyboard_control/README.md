@@ -1,4 +1,3 @@
-<!-- 中文说明：本文档记录键盘遥控包的接口、平滑控制逻辑、参数、运行方式和安全约束。 -->
 # myagv_keyboard_control
 
 `myagv_keyboard_control` 是 MYAGV 底盘终端键盘直控包。节点按照固定周期直接发布

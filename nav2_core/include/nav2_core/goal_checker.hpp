@@ -35,7 +35,6 @@
 #ifndef NAV2_CORE__GOAL_CHECKER_HPP_
 #define NAV2_CORE__GOAL_CHECKER_HPP_
 
-// 中文：本文件定义“导航任务是否到达目标”的可插拔判定接口，由 Controller Server 按 Goal 使用。
 
 #include <memory>
 #include <string>
@@ -59,31 +58,23 @@ namespace nav2_core
  * the goal state. This primarily consists of checking the relative positions of two poses
  * (which are presumed to be in the same frame). It can also check the velocity, as some
  * applications require that robot be stopped to be considered as having reached the goal.
- * 中文：GoalChecker 同时接收当前 Pose、目标 Pose 和当前速度，可实现仅位置、位置＋朝向或
- * 中文：位置＋朝向＋停车等不同到达语义。两个 Pose 必须已经处于同一坐标系。
- * 中文：Controller Server 每个控制周期调用当前选中的插件，并把同一指针传给 Controller 供算法参考。
  */
 class GoalChecker
 {
 public:
-  // 中文：服务器使用该共享指针别名在插件映射中保存一个或多个 GoalChecker 实例。
   typedef std::shared_ptr<nav2_core::GoalChecker> Ptr;
 
-  // 中文：虚析构保证经基类指针释放具体检查器时执行完整派生析构链。
   virtual ~GoalChecker() {}
 
   /**
    * @brief Initialize any parameters from the NodeHandle
    * @param parent Node pointer for grabbing parameters
-   * 中文：Controller Server 配置阶段传入父 Lifecycle Node、插件实例名和 Local Costmap2DROS。
-   * 中文：实现应在此读取容差参数；父节点为弱引用，Costmap 为共享资源。
    */
   virtual void initialize(
     const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent,
     const std::string & plugin_name,
     const std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros) = 0;
 
-  // 中文：开始新 Goal 或重置控制状态时清除插件内部的有状态判定，例如“首次满足 XY 容差”标记。
   virtual void reset() = 0;
 
   /**
@@ -92,8 +83,6 @@ public:
    * @param goal_pose The pose to check against
    * @param velocity The robot's current velocity
    * @return True if goal is reached
-   * 中文：同步判断当前任务是否到达。返回 true 后由 Controller Server 收口 FollowPath，而不是插件
-   * 中文：直接发布 Action Result；实现可以结合线速度和角速度要求机器人完全停稳。
    */
   virtual bool isGoalReached(
     const geometry_msgs::msg::Pose & query_pose, const geometry_msgs::msg::Pose & goal_pose,
@@ -108,8 +97,6 @@ public:
    * @param pose_tolerance The tolerance used for checking in Pose fields
    * @param vel_tolerance The tolerance used for checking velocity fields
    * @return True if the tolerances are valid to use
-   * 中文：向 Controller 或其他调用方公开本插件可能使用的最大 Pose／Twist 容差。未参与判定的字段
-   * 中文：应写入 `numeric_limits<double>::lowest()`；返回 false 表示该实现不提供可靠容差信息。
    */
   virtual bool getTolerances(
     geometry_msgs::msg::Pose & pose_tolerance,

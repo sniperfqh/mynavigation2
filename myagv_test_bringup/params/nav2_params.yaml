@@ -397,7 +397,6 @@ local_costmap:
         z_voxels: 16
         max_obstacle_height: 2.0
         mark_threshold: 0
-        # 双雷达备用配置，当前停用；需要恢复时取消本段注释并注释下方单雷达配置。
         # observation_sources: "lidar_1 lidar_2"
         # lidar_1:
         #   topic: /c200_lidar_node1/scan
@@ -451,7 +450,6 @@ global_costmap:
         plugin: "nav2_costmap_2d::ObstacleLayer"
         enabled: True
         footprint_clearing_enabled: True
-        # 双雷达备用配置，当前停用；需要恢复时取消本段注释并注释下方单雷达配置。
         # observation_sources: "lidar_1 lidar_2"
         # lidar_1:
         #   topic: /c200_lidar_node1/scan

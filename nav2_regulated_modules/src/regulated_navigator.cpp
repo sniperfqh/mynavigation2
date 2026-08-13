@@ -9,9 +9,7 @@ using namespace std::chrono_literals;
 namespace nav2_regulated_modules
 {
 
-// 中文注释：构造函数只声明运行参数；ROS 通信接口延迟到 Lifecycle configure 阶段创建。
 RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : nav2_util::LifecycleNode("regulated_navigator", "", options) {
-  // 中文注释：构造阶段只声明参数，通信接口在 configure 阶段创建。
   declare_parameter("global_frame", "map");
   declare_parameter("robot_base_frame", "base_link");
   declare_parameter("operation_mode", "autonomous");
@@ -48,9 +46,7 @@ RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : na
   declare_parameter("stop_cmd_vel_topic", "cmd_vel_nav");
 }
 
-// 中文注释：读取参数、配置策略模块，并创建 Action、Service、Topic、TF 和定时器接口。
 nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycle::State &) {
-  // 中文注释：读取配置并初始化规划、控制、恢复和定位监控所需接口。
   global_frame_ = get_parameter("global_frame").as_string();
   robot_base_frame_ = get_parameter("robot_base_frame").as_string();
   const auto operation_mode = get_parameter("operation_mode").as_string();
@@ -96,10 +92,8 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
 
   goal_sub_ = create_subscription<geometry_msgs::msg::PoseStamped>(goal_topic_, rclcpp::SystemDefaultsQoS(), std::bind(&RegulatedNavigator::onTopicGoal, this, std::placeholders::_1));
   if (operation_mode_ == NavigationMode::FIXED_PATH) {
-    // 中文注释：业务 Action 提供取消、反馈和结果；新 Goal 通过 replace 语义替换旧路径任务。
     fixed_path_server_ = rclcpp_action::create_server<FollowFixedPath>(this, fixed_path_action_, std::bind(&RegulatedNavigator::handleFixedPathGoal, this, std::placeholders::_1, std::placeholders::_2), std::bind(&RegulatedNavigator::handleFixedPathCancel, this, std::placeholders::_1), std::bind(&RegulatedNavigator::handleFixedPathAccepted, this, std::placeholders::_1));
   }
-  // 中文注释：取消、定位丢失或失败时直接向控制链入口发布零速度，形成停车兜底。
   stop_cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>(get_parameter("stop_cmd_vel_topic").as_string(), rclcpp::SystemDefaultsQoS());
 
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
@@ -113,18 +107,14 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
-// 中文注释：激活业务入口并创建 Lifecycle Bond，随后开始接受导航任务。
 nav2_util::CallbackReturn RegulatedNavigator::on_activate(const rclcpp_lifecycle::State &) {
-  // 中文注释：入口最后激活，确保规划、控制和平滑服务器已由 Lifecycle Manager 拉起。
   active_ = true;
   createBond();
   LOG_INFO("独立规控导航器已激活");
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
-// 中文注释：停止接受业务并取消当前任务，确保节点停用后不再输出运动指令。
 nav2_util::CallbackReturn RegulatedNavigator::on_deactivate(const rclcpp_lifecycle::State &) {
-  // 中文注释：停用时先取消底层任务，防止 Lifecycle 关闭后仍继续输出速度。
   active_ = false;
   cancelTask("节点停用");
   destroyBond();
@@ -132,7 +122,6 @@ nav2_util::CallbackReturn RegulatedNavigator::on_deactivate(const rclcpp_lifecyc
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
-// 中文注释：取消任务并释放 configure 阶段创建的全部 ROS 接口，回到未配置状态。
 nav2_util::CallbackReturn RegulatedNavigator::on_cleanup(const rclcpp_lifecycle::State &) {
   cancelTask("节点清理");
   navigate_pose_server_.reset();
@@ -155,7 +144,6 @@ nav2_util::CallbackReturn RegulatedNavigator::on_cleanup(const rclcpp_lifecycle:
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
-// 中文注释：进程关闭前再次执行任务取消和停车收口。
 nav2_util::CallbackReturn RegulatedNavigator::on_shutdown(const rclcpp_lifecycle::State &) {
   cancelTask("节点关闭");
   LOG_INFO("独立规控导航器已关闭");
