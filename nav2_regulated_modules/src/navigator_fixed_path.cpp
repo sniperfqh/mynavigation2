@@ -357,14 +357,14 @@ void RegulatedNavigator::generateBezierUniformPoints(const nav_msgs::msg::Path &
         double s = i * interval;
         if (s > total_len) s = total_len; // 防止越界
         double t = findTfromArcLength(arc_lengths, ts, s);
-        uniform_poses.push_back(bezier3(input_path, t, Ture));
+        uniform_poses.push_back(bezier3(input_path, t, true));
     }
 
     // 确保最后一个点就是终点
     const auto& last_pt = uniform_poses.back().pose.position;
     const auto& end_pt = input_path.poses.back().pose.position;
     if ((last_pt.x != end_pt.x) || (last_pt.y != end_pt.y)) {
-        uniform_poses.push_back(bezier3(input_path, 1.0, Ture));
+        uniform_poses.push_back(bezier3(input_path, 1.0, true));
     }
 
     // 构建输出路径
