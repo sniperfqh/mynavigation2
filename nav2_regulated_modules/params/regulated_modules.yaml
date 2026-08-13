@@ -129,6 +129,7 @@ regulated_navigator:
     max_localization_rotation_jump: 0.35
     progress_timeout: 10.0
     progress_min_translation: 0.1
+    fixed_path_step: 0.1   
     stop_cmd_vel_topic: "cmd_vel_nav"
 
 controller_server:
