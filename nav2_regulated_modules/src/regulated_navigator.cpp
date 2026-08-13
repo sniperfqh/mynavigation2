@@ -43,6 +43,7 @@ RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : na
   declare_parameter("progress_min_translation", 0.1);
   declare_parameter("localization_recovery_timeout", 10.0);
   declare_parameter("localization_stable_duration", 0.5);
+  declare_parameter("fixed_path_step", 0.1);
   declare_parameter("stop_cmd_vel_topic", "cmd_vel_nav");
 }
 
@@ -76,6 +77,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   progress_min_translation_ = get_parameter("progress_min_translation").as_double();
   localization_recovery_timeout_ = get_parameter("localization_recovery_timeout").as_double();
   localization_stable_duration_ = get_parameter("localization_stable_duration").as_double();
+  fixed_path_step_ = get_parameter("fixed_path_step").as_double();
 
   planning_module_.configure(get_parameter("planner_id").as_string(), get_parameter("smoother_id").as_string(), get_parameter("use_smoother").as_bool(), get_parameter("replan_frequency").as_double(), get_parameter("max_consecutive_planning_failures").as_int());
   control_module_.configure(get_parameter("controller_id").as_string(), get_parameter("goal_checker_id").as_string(), get_parameter("progress_timeout").as_double());
