@@ -161,8 +161,8 @@ controller_server:
       plugin: "nav2_controller::StoppedGoalChecker"
       xy_goal_tolerance: 0.01
       yaw_goal_tolerance: 0.1
-      trans_stopped_velocity: 0.01
-      rot_stopped_velocity: 0.05
+      trans_stopped_velocity: 0.0067
+      rot_stopped_velocity: 0.0333
 
     DWB:
       plugin: "dwb_core::DWBLocalPlanner"
@@ -206,16 +206,16 @@ controller_server:
 
     RPP:
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
-      desired_linear_vel: 0.44
-      lookahead_dist: 0.45
-      min_lookahead_dist: 0.25
-      max_lookahead_dist: 0.75
+      desired_linear_vel: 1.0
+      lookahead_dist: 0.3
+      min_lookahead_dist: 0.1667
+      max_lookahead_dist: 1.0
       lookahead_time: 1.5
-      rotate_to_heading_angular_vel: 1.6
+      rotate_to_heading_angular_vel: 0.5333
       transform_tolerance: 0.2
       use_velocity_scaled_lookahead_dist: true
-      min_approach_linear_velocity: 0.01
-      approach_velocity_scaling_dist: 0.6
+      min_approach_linear_velocity: 0.0067
+      approach_velocity_scaling_dist: 2.2
       use_collision_detection: true
       max_allowed_time_to_collision_up_to_carrot: 1.0
       use_regulated_linear_velocity_scaling: true
@@ -224,10 +224,10 @@ controller_server:
       cost_scaling_gain: 0.8
       inflation_cost_scaling_factor: 5.0
       regulated_linear_scaling_min_radius: 0.7
-      regulated_linear_scaling_min_speed: 0.05
+      regulated_linear_scaling_min_speed: 0.0333
       use_rotate_to_heading: true
       rotate_to_heading_min_angle: 0.785
-      max_angular_accel: 3.2
+      max_angular_accel: 2.1333
       max_robot_pose_search_dist: 3.0
       use_interpolation: true
 
@@ -391,10 +391,10 @@ velocity_smoother:
     smoothing_frequency: 20.0
     scale_velocities: false
     feedback: "CLOSED_LOOP"
-    max_velocity: [0.52, 0.0, 2.0]
-    min_velocity: [-0.52, 0.0, -2.0]
-    max_accel: [2.5, 0.0, 3.2]
-    max_decel: [-2.5, 0.0, -3.2]
+    max_velocity: [1.0, 0.0, 0.6667]
+    min_velocity: [-0.1733, 0.0, -0.6667]
+    max_accel: [0.6667, 0.0, 2.1333]
+    max_decel: [-0.6667, 0.0, -2.1333]
     odom_topic: "/odometry"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
