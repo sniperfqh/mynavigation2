@@ -85,11 +85,7 @@ void RegulatedNavigator::prepareFixedPath(const nav_msgs::msg::Path & input, nav
         if (distance_sq < DISTANCE_TOLERANCE * DISTANCE_TOLERANCE) interpolated_path.poses.pop_back();
 
         // 使用 std::move 将结果高效堆入 interpolated_path 的尾部，避免深拷贝
-        interpolated_path.poses.insert(
-            interpolated_path.poses.end(),
-            std::make_move_iterator(bezier_points.poses.begin()),
-            std::make_move_iterator(bezier_points.poses.end())
-        );
+        interpolated_path.poses.insert(interpolated_path.poses.end(), std::make_move_iterator(bezier_points.poses.begin()), std::make_move_iterator(bezier_points.poses.end()));
     }
 
     // 用插值后的路径替换原有的 output

@@ -1,6 +1,7 @@
 #include "nav2_regulated_modules/regulated_navigator.hpp"
 
 #include <chrono>
+#include <cmath>
 #include <functional>
 #include <memory>
 
@@ -45,6 +46,10 @@ RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : na
   declare_parameter("localization_stable_duration", 0.5);
   declare_parameter("fixed_path_step", 0.1);
   declare_parameter("stop_cmd_vel_topic", "cmd_vel_nav");
+  declare_parameter("controller_cmd_vel_topic", "cmd_vel_nav");
+  declare_parameter("smoothed_cmd_vel_topic", "cmd_vel");
+  declare_parameter("velocity_odom_topic", "/odometry");
+  declare_parameter("velocity_log_frequency", 1.0);
 }
 
 nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycle::State &) {
@@ -78,6 +83,14 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   localization_recovery_timeout_ = get_parameter("localization_recovery_timeout").as_double();
   localization_stable_duration_ = get_parameter("localization_stable_duration").as_double();
   fixed_path_step_ = get_parameter("fixed_path_step").as_double();
+  controller_cmd_vel_topic_ = get_parameter("controller_cmd_vel_topic").as_string();
+  smoothed_cmd_vel_topic_ = get_parameter("smoothed_cmd_vel_topic").as_string();
+  velocity_odom_topic_ = get_parameter("velocity_odom_topic").as_string();
+  velocity_log_frequency_ = get_parameter("velocity_log_frequency").as_double();
+  if (!std::isfinite(velocity_log_frequency_) || velocity_log_frequency_ <= 0.0) {
+    LOG_ERROR("velocity_log_frequency 必须为有限正数，当前值={}", velocity_log_frequency_);
+    return nav2_util::CallbackReturn::FAILURE;
+  }
 
   planning_module_.configure(get_parameter("planner_id").as_string(), get_parameter("smoother_id").as_string(), get_parameter("use_smoother").as_bool(), get_parameter("replan_frequency").as_double(), get_parameter("max_consecutive_planning_failures").as_int());
   control_module_.configure(get_parameter("controller_id").as_string(), get_parameter("goal_checker_id").as_string(), get_parameter("progress_timeout").as_double());
@@ -97,15 +110,21 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
     fixed_path_server_ = rclcpp_action::create_server<FollowFixedPath>(this, fixed_path_action_, std::bind(&RegulatedNavigator::handleFixedPathGoal, this, std::placeholders::_1, std::placeholders::_2), std::bind(&RegulatedNavigator::handleFixedPathCancel, this, std::placeholders::_1), std::bind(&RegulatedNavigator::handleFixedPathAccepted, this, std::placeholders::_1));
   }
   stop_cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>(get_parameter("stop_cmd_vel_topic").as_string(), rclcpp::SystemDefaultsQoS());
+  const auto velocity_qos = rclcpp::QoS(rclcpp::KeepLast(10)).best_effort();
+  controller_velocity_sub_ = create_subscription<geometry_msgs::msg::Twist>(controller_cmd_vel_topic_, velocity_qos, std::bind(&RegulatedNavigator::onControllerVelocity, this, std::placeholders::_1));
+  smoothed_velocity_sub_ = create_subscription<geometry_msgs::msg::Twist>(smoothed_cmd_vel_topic_, velocity_qos, std::bind(&RegulatedNavigator::onSmoothedVelocity, this, std::placeholders::_1));
+  velocity_odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(velocity_odom_topic_, velocity_qos, std::bind(&RegulatedNavigator::onVelocityOdometry, this, std::placeholders::_1));
 
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
   const auto feedback_period = std::chrono::duration<double>(1.0 / feedback_frequency_);
   feedback_timer_ = create_wall_timer(std::chrono::duration_cast<std::chrono::milliseconds>(feedback_period), std::bind(&RegulatedNavigator::publishFeedback, this));
   monitor_timer_ = create_wall_timer(200ms, std::bind(&RegulatedNavigator::monitorTask, this));
+  const auto velocity_log_period = std::chrono::duration<double>(1.0 / velocity_log_frequency_);
+  velocity_log_timer_ = create_wall_timer(std::chrono::duration_cast<std::chrono::milliseconds>(velocity_log_period), std::bind(&RegulatedNavigator::logVelocityChain, this));
 
   configured_ = true;
-  LOG_INFO("独立规控导航器配置完成，operation_mode={}", operation_mode);
+  LOG_INFO("独立规控导航器配置完成，operation_mode={}，速度日志={}Hz，反馈={}，控制器输出={}，平滑器输出={}", operation_mode, velocity_log_frequency_, velocity_odom_topic_, controller_cmd_vel_topic_, smoothed_cmd_vel_topic_);
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
@@ -136,9 +155,19 @@ nav2_util::CallbackReturn RegulatedNavigator::on_cleanup(const rclcpp_lifecycle:
   clear_local_client_.reset();
   clear_global_client_.reset();
   goal_sub_.reset();
+  controller_velocity_sub_.reset();
+  smoothed_velocity_sub_.reset();
+  velocity_odom_sub_.reset();
   stop_cmd_pub_.reset();
   feedback_timer_.reset();
   monitor_timer_.reset();
+  velocity_log_timer_.reset();
+  {
+    std::lock_guard<std::mutex> lock(velocity_mutex_);
+    has_controller_velocity_ = false;
+    has_smoothed_velocity_ = false;
+    has_velocity_odometry_ = false;
+  }
   tf_listener_.reset();
   tf_buffer_.reset();
   configured_ = false;

@@ -58,9 +58,7 @@ public:
    * @param decel maximum deceleration
    * @return Scale factor, eta
    */
-  double findEtaConstraint(
-    const double v_curr, const double v_cmd,
-    const double accel, const double decel);
+  double findEtaConstraint(const double v_curr, const double v_cmd, const double accel, const double decel);
 
   /**
    * @brief Apply acceleration and scale factor constraints
@@ -71,9 +69,7 @@ public:
    * @param eta Scale factor
    * @return Velocity command
    */
-  double applyConstraints(
-    const double v_curr, const double v_cmd,
-    const double accel, const double decel, const double eta);
+  double applyConstraints(const double v_curr, const double v_cmd, const double accel, const double decel, const double eta);
 
 protected:
   nav2_util::CallbackReturn on_configure(const rclcpp_lifecycle::State & state) override;
@@ -120,13 +116,11 @@ protected:
   /**
    * @brief Dynamic reconfigure callback
    */
-  rcl_interfaces::msg::SetParametersResult dynamicParametersCallback(
-    std::vector<rclcpp::Parameter> parameters);
+  rcl_interfaces::msg::SetParametersResult dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters);
 
   // Network interfaces
   std::unique_ptr<nav2_util::OdomSmoother> odom_smoother_;
-  rclcpp_lifecycle::LifecyclePublisher<geometry_msgs::msg::Twist>::SharedPtr
-    smoothed_cmd_pub_;
+  rclcpp_lifecycle::LifecyclePublisher<geometry_msgs::msg::Twist>::SharedPtr smoothed_cmd_pub_;
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_sub_;
   rclcpp::TimerBase::SharedPtr timer_;
 
@@ -141,6 +135,7 @@ protected:
   bool open_loop_;
   bool stopped_{true};
   bool scale_velocities_;
+  double velocity_log_frequency_{1.0};
   std::vector<double> max_velocities_;
   std::vector<double> min_velocities_;
   std::vector<double> max_accels_;
@@ -148,6 +143,9 @@ protected:
   std::vector<double> deadband_velocities_;
   rclcpp::Duration velocity_timeout_{0, 0};
   rclcpp::Time last_command_time_;
+  geometry_msgs::msg::Twist latest_raw_command_;
+  std::chrono::steady_clock::time_point last_velocity_log_time_;
+  bool has_velocity_log_time_{false};
 
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr dyn_params_handler_;
 };

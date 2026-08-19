@@ -44,4 +44,43 @@ void RegulatedNavigator::stopRobot() {
   LOG_DEBUG("已向速度链入口连续发布 3 帧零速度");
 }
 
+void RegulatedNavigator::onControllerVelocity(const geometry_msgs::msg::Twist::SharedPtr velocity) {
+  std::lock_guard<std::mutex> lock(velocity_mutex_);
+  latest_controller_velocity_ = *velocity;
+  has_controller_velocity_ = true;
+}
+
+void RegulatedNavigator::onSmoothedVelocity(const geometry_msgs::msg::Twist::SharedPtr velocity) {
+  std::lock_guard<std::mutex> lock(velocity_mutex_);
+  latest_smoothed_velocity_ = *velocity;
+  has_smoothed_velocity_ = true;
+}
+
+void RegulatedNavigator::onVelocityOdometry(const nav_msgs::msg::Odometry::SharedPtr odometry) {
+  std::lock_guard<std::mutex> lock(velocity_mutex_);
+  latest_velocity_odometry_ = *odometry;
+  has_velocity_odometry_ = true;
+}
+
+void RegulatedNavigator::logVelocityChain() {
+  if (!active_) {return;}
+  geometry_msgs::msg::Twist controller_velocity;
+  geometry_msgs::msg::Twist smoothed_velocity;
+  nav_msgs::msg::Odometry velocity_odometry;
+  bool has_controller_velocity;
+  bool has_smoothed_velocity;
+  bool has_velocity_odometry;
+  {
+    std::lock_guard<std::mutex> lock(velocity_mutex_);
+    controller_velocity = latest_controller_velocity_;
+    smoothed_velocity = latest_smoothed_velocity_;
+    velocity_odometry = latest_velocity_odometry_;
+    has_controller_velocity = has_controller_velocity_;
+    has_smoothed_velocity = has_smoothed_velocity_;
+    has_velocity_odometry = has_velocity_odometry_;
+  }
+  if (!has_controller_velocity && !has_smoothed_velocity && !has_velocity_odometry) {return;}
+  LOG_INFO("关键速度链：反馈 {} [vx={:.3f} m/s, wz={:.3f} rad/s, received={}] -> 控制器输出/平滑器输入 {} [vx={:.3f} m/s, wz={:.3f} rad/s, received={}] -> 平滑器输出 {} [vx={:.3f} m/s, wz={:.3f} rad/s, received={}]", velocity_odom_topic_, velocity_odometry.twist.twist.linear.x, velocity_odometry.twist.twist.angular.z, has_velocity_odometry, controller_cmd_vel_topic_, controller_velocity.linear.x, controller_velocity.angular.z, has_controller_velocity, smoothed_cmd_vel_topic_, smoothed_velocity.linear.x, smoothed_velocity.angular.z, has_smoothed_velocity);
+}
+
 }  // namespace nav2_regulated_modules

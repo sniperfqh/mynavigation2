@@ -3,6 +3,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <vector>
@@ -21,6 +22,7 @@
 #include "nav2_regulated_modules/navigation_state.hpp"
 #include "nav2_regulated_modules/planning_module.hpp"
 #include "nav2_util/lifecycle_node.hpp"
+#include "nav_msgs/msg/odometry.hpp"
 #include "nav_msgs/msg/path.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "rclcpp_action/rclcpp_action.hpp"
@@ -90,27 +92,17 @@ private:
   // 中文注释：完成 Path 变换和下游检查后，以新 Action Goal 替换旧任务。
   void handleFixedPathAccepted(const std::shared_ptr<FixedPathHandle> goal);
   // 中文注释：校验固定路径并统一变换到全局坐标系。 增加固定路径的离散点生成
-  void prepareFixedPath(
-    const nav_msgs::msg::Path & path,
-    nav_msgs::msg::Path &output);
+  void prepareFixedPath(const nav_msgs::msg::Path & path, nav_msgs::msg::Path &output);
   // 直线插值生成四点
-  void liner2to4point(
-    const nav_msgs::msg::Path &input_path,
-    nav_msgs::msg::Path &output_path);
+  void liner2to4point(const nav_msgs::msg::Path &input_path, nav_msgs::msg::Path &output_path);
   // 3阶bezier曲线单点坐标计算
-  geometry_msgs::msg::PoseStamped bezier3(
-    const nav_msgs::msg::Path &input_path, double t, bool useresult);
+  geometry_msgs::msg::PoseStamped bezier3(const nav_msgs::msg::Path &input_path, double t, bool useresult);
   // 计算3阶bezier曲线的长度
-  void computeArcLengths(
-    const std::vector<geometry_msgs::msg::PoseStamped> &poses,
-    std::vector<double> &arc_lengths);
+  void computeArcLengths(const std::vector<geometry_msgs::msg::PoseStamped> &poses, std::vector<double> &arc_lengths);
   // 在arc_lengths中找到对应s_target的参数t，线性插值
-  double findTfromArcLength(
-    const std::vector<double> &arc_lengths, const std::vector<double> &ts, double s_target);
+  double findTfromArcLength(const std::vector<double> &arc_lengths, const std::vector<double> &ts, double s_target);
   // 依据四点生成3阶bezier曲线固定步长序列点
-  void generateBezierUniformPoints(
-    const nav_msgs::msg::Path &input_path, double interval,
-    nav_msgs::msg::Path &output_path);
+  void generateBezierUniformPoints(const nav_msgs::msg::Path &input_path, double interval, nav_msgs::msg::Path &output_path);
   // 中文注释：按固定频率把当前位姿、耗时、剩余距离和恢复次数反馈给外层 Action。
   void publishFeedback();
 
@@ -131,6 +123,11 @@ private:
   bool isCurrentFollow(uint64_t generation, uint64_t sequence) const;
   // 中文注释：向速度链入口重复发布零 Twist，形成停车兜底。
   void stopRobot();
+  // 中文注释：缓存控制器输出、平滑器输出和里程计反馈，由低频定时器统一打印速度链。
+  void onControllerVelocity(const geometry_msgs::msg::Twist::SharedPtr velocity);
+  void onSmoothedVelocity(const geometry_msgs::msg::Twist::SharedPtr velocity);
+  void onVelocityOdometry(const nav_msgs::msg::Odometry::SharedPtr odometry);
+  void logVelocityChain();
 
   // 中文注释：取消当前子任务、停车并异步清理双代价地图。
   void startRecovery(const std::string & reason);
@@ -177,6 +174,9 @@ private:
   std::string robot_base_frame_;
   std::string goal_topic_;
   std::string fixed_path_action_;
+  std::string controller_cmd_vel_topic_;
+  std::string smoothed_cmd_vel_topic_;
+  std::string velocity_odom_topic_;
   double server_timeout_{5.0};
   double cancel_timeout_{2.0};
   double smoothing_duration_{2.0};
@@ -193,6 +193,7 @@ private:
   bool check_smoother_collisions_{true};
   double current_speed_{0.0};
   double fixed_path_step_{0.1};
+  double velocity_log_frequency_{1.0};
 
   // 中文注释：时间戳和缓存数据用于判断定位丢失／恢复、跳变、重规划等待和原始路径回退。
   rclcpp::Time last_valid_tf_time_{0, 0, RCL_ROS_TIME};
@@ -201,6 +202,13 @@ private:
   rclcpp::Time recovery_ready_time_{0, 0, RCL_ROS_TIME};
   geometry_msgs::msg::PoseStamped last_pose_;
   nav_msgs::msg::Path pending_raw_path_;
+  geometry_msgs::msg::Twist latest_controller_velocity_;
+  geometry_msgs::msg::Twist latest_smoothed_velocity_;
+  nav_msgs::msg::Odometry latest_velocity_odometry_;
+  std::mutex velocity_mutex_;
+  bool has_controller_velocity_{false};
+  bool has_smoothed_velocity_{false};
+  bool has_velocity_odometry_{false};
 
   // 中文注释：以下 ROS 接口分别连接 Nav2 子 Action、对外导航 Action 与清图 Service。
   rclcpp_action::Client<ComputePathToPose>::SharedPtr compute_pose_client_;
@@ -224,9 +232,13 @@ private:
 
   // 中文注释：Topic、停车发布器、定时器和 TF 接口构成非 Action 数据流与健康监控链。
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr controller_velocity_sub_;
+  rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr smoothed_velocity_sub_;
+  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr velocity_odom_sub_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr stop_cmd_pub_;
   rclcpp::TimerBase::SharedPtr feedback_timer_;
   rclcpp::TimerBase::SharedPtr monitor_timer_;
+  rclcpp::TimerBase::SharedPtr velocity_log_timer_;
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 };

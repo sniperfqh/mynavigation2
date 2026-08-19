@@ -659,6 +659,16 @@ ros2 action send_goal /follow_fixed_path \
   ]}}" --feedback
 ```
 
+添加样条拟合后
+```bash
+ros2 action send_goal /follow_fixed_path \
+  nav2_regulated_modules/action/FollowFixedPath \
+  "{path: {header: {frame_id: map}, poses: [
+    {pose: {position: {x: 70.100000, y: -12.400000, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.999717, w: 0.023789}}},
+    {pose: {position: {x: 63.800000, y: -12.100000, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.999717, w: 0.023789}}}
+  ]}}" --feedback
+```
+
 输入要求：
 
 - Action 默认是 `/follow_fixed_path`，可通过 `regulated_navigator.fixed_path_action` 修改。

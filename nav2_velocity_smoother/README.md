@@ -55,6 +55,7 @@ velocity_smoother:
    	min_velocity: [-0.5, 0.0, -2.5]  # Minimum velocities, ordered [Vx, Vy, Vw]
    	deadband_velocity: [0.0, 0.0, 0.0]  # A deadband of velocities below which they should be zero-ed out for sending to the robot base controller, ordered [Vx, Vy, Vw]
    	velocity_timeout: 1.0  # Time (s) after which if no new velocity commands are received to zero out and stop
+    velocity_log_frequency: 1.0  # Rate (Hz) to log raw input, feedback velocity, and final smoothed output
    	max_accel: [2.5, 0.0, 3.2]  # Maximum acceleration, ordered [Ax, Ay, Aw]
    	max_decel: [-2.5, 0.0, -3.2]  # Maximum deceleration, ordered [Ax, Ay, Aw]
    	odom_topic: "odom"  # Topic of odometry to use for estimating current velocities
@@ -94,4 +95,4 @@ nav2_velocity_smoother 是一个 Lifecycle Component 节点，用于平滑 Nav2 
 
 该包支持差分、全向和部分 Ackermann 平台，输入 cmd_vel，输出 smoothed_cmd_vel。节点按定时器频率运行，可高于控制器频率以插值速度。OPEN_LOOP 假定机器人实现了上一条平滑命令，CLOSED_LOOP 则读取里程计估计实际速度。
 
-参数包括平滑频率、比例缩放、反馈模式、最大／最小速度、死区、超时、最大加减速度和里程计窗口。速度超时后会发布零速度。低频或高延迟里程计适合 OPEN_LOOP；高频里程计可使用 CLOSED_LOOP，但平滑频率不应超过里程计频率。旋转速度上下限应使用带符号的成对值，减速度为负数；死区用于过滤低于静摩擦阈值的微小命令。
+参数包括平滑频率、比例缩放、反馈模式、最大／最小速度、死区、超时、最大加减速度、里程计窗口和关键速度链日志频率。速度超时后会发布零速度。低频或高延迟里程计适合 OPEN_LOOP；高频里程计可使用 CLOSED_LOOP，但平滑频率不应超过里程计频率。旋转速度上下限应使用带符号的成对值，减速度为负数；死区用于过滤低于静摩擦阈值的微小命令。
