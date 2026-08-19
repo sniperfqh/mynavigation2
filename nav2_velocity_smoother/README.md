@@ -55,7 +55,7 @@ velocity_smoother:
    	min_velocity: [-0.5, 0.0, -2.5]  # Minimum velocities, ordered [Vx, Vy, Vw]
    	deadband_velocity: [0.0, 0.0, 0.0]  # A deadband of velocities below which they should be zero-ed out for sending to the robot base controller, ordered [Vx, Vy, Vw]
    	velocity_timeout: 1.0  # Time (s) after which if no new velocity commands are received to zero out and stop
-    velocity_log_frequency: 1.0  # Rate (Hz) to log raw input, feedback velocity, and final smoothed output
+    velocity_log_frequency: 10.0  # Rate (Hz) to log raw input, feedback velocity, and final smoothed output
    	max_accel: [2.5, 0.0, 3.2]  # Maximum acceleration, ordered [Ax, Ay, Aw]
    	max_decel: [-2.5, 0.0, -3.2]  # Maximum deceleration, ordered [Ax, Ay, Aw]
    	odom_topic: "odom"  # Topic of odometry to use for estimating current velocities
