@@ -17,6 +17,7 @@ ament_target_dependencies(${library_name}
   tf2_ros
   nav_msgs
   geometry_msgs
+  byd_custom_msgs
   lifecycle_msgs
   rclcpp_lifecycle
   tf2_geometry_msgs

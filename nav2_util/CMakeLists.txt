@@ -8,6 +8,7 @@ find_package(tf2_ros REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(byd_custom_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(rclcpp REQUIRED)
 find_package(lifecycle_msgs REQUIRED)
@@ -24,6 +25,7 @@ set(dependencies
     tf2
     tf2_geometry_msgs
     geometry_msgs
+    byd_custom_msgs
     nav_msgs
     rclcpp
     lifecycle_msgs

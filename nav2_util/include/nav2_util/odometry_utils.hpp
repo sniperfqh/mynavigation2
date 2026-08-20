@@ -29,6 +29,7 @@
 #include "nav2_util/lifecycle_node.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "nav2_util/node_utils.hpp"
+#include "byd_custom_msgs/msg/motion_state.hpp"
 
 namespace nav2_util
 {
@@ -81,14 +82,14 @@ protected:
    * @brief Callback of odometry subscriber to process
    * @param msg Odometry msg to smooth
    */
-  void odomCallback(nav_msgs::msg::Odometry::SharedPtr msg);
+  void odomCallback(byd_custom_msgs::msg::MotionState::SharedPtr mtmsg);
 
   /**
    * @brief Update internal state of the smoother after getting new data
    */
   void updateState();
 
-  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+  rclcpp::Subscription<byd_custom_msgs::msg::MotionState>::SharedPtr odom_sub_;
   nav_msgs::msg::Odometry odom_cumulate_;
   geometry_msgs::msg::TwistStamped vel_smooth_;
   std::mutex odom_mutex_;

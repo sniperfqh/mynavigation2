@@ -399,7 +399,7 @@ velocity_smoother:
     min_velocity: [-0.1040, 0.0, -0.4000]
     max_accel: [0.4000, 0.0, 1.2800]
     max_decel: [-0.4000, 0.0, -1.2800]
-    odom_topic: "/odometry"
+    odom_topic: "/motion_state"
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
     velocity_timeout: 1.0

@@ -14,6 +14,7 @@
   <depend>nav2_common</depend>
 
   <depend>geometry_msgs</depend>
+  <depend>byd_custom_msgs</depend>
   <depend>rclcpp</depend>
   <depend>nav2_msgs</depend>
   <depend>nav_msgs</depend>

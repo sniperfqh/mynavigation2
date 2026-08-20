@@ -25,7 +25,7 @@ namespace nav2_util
 
 OdomSmoother::OdomSmoother(const rclcpp::Node::WeakPtr & parent, double filter_duration, const std::string & odom_topic) : odom_history_duration_(rclcpp::Duration::from_seconds(filter_duration)) {
   auto node = parent.lock();
-  odom_sub_ = node->create_subscription<nav_msgs::msg::Odometry>(odom_topic, rclcpp::SystemDefaultsQoS(), std::bind(&OdomSmoother::odomCallback, this, std::placeholders::_1));
+  odom_sub_ = node->create_subscription<byd_custom_msgs::msg::MotionState>(odom_topic, rclcpp::SystemDefaultsQoS(), std::bind(&OdomSmoother::odomCallback, this, std::placeholders::_1));
 
   odom_cumulate_.twist.twist.linear.x = 0;
   odom_cumulate_.twist.twist.linear.y = 0;
@@ -37,7 +37,7 @@ OdomSmoother::OdomSmoother(const rclcpp::Node::WeakPtr & parent, double filter_d
 
 OdomSmoother::OdomSmoother(const nav2_util::LifecycleNode::WeakPtr & parent, double filter_duration, const std::string & odom_topic) : odom_history_duration_(rclcpp::Duration::from_seconds(filter_duration)) {
   auto node = parent.lock();
-  odom_sub_ = node->create_subscription<nav_msgs::msg::Odometry>(odom_topic, rclcpp::SystemDefaultsQoS(), std::bind(&OdomSmoother::odomCallback, this, std::placeholders::_1));
+  odom_sub_ = node->create_subscription<byd_custom_msgs::msg::MotionState>(odom_topic, rclcpp::SystemDefaultsQoS(), std::bind(&OdomSmoother::odomCallback, this, std::placeholders::_1));
 
   odom_cumulate_.twist.twist.linear.x = 0;
   odom_cumulate_.twist.twist.linear.y = 0;
@@ -47,8 +47,16 @@ OdomSmoother::OdomSmoother(const nav2_util::LifecycleNode::WeakPtr & parent, dou
   odom_cumulate_.twist.twist.angular.z = 0;
 }
 
-void OdomSmoother::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg) {
+void OdomSmoother::odomCallback(const byd_custom_msgs::msg::MotionState::SharedPtr mtmsg) {
   std::lock_guard<std::mutex> lock(odom_mutex_);
+  nav_msgs::msg::Odometry::SharedPtr msg;
+  msg->header = mtmsg->header;
+  msg->twist.twist.linear.x = mtmsg->v_car;
+  msg->twist.twist.linear.y = 0;
+  msg->twist.twist.linear.z = 0;
+  msg->twist.twist.angular.x = 0;
+  msg->twist.twist.angular.y = 0;
+  msg->twist.twist.angular.z = mtmsg->w_car;
 
   // update cumulated odom only if history is not empty
   if (!odom_history_.empty()) {
