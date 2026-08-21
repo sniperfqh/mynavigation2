@@ -49,13 +49,13 @@ OdomSmoother::OdomSmoother(const nav2_util::LifecycleNode::WeakPtr & parent, dou
 
 void OdomSmoother::odomCallback(const byd_custom_msgs::msg::MotionState::SharedPtr mtmsg) {
   std::lock_guard<std::mutex> lock(odom_mutex_);
-  nav_msgs::msg::Odometry::SharedPtr msg;
+  auto msg = std::make_shared<nav_msgs::msg::Odometry>();
   msg->header = mtmsg->header;
   msg->twist.twist.linear.x = mtmsg->v_car;
-  msg->twist.twist.linear.y = 0;
-  msg->twist.twist.linear.z = 0;
-  msg->twist.twist.angular.x = 0;
-  msg->twist.twist.angular.y = 0;
+  msg->twist.twist.linear.y = 0.0;
+  msg->twist.twist.linear.z = 0.0;
+  msg->twist.twist.angular.x = 0.0;
+  msg->twist.twist.angular.y = 0.0;
   msg->twist.twist.angular.z = mtmsg->w_car;
 
   // update cumulated odom only if history is not empty

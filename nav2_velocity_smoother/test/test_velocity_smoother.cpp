@@ -586,7 +586,7 @@ TEST(VelocitySmootherTest, testDynamicParameter) {
   std::vector<double> bad_test_accel{-10.0, -10.0, -10.0};
   std::vector<double> bad_test_decel{10.0, 10.0, 10.0};
 
-  auto results = rec_param->set_parameters_atomically({rclcpp::Parameter("smoothing_frequency", 100.0), rclcpp::Parameter("feedback", std::string("CLOSED_LOOP")), rclcpp::Parameter("scale_velocities", true), rclcpp::Parameter("max_velocity", max_vel), rclcpp::Parameter("min_velocity", min_vel), rclcpp::Parameter("max_accel", max_accel), rclcpp::Parameter("max_decel", min_accel), rclcpp::Parameter("odom_topic", std::string("TEST")), rclcpp::Parameter("odom_duration", 2.0), rclcpp::Parameter("velocity_timeout", 4.0), rclcpp::Parameter("velocity_log_frequency", 2.0), rclcpp::Parameter("deadband_velocity", deadband)});
+  auto results = rec_param->set_parameters_atomically({rclcpp::Parameter("smoothing_frequency", 100.0), rclcpp::Parameter("feedback", std::string("CLOSED_LOOP")), rclcpp::Parameter("scale_velocities", true), rclcpp::Parameter("max_velocity", max_vel), rclcpp::Parameter("min_velocity", min_vel), rclcpp::Parameter("max_accel", max_accel), rclcpp::Parameter("max_decel", min_accel), rclcpp::Parameter("odom_topic", std::string("TEST")), rclcpp::Parameter("odom_duration", 2.0), rclcpp::Parameter("velocity_timeout", 4.0), rclcpp::Parameter("deadband_velocity", deadband)});
 
   rclcpp::spin_until_future_complete(smoother->get_node_base_interface(), results);
 
@@ -600,7 +600,6 @@ TEST(VelocitySmootherTest, testDynamicParameter) {
   EXPECT_EQ(smoother->get_parameter("odom_topic").as_string(), std::string("TEST"));
   EXPECT_EQ(smoother->get_parameter("odom_duration").as_double(), 2.0);
   EXPECT_EQ(smoother->get_parameter("velocity_timeout").as_double(), 4.0);
-  EXPECT_EQ(smoother->get_parameter("velocity_log_frequency").as_double(), 2.0);
   EXPECT_EQ(smoother->get_parameter("deadband_velocity").as_double_array(), deadband);
 
   // Test reverting
@@ -610,11 +609,6 @@ TEST(VelocitySmootherTest, testDynamicParameter) {
 
   // Test invalid change
   results = rec_param->set_parameters_atomically({rclcpp::Parameter("feedback", std::string("LAWLS"))});
-  rclcpp::spin_until_future_complete(smoother->get_node_base_interface(), results);
-  EXPECT_FALSE(results.get().successful);
-
-  // Test invalid velocity log frequency
-  results = rec_param->set_parameters_atomically({rclcpp::Parameter("velocity_log_frequency", 0.0)});
   rclcpp::spin_until_future_complete(smoother->get_node_base_interface(), results);
   EXPECT_FALSE(results.get().successful);
 

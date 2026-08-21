@@ -135,7 +135,6 @@ protected:
   bool open_loop_;
   bool stopped_{true};
   bool scale_velocities_;
-  double velocity_log_frequency_{10.0};
   std::vector<double> max_velocities_;
   std::vector<double> min_velocities_;
   std::vector<double> max_accels_;
@@ -143,9 +142,6 @@ protected:
   std::vector<double> deadband_velocities_;
   rclcpp::Duration velocity_timeout_{0, 0};
   rclcpp::Time last_command_time_;
-  geometry_msgs::msg::Twist latest_raw_command_;
-  std::chrono::steady_clock::time_point last_velocity_log_time_;
-  bool has_velocity_log_time_{false};
 
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr dyn_params_handler_;
 };

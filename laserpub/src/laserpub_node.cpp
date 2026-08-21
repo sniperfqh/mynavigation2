@@ -16,14 +16,14 @@ public:
   : Node("laserpub")
   {
     frame_id_ = declare_parameter<std::string>("frame_id", "base_link");
-    topic_ = declare_parameter<std::string>("topic", "/c200_lidar_node1/scan");
+    topic_ = declare_parameter<std::string>("topic", "/c200_lidar_node/scan");
     angle_min_ = declare_parameter<double>("angle_min", -M_PI);
     angle_max_ = declare_parameter<double>("angle_max", M_PI);
     range_min_ = declare_parameter<double>("range_min", 0.12);
     range_max_ = declare_parameter<double>("range_max", 3.5);
     default_range_ = declare_parameter<double>("default_range", range_max_);
     sample_count_ = declare_parameter<int>("sample_count", 360);
-    obstacle_range_ = declare_parameter<double>("obstacle_range", 1.0);
+    obstacle_range_ = declare_parameter<double>("obstacle_range", 1.5);
     obstacle_width_ = declare_parameter<int>("obstacle_width", 6);
     publish_test_obstacles_ = declare_parameter<bool>("publish_test_obstacles", true);
     const double publish_rate = declare_parameter<double>("publish_rate", 10.0);
@@ -49,7 +49,6 @@ public:
     time_increment_ = scan_period_ / static_cast<double>(sample_count_);
     ranges_.assign(static_cast<size_t>(sample_count_), static_cast<float>(default_range_));
     if (publish_test_obstacles_) {
-      addObstacleBeam(0.0);
       addObstacleBeam(M_PI * 0.5);
       addObstacleBeam(-M_PI * 0.5);
     }

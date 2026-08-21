@@ -39,10 +39,12 @@ def generate_launch_description():
     keyboard_input_device = LaunchConfiguration('keyboard_input_device')
     is_remote = PythonExpression(["'", operation_mode, "' == 'remote'"])
     is_navigation = PythonExpression(["'", operation_mode, "' != 'remote'"])
-    smoothed_cmd_vel_topic = 'cmd_vel'
-    # collision_monitor_output_topic = PythonExpression([
-    #     "'cmd_vel' if '", operation_mode,
-    #     "' == 'fixed_path' else 'cmd_vel_collision_unused'"])
+    smoothed_cmd_vel_topic = PythonExpression([
+        "'cmd_vel_collision_in' if '", operation_mode,
+        "' == 'fixed_path' else 'cmd_vel'"])
+    collision_monitor_output_topic = PythonExpression([
+        "'cmd_vel' if '", operation_mode,
+        "' == 'fixed_path' else 'cmd_vel_collision_unused'"])
     effective_progress_timeout = ParameterValue(
         PythonExpression([
             fixed_path_progress_timeout, " if '", operation_mode,
@@ -54,7 +56,7 @@ def generate_launch_description():
         'controller_server',
         'smoother_server',
         'velocity_smoother',
-        # 'collision_monitor',
+        'collision_monitor',
         'regulated_navigator',
     ]
 
@@ -235,24 +237,24 @@ def generate_launch_description():
                 remappings=remappings +
                 [('cmd_vel', 'cmd_vel_nav'),
                  ('cmd_vel_smoothed', smoothed_cmd_vel_topic)]),
-            # Node(
-            #     package='nav2_collision_monitor',
-            #     executable='collision_monitor',
-            #     name='collision_monitor',
-            #     output='screen',
-            #     respawn=use_respawn,
-            #     respawn_delay=2.0,
-            #     parameters=[
-            #         configured_params,
-            #         {
-            #             'cmd_vel_in_topic': 'cmd_vel_collision_in',
-            #             'cmd_vel_out_topic': ParameterValue(
-            #                 collision_monitor_output_topic,
-            #                 value_type=str),
-            #         },
-            #     ],
-            #     arguments=['--ros-args', '--log-level', log_level],
-            #     remappings=remappings),
+            Node(
+                package='nav2_collision_monitor',
+                executable='collision_monitor',
+                name='collision_monitor',
+                output='screen',
+                respawn=use_respawn,
+                respawn_delay=2.0,
+                parameters=[
+                    configured_params,
+                    {
+                        'cmd_vel_in_topic': 'cmd_vel_collision_in',
+                        'cmd_vel_out_topic': ParameterValue(
+                            collision_monitor_output_topic,
+                            value_type=str),
+                    },
+                ],
+                arguments=['--ros-args', '--log-level', log_level],
+                remappings=remappings),
             Node(
                 package='nav2_regulated_modules',
                 executable='regulated_navigator_node',
@@ -320,20 +322,20 @@ def generate_launch_description():
                 remappings=remappings +
                 [('cmd_vel', 'cmd_vel_nav'),
                  ('cmd_vel_smoothed', smoothed_cmd_vel_topic)]),
-            # ComposableNode(
-            #     package='nav2_collision_monitor',
-            #     plugin='nav2_collision_monitor::CollisionMonitor',
-            #     name='collision_monitor',
-            #     parameters=[
-            #         configured_params,
-            #         {
-            #             'cmd_vel_in_topic': 'cmd_vel_collision_in',
-            #             'cmd_vel_out_topic': ParameterValue(
-            #                 collision_monitor_output_topic,
-            #                 value_type=str),
-            #         },
-            #     ],
-            #     remappings=remappings),
+            ComposableNode(
+                package='nav2_collision_monitor',
+                plugin='nav2_collision_monitor::CollisionMonitor',
+                name='collision_monitor',
+                parameters=[
+                    configured_params,
+                    {
+                        'cmd_vel_in_topic': 'cmd_vel_collision_in',
+                        'cmd_vel_out_topic': ParameterValue(
+                            collision_monitor_output_topic,
+                            value_type=str),
+                    },
+                ],
+                remappings=remappings),
             ComposableNode(
                 package='nav2_lifecycle_manager',
                 plugin='nav2_lifecycle_manager::LifecycleManager',
@@ -368,11 +370,11 @@ def generate_launch_description():
         parameters=[{'input_topic': '/cmd_vel'},
                     {'output_topic': '/control_to_uart'}])
 
-    # collision_boundary_visualizer_cmd = Node(
-    #     package='nav2_regulated_modules',
-    #     executable='collision_boundary_visualizer_node',
-    #     name='collision_boundary_visualizer',
-    #     output='screen')
+    collision_boundary_visualizer_cmd = Node(
+        package='nav2_regulated_modules',
+        executable='collision_boundary_visualizer_node',
+        name='collision_boundary_visualizer',
+        output='screen')
 
     remote_control_cmd = Node(
         condition=IfCondition(is_remote),
@@ -394,7 +396,7 @@ def generate_launch_description():
             load_composable_nodes,
             start_regulated_navigator_cmd,
             start_controlpub_cmd,
-            # collision_boundary_visualizer_cmd,
+            collision_boundary_visualizer_cmd,
         ])
 
     ld = LaunchDescription()

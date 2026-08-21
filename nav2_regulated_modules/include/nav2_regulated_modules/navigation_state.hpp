@@ -39,7 +39,7 @@ enum class TaskType
   TO_POSE,
   THROUGH_POSES,
   TOPIC_GOAL,
-  FIXED_PATH
+  NAVIGATION_SERVICE
 };
 
 struct NavigationTask
@@ -57,6 +57,9 @@ struct NavigationTask
   int recovery_count{0};
   int consecutive_planning_failures{0};
   double distance_remaining{0.0};
+  std::string task_id;
+  double total_path_length{0.0};
+  float progress{0.0F};
   std::string last_error;
 };
 

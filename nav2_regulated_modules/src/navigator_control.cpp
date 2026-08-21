@@ -1,5 +1,6 @@
 #include "nav2_regulated_modules/regulated_navigator.hpp"
 
+#include <algorithm>
 #include <memory>
 
 namespace nav2_regulated_modules
@@ -26,7 +27,7 @@ void RegulatedNavigator::sendFollowPath(const nav_msgs::msg::Path & path) {
   }
   auto options = rclcpp_action::Client<FollowPath>::SendGoalOptions();
   options.goal_response_callback = [this, generation, sequence](auto handle) {if (isCurrentFollow(generation, sequence)) {active_follow_goal_ = handle; if (!handle) {startRecovery("控制 Goal 被拒绝");}}};
-  options.feedback_callback = [this, generation, sequence](auto, const std::shared_ptr<const FollowPath::Feedback> controller_feedback) {if (isCurrentFollow(generation, sequence)) {task_.distance_remaining = static_cast<double>(controller_feedback->distance_to_goal); current_speed_ = controller_feedback->speed; if (active_fixed_path_goal_) {auto feedback = std::make_shared<FollowFixedPath::Feedback>(); feedback->distance_remaining = task_.distance_remaining; active_fixed_path_goal_->publish_feedback(feedback);}}};
+  options.feedback_callback = [this, generation, sequence](auto, const std::shared_ptr<const FollowPath::Feedback> controller_feedback) {if (isCurrentFollow(generation, sequence)) {task_.distance_remaining = static_cast<double>(controller_feedback->distance_to_goal); current_speed_ = controller_feedback->speed; if (task_.total_path_length > 0.0) {const double completed_ratio = (task_.total_path_length - task_.distance_remaining) / task_.total_path_length; task_.progress = std::max(task_.progress, static_cast<float>(std::clamp(completed_ratio, 0.0, 1.0)));} if (active_navigation_service_goal_) {auto feedback = std::make_shared<NavigationService::Feedback>(); feedback->cur_task_id = task_.task_id; feedback->cur_seg_id = ""; feedback->progress = task_.progress; active_navigation_service_goal_->publish_feedback(feedback);}}};
   options.result_callback = [this, generation, sequence](const auto & result) {if (!isCurrentFollow(generation, sequence)) {return;} active_follow_goal_.reset(); if (result.code == rclcpp_action::ResultCode::SUCCEEDED) {succeedTask();} else if (task_.state != NavigationState::CANCELING) {startRecovery("控制器执行路径失败");}};
   follow_client_->async_send_goal(goal, options);
 }

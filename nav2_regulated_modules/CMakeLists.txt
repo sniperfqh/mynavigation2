@@ -14,6 +14,7 @@ find_package(geometry_msgs REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(nav2_util REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(byd_custom_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
@@ -49,13 +50,12 @@ ament_target_dependencies(regulated_navigator_node
   nav2_msgs
   nav2_util
   nav_msgs
+  byd_custom_msgs
   tf2
   tf2_ros
   tf2_geometry_msgs
   spdlog_wrapper
 )
-rosidl_get_typesupport_target(cpp_typesupport_target ${PROJECT_NAME} "rosidl_typesupport_cpp")
-target_link_libraries(regulated_navigator_node "${cpp_typesupport_target}")
 
 add_executable(collision_boundary_visualizer_node src/collision_boundary_visualizer.cpp)
 target_compile_features(collision_boundary_visualizer_node PUBLIC c_std_99 cxx_std_17)

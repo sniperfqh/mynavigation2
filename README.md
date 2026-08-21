@@ -404,7 +404,7 @@ Action、速度命令或 Topic 发布者残留。
 | --- | --- | --- | --- |
 | `remote` | 交互式终端键盘 | 键盘 → `myagv_keyboard_control` → `/control_to_uart` | 人工接管、底盘方向和串口联调 |
 | `autonomous` | `/goal_pose`、`NavigateToPose`、`NavigateThroughPoses` | Planner → Smoother → FollowPath → Velocity Smoother → `controlpub` | 自主规划并实时导航 |
-| `fixed_path` | `/follow_fixed_path`，类型为 `nav2_regulated_modules/action/FollowFixedPath` | 业务 Action → Path 校验／坐标变换 → FollowPath → Velocity Smoother → `controlpub` | 上游已经生成完整可跟踪路径 |
+| `fixed_path` | `/navigation_service`，类型为 `byd_custom_msgs/action/NavigationService` | 业务分段 → Path 生成／校验 → FollowPath → Velocity Smoother → `controlpub` | 上游提供连续直线段或贝塞尔段 |
 
 三种模式都保证 `/control_to_uart` 只有一个发布源：
 
@@ -585,18 +585,17 @@ ros2 launch nav2_regulated_modules regulated_modules.launch.py \
   use_rviz:=True
 ```
 
-终端二发送一条最小接口测试路径，并持续显示剩余距离反馈和最终结果：
+终端二发送一条直线段，并持续显示整体进度反馈和最终结果：
 
 ```bash
 cd /home/byd/Documents/zpy_ws/project/nav2_demo/nav2_ws
 source /opt/ros/humble/setup.bash
 source install/setup.bash
-ros2 action send_goal /follow_fixed_path \
-  nav2_regulated_modules/action/FollowFixedPath \
-  "{path: {header: {frame_id: map}, poses: [
-    {pose: {position: {x: 0.0, y: 0.0, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}},
-    {pose: {position: {x: 1.0, y: 0.0, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}
-  ]}}" --feedback
+ros2 action send_goal /navigation_service \
+  byd_custom_msgs/action/NavigationService \
+  "{task_id: demo_line, navi_segment: [
+    {segment_type: 1, node1: {x: 70.1, y: -12.4, z: 0.0}, node2: {x: 63.8, y: -12.1, z: 0.0}, control_pos1: {x: 0.0, y: 0.0, z: 0.0}, control_pos2: {x: 0.0, y: 0.0, z: 0.0}}
+  ]}" --feedback
 ```
 
 #### 8.6.1 指定直线段路径点簇
@@ -606,11 +605,10 @@ ros2 action send_goal /follow_fixed_path \
 `0.007139 m`。所有 Pose 使用沿路径前进方向的统一朝向，`yaw=3.094010 rad`，对应四元数约为
 `{x: 0.0, y: 0.0, z: 0.999717, w: 0.023789}`。
 
-终端二可直接发送该路径点簇：
+以下离散 Path 点簇是旧接口的几何说明，不再作为当前 Action 的可执行命令；当前接口只发送分段端点和控制点：
 
 ```bash
-ros2 action send_goal /follow_fixed_path \
-  nav2_regulated_modules/action/FollowFixedPath \
+# 旧离散 Path 示例（仅供几何参考，不能直接发送给 NavigationService）
   "{path: {header: {frame_id: map}, poses: [
     {pose: {position: {x: 70.100000, y: -12.400000, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.999717, w: 0.023789}}},
     {pose: {position: {x: 69.950169779, y: -12.392865228, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.999717, w: 0.023789}}},
@@ -659,30 +657,18 @@ ros2 action send_goal /follow_fixed_path \
   ]}}" --feedback
 ```
 
-添加样条拟合后
-```bash
-ros2 action send_goal /follow_fixed_path \
-  nav2_regulated_modules/action/FollowFixedPath \
-  "{path: {header: {frame_id: map}, poses: [
-    {pose: {position: {x: 70.100000, y: -12.400000, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.999717, w: 0.023789}}},
-    {pose: {position: {x: 63.800000, y: -12.100000, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.999717, w: 0.023789}}}
-  ]}}" --feedback
-```
-
 输入要求：
 
-- Action 默认是 `/follow_fixed_path`，可通过 `regulated_navigator.fixed_path_action` 修改。
-- Goal 输入为 `nav_msgs/msg/Path path`，Feedback 为 `float64 distance_remaining`，Result 为
-  `bool success`。
-- 消息必须是已经可跟踪的完整路径，而不是等待本节点规划的离散航点。
-- Path 至少包含两个 Pose，顶层 `header.frame_id` 不能为空，坐标必须为有限值，四元数必须有效。
-- Pose 未设置 `header.frame_id` 时继承 Path 坐标系；节点会把所有 Pose 转换到 `global_frame`
-  后再发送 FollowPath。
-- 上游负责路径点密度、姿态、避障、可行性以及与机器人运动学约束的一致性。
+- Action 默认是 `/navigation_service`，可通过 `regulated_navigator.navigation_service_action` 修改。
+- Goal 输入为 `string task_id` 和 `NaviSegment[] navi_segment`；路径生成只读取每段的 `segment_type`、`node1`、`node2`、`control_pos1`、`control_pos2`。
+- Feedback 为 `cur_task_id`、空的 `cur_seg_id` 和 `float32 progress`；`progress` 表示总路径完成比例，范围为 `0.0–1.0`。Result 为 `bool finish`。
+- `segment_type=1` 为直线段，节点根据 `node1/node2` 自动生成共线控制点；`segment_type=2` 为三次贝塞尔段，依次使用 `node1/control_pos1/control_pos2/node2`。
+- 所有坐标按 `global_frame` 解释且必须为有限值；相邻段的前段 `node2` 与后段 `node1` 必须连续，节点按 `fixed_path_step` 近似等距采样并生成切线朝向。
+- 上游仍负责路径几何、避障、可行性以及与机器人运动学约束的一致性；插值只增加路径密度，不会把不可行线段变成可行路径。
 
-运行中发送新的 `/follow_fixed_path` Goal 会先校验并转换新 Path，再取消旧 FollowPath、终止旧
-外层 Goal，并启动新任务，不需要重启控制器。客户端取消时返回 `CANCELED` 和 `success=false`；
-控制器到达终点时返回 `SUCCEEDED` 和 `success=true`。定位恢复时只重发已保存路径，不会回落到
+运行中发送新的 `/navigation_service` Goal 会先校验并生成新 Path，再取消旧 FollowPath、终止旧
+外层 Goal，并启动新任务，不需要重启控制器。客户端取消时返回 `CANCELED` 和 `finish=false`；
+控制器到达终点时返回 `SUCCEEDED` 和 `finish=true`；取消、抢占或失败时为 `finish=false`。定位恢复时只重发已保存路径，不会回落到
 自主规划。该模式会拒绝
 `NavigateToPose`、`NavigateThroughPoses` 和 `/goal_pose` 自主目标。
 
@@ -712,8 +698,8 @@ ros2 topic info /control_to_uart --verbose
 固定路径模式额外检查：
 
 ```bash
-ros2 action info /follow_fixed_path
-ros2 interface show nav2_regulated_modules/action/FollowFixedPath
+ros2 action info /navigation_service
+ros2 interface show byd_custom_msgs/action/NavigationService
 ```
 
 遥控模式检查：
@@ -728,7 +714,7 @@ ros2 topic info /control_to_uart --verbose
 - 自主和固定路径模式的 Lifecycle 节点均为 `active [3]`。
 - `remote` 中 `/control_to_uart` 只有 `myagv_keyboard_control` 发布。
 - `autonomous` 和 `fixed_path` 中 `/control_to_uart` 只有 `controlpub` 发布。
-- `fixed_path` 中 `/follow_fixed_path` 有一个 `regulated_navigator` Action Server，并且不再存在
+- `fixed_path` 中 `/navigation_service` 有一个 `regulated_navigator` Action Server，并且不再存在
   `/fixed_path` Topic 订阅入口。
 
 测试完成后先停止 `regulated_modules.launch.py`，再停止雷达、定位和底盘通信节点。导航模式停止
@@ -1088,6 +1074,6 @@ ros2 launch nav2_regulated_modules regulated_modules.launch.py \
 
 本项目是当前工作区中的 Nav2 源码和机器人应用集合。README 前面的章节说明标准 BT 导航入口、导航数据流、节点链路、控制器选择、启动后检查以及通过 NavigateToPose 和 NavigateThroughPoses Action 发送目标。
 
-nav2_regulated_modules 提供 remote、autonomous 和 fixed_path 三种互斥运行模式。remote 只启动键盘遥控并向底盘输出速度；autonomous 运行标准规划、控制、平滑和速度限制链；fixed_path 通过 FollowFixedPath Action 接收完整路径，并复用 Nav2 Controller Server 执行。每种模式的 Launch 参数、输入 Topic、输出 Topic、前提条件和停止方式在原文对应章节中列出。
+nav2_regulated_modules 提供 remote、autonomous 和 fixed_path 三种互斥运行模式。remote 只启动键盘遥控并向底盘输出速度；autonomous 运行标准规划、控制、平滑和速度限制链；fixed_path 通过 NavigationService Action 接收直线或贝塞尔分段，并复用 Nav2 Controller Server 执行。每种模式的 Launch 参数、输入 Topic、输出 Topic、前提条件和停止方式在原文对应章节中列出。
 
 贡献流程包括 Fork、克隆个人仓库、添加上游远端、创建开发分支、修改和验证、提交、推送以及创建 Pull Request。导航系统的安全边界是保持单一最终速度发布者、切换时先停止旧任务、校验 Path 和 TF，并在设备退出时恢复终端属性。原文代码、命令、参数和接口名称保持不变。

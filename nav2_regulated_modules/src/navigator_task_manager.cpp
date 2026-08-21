@@ -62,15 +62,15 @@ void RegulatedNavigator::cancelTask(const std::string & reason) {
     }
     active_poses_goal_.reset();
   }
-  if (active_fixed_path_goal_) {
-    auto fixed_path_result = std::make_shared<FollowFixedPath::Result>();
-    fixed_path_result->success = false;
-    if (active_fixed_path_goal_->is_canceling()) {
-      active_fixed_path_goal_->canceled(fixed_path_result);
+  if (active_navigation_service_goal_) {
+    auto navigation_service_result = std::make_shared<NavigationService::Result>();
+    navigation_service_result->finish = false;
+    if (active_navigation_service_goal_->is_canceling()) {
+      active_navigation_service_goal_->canceled(navigation_service_result);
     } else {
-      active_fixed_path_goal_->abort(fixed_path_result);
+      active_navigation_service_goal_->abort(navigation_service_result);
     }
-    active_fixed_path_goal_.reset();
+    active_navigation_service_goal_.reset();
   }
   LOG_WARN("导航任务已取消：{}", reason);
   LOG_INFO("导航任务取消收口完成，generation={}，reason={}", generation, reason);
@@ -80,7 +80,7 @@ void RegulatedNavigator::cancelTask(const std::string & reason) {
 void RegulatedNavigator::preemptCurrentTask() {
   if (task_.type == TaskType::NONE) {return;}
   const auto generation = task_.generation;
-  const char * task_type = task_.type == TaskType::TO_POSE ? "to_pose" : task_.type == TaskType::THROUGH_POSES ? "through_poses" : task_.type == TaskType::TOPIC_GOAL ? "topic_goal" : "fixed_path";
+  const char * task_type = task_.type == TaskType::TO_POSE ? "to_pose" : task_.type == TaskType::THROUGH_POSES ? "through_poses" : task_.type == TaskType::TOPIC_GOAL ? "topic_goal" : "navigation_service";
   ++task_generation_;
   cancelSubGoals(true);
   stopRobot();
@@ -94,11 +94,11 @@ void RegulatedNavigator::preemptCurrentTask() {
     active_poses_goal_->abort(poses_result);
     active_poses_goal_.reset();
   }
-  if (active_fixed_path_goal_) {
-    auto fixed_path_result = std::make_shared<FollowFixedPath::Result>();
-    fixed_path_result->success = false;
-    active_fixed_path_goal_->abort(fixed_path_result);
-    active_fixed_path_goal_.reset();
+  if (active_navigation_service_goal_) {
+    auto navigation_service_result = std::make_shared<NavigationService::Result>();
+    navigation_service_result->finish = false;
+    active_navigation_service_goal_->abort(navigation_service_result);
+    active_navigation_service_goal_.reset();
   }
   LOG_INFO("旧导航任务被新任务抢占，generation={}，task_type={}", generation, task_type);
   resetTask();
@@ -116,11 +116,16 @@ void RegulatedNavigator::succeedTask() {
     active_poses_goal_->succeed(std::make_shared<NavigateThroughPoses::Result>());
     active_poses_goal_.reset();
   }
-  if (active_fixed_path_goal_) {
-    auto fixed_path_result = std::make_shared<FollowFixedPath::Result>();
-    fixed_path_result->success = true;
-    active_fixed_path_goal_->succeed(fixed_path_result);
-    active_fixed_path_goal_.reset();
+  if (active_navigation_service_goal_) {
+    auto feedback = std::make_shared<NavigationService::Feedback>();
+    feedback->cur_task_id = task_.task_id;
+    feedback->cur_seg_id = "";
+    feedback->progress = 1.0F;
+    active_navigation_service_goal_->publish_feedback(feedback);
+    auto navigation_service_result = std::make_shared<NavigationService::Result>();
+    navigation_service_result->finish = true;
+    active_navigation_service_goal_->succeed(navigation_service_result);
+    active_navigation_service_goal_.reset();
   }
   LOG_INFO("导航任务执行成功，generation={}，耗时={:.3f}s，恢复次数={}", generation, elapsed, task_.recovery_count);
   resetTask();
@@ -138,11 +143,11 @@ void RegulatedNavigator::failTask(const std::string & reason) {
     active_poses_goal_->abort(std::make_shared<NavigateThroughPoses::Result>());
     active_poses_goal_.reset();
   }
-  if (active_fixed_path_goal_) {
-    auto fixed_path_result = std::make_shared<FollowFixedPath::Result>();
-    fixed_path_result->success = false;
-    active_fixed_path_goal_->abort(fixed_path_result);
-    active_fixed_path_goal_.reset();
+  if (active_navigation_service_goal_) {
+    auto navigation_service_result = std::make_shared<NavigationService::Result>();
+    navigation_service_result->finish = false;
+    active_navigation_service_goal_->abort(navigation_service_result);
+    active_navigation_service_goal_.reset();
   }
   LOG_ERROR("导航任务失败，generation={}，恢复次数={}，reason={}", generation, task_.recovery_count, reason);
   resetTask();
@@ -156,7 +161,7 @@ void RegulatedNavigator::resetTask() {
   has_last_pose_ = false;
   current_speed_ = 0.0;
   cancel_requested_ = false;
-  active_fixed_path_goal_.reset();
+  active_navigation_service_goal_.reset();
 }
 
 }  // namespace nav2_regulated_modules

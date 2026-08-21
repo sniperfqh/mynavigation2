@@ -15,7 +15,7 @@ RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : na
   declare_parameter("robot_base_frame", "base_link");
   declare_parameter("operation_mode", "autonomous");
   declare_parameter("goal_topic", "goal_pose");
-  declare_parameter("fixed_path_action", "follow_fixed_path");
+  declare_parameter("navigation_service_action", "navigation_service");
   declare_parameter("navigate_to_pose_action", "navigate_to_pose");
   declare_parameter("navigate_through_poses_action", "navigate_through_poses");
   declare_parameter("compute_path_to_pose_action", "compute_path_to_pose");
@@ -67,7 +67,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
     return nav2_util::CallbackReturn::FAILURE;
   }
   goal_topic_ = get_parameter("goal_topic").as_string();
-  fixed_path_action_ = get_parameter("fixed_path_action").as_string();
+  navigation_service_action_ = get_parameter("navigation_service_action").as_string();
   server_timeout_ = get_parameter("server_timeout").as_double();
   cancel_timeout_ = get_parameter("cancel_timeout").as_double();
   smoothing_duration_ = get_parameter("max_smoothing_duration").as_double();
@@ -87,6 +87,10 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   smoothed_cmd_vel_topic_ = get_parameter("smoothed_cmd_vel_topic").as_string();
   velocity_odom_topic_ = get_parameter("velocity_odom_topic").as_string();
   velocity_log_frequency_ = get_parameter("velocity_log_frequency").as_double();
+  if (!std::isfinite(fixed_path_step_) || fixed_path_step_ <= 0.0) {
+    LOG_ERROR("fixed_path_step 必须为有限正数，当前值={}", fixed_path_step_);
+    return nav2_util::CallbackReturn::FAILURE;
+  }
   if (!std::isfinite(velocity_log_frequency_) || velocity_log_frequency_ <= 0.0) {
     LOG_ERROR("velocity_log_frequency 必须为有限正数，当前值={}", velocity_log_frequency_);
     return nav2_util::CallbackReturn::FAILURE;
@@ -107,7 +111,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
 
   goal_sub_ = create_subscription<geometry_msgs::msg::PoseStamped>(goal_topic_, rclcpp::SystemDefaultsQoS(), std::bind(&RegulatedNavigator::onTopicGoal, this, std::placeholders::_1));
   if (operation_mode_ == NavigationMode::FIXED_PATH) {
-    fixed_path_server_ = rclcpp_action::create_server<FollowFixedPath>(this, fixed_path_action_, std::bind(&RegulatedNavigator::handleFixedPathGoal, this, std::placeholders::_1, std::placeholders::_2), std::bind(&RegulatedNavigator::handleFixedPathCancel, this, std::placeholders::_1), std::bind(&RegulatedNavigator::handleFixedPathAccepted, this, std::placeholders::_1));
+    navigation_service_server_ = rclcpp_action::create_server<NavigationService>(this, navigation_service_action_, std::bind(&RegulatedNavigator::handleNavigationServiceGoal, this, std::placeholders::_1, std::placeholders::_2), std::bind(&RegulatedNavigator::handleNavigationServiceCancel, this, std::placeholders::_1), std::bind(&RegulatedNavigator::handleNavigationServiceAccepted, this, std::placeholders::_1));
   }
   stop_cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>(get_parameter("stop_cmd_vel_topic").as_string(), rclcpp::SystemDefaultsQoS());
   const auto velocity_qos = rclcpp::QoS(rclcpp::KeepLast(10)).best_effort();
@@ -147,7 +151,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_cleanup(const rclcpp_lifecycle:
   cancelTask("节点清理");
   navigate_pose_server_.reset();
   navigate_poses_server_.reset();
-  fixed_path_server_.reset();
+  navigation_service_server_.reset();
   compute_pose_client_.reset();
   compute_poses_client_.reset();
   smooth_client_.reset();

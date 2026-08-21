@@ -13,7 +13,6 @@
 // limitations under the License.
 
 #include <chrono>
-#include <cmath>
 #include <limits>
 #include <memory>
 #include <string>
@@ -87,15 +86,11 @@ nav2_util::CallbackReturn VelocitySmoother::on_configure(const rclcpp_lifecycle:
   declare_parameter_if_not_declared(node, "odom_duration", rclcpp::ParameterValue(0.1));
   declare_parameter_if_not_declared(node, "deadband_velocity", rclcpp::ParameterValue(std::vector<double>{0.0, 0.0, 0.0}));
   declare_parameter_if_not_declared(node, "velocity_timeout", rclcpp::ParameterValue(1.0));
-  declare_parameter_if_not_declared(node, "velocity_log_frequency", rclcpp::ParameterValue(10.0));
   node->get_parameter("odom_topic", odom_topic_);
   node->get_parameter("odom_duration", odom_duration_);
   node->get_parameter("deadband_velocity", deadband_velocities_);
   node->get_parameter("velocity_timeout", velocity_timeout_dbl);
-  node->get_parameter("velocity_log_frequency", velocity_log_frequency_);
-  if (!std::isfinite(velocity_log_frequency_) || velocity_log_frequency_ <= 0.0) {throw std::runtime_error("velocity_log_frequency must be a finite positive value!");}
   velocity_timeout_ = rclcpp::Duration::from_seconds(velocity_timeout_dbl);
-  LOG_INFO("Velocity chain log frequency={} Hz", velocity_log_frequency_);
   LOG_INFO("Velocity smoother feature parameters odom_topic={}, odom_duration={}, velocity_timeout={}", odom_topic_.c_str(), odom_duration_, velocity_timeout_dbl);
 
   if (max_velocities_.size() != 3 || min_velocities_.size() != 3 || max_accels_.size() != 3 || max_decels_.size() != 3 || deadband_velocities_.size() != 3)
@@ -125,7 +120,6 @@ nav2_util::CallbackReturn VelocitySmoother::on_configure(const rclcpp_lifecycle:
 nav2_util::CallbackReturn VelocitySmoother::on_activate(const rclcpp_lifecycle::State &) {
   LOG_INFO("Activating");
   LOG_INFO("Activating smoothed cmd_vel publisher and smoothing timer");
-  has_velocity_log_time_ = false;
   smoothed_cmd_pub_->on_activate();
   double timer_duration_ms = 1000.0 / smoothing_frequency_;
   timer_ = this->create_wall_timer(std::chrono::milliseconds(static_cast<int>(timer_duration_ms)), std::bind(&VelocitySmoother::smootherTimer, this));
@@ -172,8 +166,8 @@ void VelocitySmoother::inputCommandCallback(const geometry_msgs::msg::Twist::Sha
   }
 
   command_ = msg;
-  latest_raw_command_ = *msg;
   last_command_time_ = now();
+  LOG_INFO("Received raw cmd_vel linear=({:.3f}, {:.3f}) angular_z={:.3f}", msg->linear.x, msg->linear.y, msg->angular.z);
 }
 
 double VelocitySmoother::findEtaConstraint(const double v_curr, const double v_cmd, const double accel, const double decel) {
@@ -232,11 +226,8 @@ void VelocitySmoother::smootherTimer() {
   }
 
   auto cmd_vel = std::make_unique<geometry_msgs::msg::Twist>();
-  bool velocity_timed_out = false;
-
   // Check for velocity timeout. If nothing received, publish zeros to apply deceleration
   if (now() - last_command_time_ > velocity_timeout_) {
-    velocity_timed_out = true;
     if (last_cmd_ == geometry_msgs::msg::Twist() || stopped_) {
       stopped_ = true;
       return;
@@ -294,14 +285,6 @@ void VelocitySmoother::smootherTimer() {
   cmd_vel->linear.y = fabs(cmd_vel->linear.y) < deadband_velocities_[1] ? 0.0 : cmd_vel->linear.y;
   cmd_vel->angular.z = fabs(cmd_vel->angular.z) < deadband_velocities_[2] ? 0.0 : cmd_vel->angular.z;
 
-  const auto velocity_log_time = std::chrono::steady_clock::now();
-  const auto velocity_log_period = std::chrono::duration<double>(1.0 / velocity_log_frequency_);
-  if (!has_velocity_log_time_ || velocity_log_time - last_velocity_log_time_ >= velocity_log_period) {
-    LOG_INFO("关键速度链：原始输入 {} [vx={:.3f} m/s, vy={:.3f} m/s, wz={:.3f} rad/s] -> {} 反馈 {} [vx={:.3f} m/s, vy={:.3f} m/s, wz={:.3f} rad/s] -> 最终输出 {} [vx={:.3f} m/s, vy={:.3f} m/s, wz={:.3f} rad/s, timeout={}]", cmd_sub_->get_topic_name(), latest_raw_command_.linear.x, latest_raw_command_.linear.y, latest_raw_command_.angular.z, open_loop_ ? "OPEN_LOOP" : "CLOSED_LOOP", open_loop_ ? "last_cmd" : odom_topic_.c_str(), current_.linear.x, current_.linear.y, current_.angular.z, smoothed_cmd_pub_->get_topic_name(), cmd_vel->linear.x, cmd_vel->linear.y, cmd_vel->angular.z, velocity_timed_out);
-    last_velocity_log_time_ = velocity_log_time;
-    has_velocity_log_time_ = true;
-  }
-
   smoothed_cmd_pub_->publish(std::move(cmd_vel));
 }
 
@@ -327,11 +310,6 @@ rcl_interfaces::msg::SetParametersResult VelocitySmoother::dynamicParametersCall
       } else if (name == "velocity_timeout") {
         velocity_timeout_ = rclcpp::Duration::from_seconds(parameter.as_double());
         LOG_INFO("Updating velocity_timeout to {}", parameter.as_double());
-      } else if (name == "velocity_log_frequency") {
-        if (!std::isfinite(parameter.as_double()) || parameter.as_double() <= 0.0) {LOG_WARN("velocity_log_frequency must be a finite positive value"); result.successful = false; break;}
-        velocity_log_frequency_ = parameter.as_double();
-        has_velocity_log_time_ = false;
-        LOG_INFO("Updating velocity_log_frequency to {}", velocity_log_frequency_);
       } else if (name == "odom_duration") {
         odom_duration_ = parameter.as_double();
         LOG_INFO("Updating odom_duration to {}", odom_duration_);

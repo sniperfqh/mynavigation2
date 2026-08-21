@@ -1,0 +1,8 @@
+string task_id
+NaviSegment[] navi_segment
+---
+bool finish
+---
+string cur_task_id
+string cur_seg_id
+float32 progress
