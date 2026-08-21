@@ -396,7 +396,7 @@ velocity_smoother:
     max_decel: [-2.5, 0.0, -3.2]
     odom_topic: "/motion_state"
     odom_duration: 0.1
-    deadband_velocity: [0.0, 0.0, 0.0]
+    deadband_velocity: [0.002, 0.002, 0.002]
     velocity_timeout: 1.0
 
 collision_monitor:

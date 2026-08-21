@@ -280,10 +280,18 @@ void VelocitySmoother::smootherTimer() {
   cmd_vel->angular.z = applyConstraints(current_.angular.z, command_->angular.z, max_accels_[2], max_decels_[2], eta);
   last_cmd_ = *cmd_vel;
 
+  cmd_vel->linear.x = std::clamp(cmd_vel->linear.x, min_velocities_[0], max_velocities_[0]);
+  cmd_vel->linear.y = std::clamp(cmd_vel->linear.y, min_velocities_[1], max_velocities_[1]);
+  cmd_vel->angular.z = std::clamp(cmd_vel->angular.z, min_velocities_[2], max_velocities_[2]);
   // Apply deadband restrictions & publish
   cmd_vel->linear.x = fabs(cmd_vel->linear.x) < deadband_velocities_[0] ? 0.0 : cmd_vel->linear.x;
   cmd_vel->linear.y = fabs(cmd_vel->linear.y) < deadband_velocities_[1] ? 0.0 : cmd_vel->linear.y;
   cmd_vel->angular.z = fabs(cmd_vel->angular.z) < deadband_velocities_[2] ? 0.0 : cmd_vel->angular.z;
+  // LOG_INFO("command: linear.x:{}, linear.y:{}, angular.z:{}| current:{}, {}, {} | cmd_vel:{}, {}, {}", 
+  //   command_->linear.x, command_->linear.y, command_->angular.z,
+  //   current_.linear.x,  current_.linear.y,  current_.angular.z,
+  //   cmd_vel->linear.x,  cmd_vel->linear.y,  cmd_vel->angular.z
+  // );
 
   smoothed_cmd_pub_->publish(std::move(cmd_vel));
 }
