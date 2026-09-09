@@ -235,6 +235,8 @@ protected:
    */
   double getCostmapMaxExtent() const;
 
+  bool isTrackingStable(const geometry_msgs::msg::PoseStamped & transformed_begin);
+
   /**
    * @brief Callback executed when a parameter change is detected
    * @param event ParameterEvent message
@@ -276,6 +278,9 @@ protected:
   bool allow_reversing_;
   double max_robot_pose_search_dist_;
   bool use_interpolation_;
+  double max_start_distance_;
+  double max_horizontal_error_;
+  bool is_first_pursuit_;
 
   nav_msgs::msg::Path global_plan_;
   std::shared_ptr<rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>> global_path_pub_;

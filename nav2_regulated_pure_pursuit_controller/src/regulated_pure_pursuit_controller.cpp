@@ -61,6 +61,8 @@ void RegulatedPurePursuitController::configure(const rclcpp_lifecycle::Lifecycle
   declare_parameter_if_not_declared(node, plugin_name_ + ".lookahead_dist", rclcpp::ParameterValue(0.6));
   declare_parameter_if_not_declared(node, plugin_name_ + ".min_lookahead_dist", rclcpp::ParameterValue(0.3));
   declare_parameter_if_not_declared(node, plugin_name_ + ".max_lookahead_dist", rclcpp::ParameterValue(0.9));
+  declare_parameter_if_not_declared(node, plugin_name_ + ".max_start_distance", rclcpp::ParameterValue(1.0));
+  declare_parameter_if_not_declared(node, plugin_name_ + ".max_horizontal_error", rclcpp::ParameterValue(0.5));
   declare_parameter_if_not_declared(node, plugin_name_ + ".lookahead_time", rclcpp::ParameterValue(1.5));
   declare_parameter_if_not_declared(node, plugin_name_ + ".rotate_to_heading_angular_vel", rclcpp::ParameterValue(1.8));
   declare_parameter_if_not_declared(node, plugin_name_ + ".transform_tolerance", rclcpp::ParameterValue(0.1));
@@ -88,6 +90,8 @@ void RegulatedPurePursuitController::configure(const rclcpp_lifecycle::Lifecycle
   node->get_parameter(plugin_name_ + ".lookahead_dist", lookahead_dist_);
   node->get_parameter(plugin_name_ + ".min_lookahead_dist", min_lookahead_dist_);
   node->get_parameter(plugin_name_ + ".max_lookahead_dist", max_lookahead_dist_);
+  node->get_parameter(plugin_name_ + ".max_start_distance", max_start_distance_);
+  node->get_parameter(plugin_name_ + ".max_horizontal_error", max_horizontal_error_);
   node->get_parameter(plugin_name_ + ".lookahead_time", lookahead_time_);
   node->get_parameter(plugin_name_ + ".rotate_to_heading_angular_vel", rotate_to_heading_angular_vel_);
   node->get_parameter(plugin_name_ + ".transform_tolerance", transform_tolerance);
@@ -185,6 +189,28 @@ double RegulatedPurePursuitController::getLookAheadDistance(const geometry_msgs:
   return lookahead_dist;
 }
 
+bool RegulatedPurePursuitController::isTrackingStable(const geometry_msgs::msg::PoseStamped & transformed_begin ) {
+  double horizontal_error = hypot(transformed_begin.pose.position.x, transformed_begin.pose.position.y);
+  if(is_first_pursuit_){
+    if (horizontal_error > max_start_distance_){
+      throw nav2_core::PlannerException("Ego-to-start distance exceeds max_start_distance_!");
+      is_first_pursuit_ = false;
+      return false;
+    }
+  }
+  if (horizontal_error <= max_horizontal_error_) {
+    is_first_pursuit_ = false;
+    return true;
+  }
+  else{
+    if (is_first_pursuit_){
+      return true;
+    }
+  }
+  throw nav2_core::PlannerException("RegulatedPurePursuitController control failed!");
+  return false;
+}
+
 geometry_msgs::msg::TwistStamped RegulatedPurePursuitController::computeVelocityCommands(const geometry_msgs::msg::PoseStamped & pose, const geometry_msgs::msg::Twist & speed, nav2_core::GoalChecker * goal_checker) {
   std::lock_guard<std::mutex> lock_reinit(mutex_);
 
@@ -219,6 +245,14 @@ geometry_msgs::msg::TwistStamped RegulatedPurePursuitController::computeVelocity
 
   auto carrot_pose = getLookAheadPoint(lookahead_dist, transformed_plan);
   carrot_pub_->publish(createCarrotMsg(carrot_pose));
+
+  if(!isTrackingStable(transformed_plan.poses.front())){
+    geometry_msgs::msg::TwistStamped cmd_vel;
+    cmd_vel.header = pose.header;
+    cmd_vel.twist.linear.x = 0.0;
+    cmd_vel.twist.angular.z = 0.0;
+    return cmd_vel;
+  }
 
   double linear_vel, angular_vel;
 
@@ -516,6 +550,7 @@ void RegulatedPurePursuitController::applyConstraints(const double & curvature, 
 }
 
 void RegulatedPurePursuitController::setPlan(const nav_msgs::msg::Path & path) {
+  is_first_pursuit_ = true;
   global_plan_ = path;
 }
 
