@@ -435,6 +435,51 @@ ros2 action send_goal /navigation_service \
   ]}" --feedback
 ```
 
+#### 实车接口一致的 `myworld_bringup` 仿真
+
+该仿真用于在接入实车前验证固定路径的方向、起终点朝向、速度符号和停车逻辑。`myworld_bringup` 使用
+Gazebo 提供机器人、里程计和传感器数据，使用 AMCL 提供 `map` 坐标系定位；固定路径 Action、
+`FixedPathController`、Controller Server 和 Velocity Smoother 与实车算法链保持一致。仿真最终通过
+`/cmd_vel` 驱动 Gazebo，实车则由底盘适配链把控制结果送到 `/control_to_uart`，因此仿真验证不能替代
+实车上的急停、通信、制动距离、定位质量和唯一控制发布者检查。
+
+终端一启动 Gazebo、AMCL、固定路径规控栈和 RViz：
+
+```bash
+ros2 launch myworld_bringup entry.launch.py operation_mode:=fixed_path use_rviz:=true
+```
+
+终端二发送前进任务。控制器先保持零线速度，原地旋转到 `node1 -> node2` 的起点切线方向，再以正线速度
+跟踪到终点，并以终点切线方向停车：
+
+```bash
+ros2 action send_goal --feedback /navigation_service byd_custom_msgs/action/NavigationService "{task_id: 'myworld_fixed_path_001', navi_segment: [{segment_type: 1, segment_name: 'diagonal_corridor', segment_id: 'segment_001', node1: {x: -2.8, y: -1.7, z: 0.0}, node2: {x: 1.91, y: -4.83, z: 0.0}, control_pos1: {x: -0.933333, y: -2.933333, z: 0.0}, control_pos2: {x: 0.933333, y: -4.166667, z: 0.0}, max_load_speed: 0.0, max_speed: 0.20, motion_direction: 1, dwell_time: 0}]}"
+```
+
+前进仿真视频（约 63 秒）：
+
+<video src="./vedio/forward.webm" controls="controls" width="900"></video>
+
+[直接播放或下载前进仿真视频](./vedio/forward.webm)
+
+终端二发送后退任务。控制器先保持零线速度，原地旋转到起点切线的反方向，再以负线速度沿相同几何路径
+跟踪到终点，并以终点切线的反方向停车：
+
+```bash
+ros2 action send_goal --feedback /navigation_service byd_custom_msgs/action/NavigationService "{task_id: 'myworld_fixed_path_001', navi_segment: [{segment_type: 1, segment_name: 'diagonal_corridor', segment_id: 'segment_001', node1: {x: -2.8, y: -1.7, z: 0.0}, node2: {x: 1.91, y: -4.83, z: 0.0}, control_pos1: {x: -0.933333, y: -2.933333, z: 0.0}, control_pos2: {x: 0.933333, y: -4.166667, z: 0.0}, max_load_speed: 0.0, max_speed: 0.20, motion_direction: 2, dwell_time: 0}]}"
+```
+
+后退仿真视频（约 32 秒）：
+
+<video src="./vedio/back.webm" controls="controls" width="900"></video>
+
+[直接播放或下载后退仿真视频](./vedio/back.webm)
+
+前进和后退示例必须分别从路径起点附近运行。完成其中一个任务后，如需验证另一个方向，应停止并重新启动
+`myworld_bringup`，确认机器人重新位于 `node1=(-2.8,-1.7)` 附近后再发送 Goal。实车运行时不要启动
+`myworld_bringup`；应启动 `nav2_regulated_modules` 的 `fixed_path` 模式，接入真实定位、TF、雷达、里程计
+和底盘驱动，并确认 `/control_to_uart` 只有一个有效发布者。
+
 #### 三段连续路径示例
 
 以下 Goal 由“直线＋三次贝塞尔曲线＋直线”构成三段连续路径。第一段终点

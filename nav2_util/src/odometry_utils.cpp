@@ -25,7 +25,12 @@ namespace nav2_util
 
 OdomSmoother::OdomSmoother(const rclcpp::Node::WeakPtr & parent, double filter_duration, const std::string & odom_topic) : odom_history_duration_(rclcpp::Duration::from_seconds(filter_duration)) {
   auto node = parent.lock();
-  odom_sub_ = node->create_subscription<byd_custom_msgs::msg::MotionState>(odom_topic, rclcpp::SystemDefaultsQoS(), std::bind(&OdomSmoother::odomCallback, this, std::placeholders::_1));
+  const auto topic_basename = odom_topic.substr(odom_topic.find_last_of('/') + 1);
+  if (topic_basename == "motion_state") {
+    odom_sub_ = node->create_subscription<byd_custom_msgs::msg::MotionState>(odom_topic, rclcpp::SystemDefaultsQoS(), [this](const byd_custom_msgs::msg::MotionState::SharedPtr msg) {odomCallback(msg);});
+  } else {
+    odom_sub_ = node->create_subscription<nav_msgs::msg::Odometry>(odom_topic, rclcpp::SystemDefaultsQoS(), [this](const nav_msgs::msg::Odometry::SharedPtr msg) {odomCallback(msg);});
+  }
 
   odom_cumulate_.twist.twist.linear.x = 0;
   odom_cumulate_.twist.twist.linear.y = 0;
@@ -37,7 +42,12 @@ OdomSmoother::OdomSmoother(const rclcpp::Node::WeakPtr & parent, double filter_d
 
 OdomSmoother::OdomSmoother(const nav2_util::LifecycleNode::WeakPtr & parent, double filter_duration, const std::string & odom_topic) : odom_history_duration_(rclcpp::Duration::from_seconds(filter_duration)) {
   auto node = parent.lock();
-  odom_sub_ = node->create_subscription<byd_custom_msgs::msg::MotionState>(odom_topic, rclcpp::SystemDefaultsQoS(), std::bind(&OdomSmoother::odomCallback, this, std::placeholders::_1));
+  const auto topic_basename = odom_topic.substr(odom_topic.find_last_of('/') + 1);
+  if (topic_basename == "motion_state") {
+    odom_sub_ = node->create_subscription<byd_custom_msgs::msg::MotionState>(odom_topic, rclcpp::SystemDefaultsQoS(), [this](const byd_custom_msgs::msg::MotionState::SharedPtr msg) {odomCallback(msg);});
+  } else {
+    odom_sub_ = node->create_subscription<nav_msgs::msg::Odometry>(odom_topic, rclcpp::SystemDefaultsQoS(), [this](const nav_msgs::msg::Odometry::SharedPtr msg) {odomCallback(msg);});
+  }
 
   odom_cumulate_.twist.twist.linear.x = 0;
   odom_cumulate_.twist.twist.linear.y = 0;
@@ -48,7 +58,6 @@ OdomSmoother::OdomSmoother(const nav2_util::LifecycleNode::WeakPtr & parent, dou
 }
 
 void OdomSmoother::odomCallback(const byd_custom_msgs::msg::MotionState::SharedPtr mtmsg) {
-  std::lock_guard<std::mutex> lock(odom_mutex_);
   auto msg = std::make_shared<nav_msgs::msg::Odometry>();
   msg->header = mtmsg->header;
   msg->twist.twist.linear.x = mtmsg->v_car;
@@ -57,6 +66,11 @@ void OdomSmoother::odomCallback(const byd_custom_msgs::msg::MotionState::SharedP
   msg->twist.twist.angular.x = 0.0;
   msg->twist.twist.angular.y = 0.0;
   msg->twist.twist.angular.z = mtmsg->w_car;
+  odomCallback(msg);
+}
+
+void OdomSmoother::odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg) {
+  std::lock_guard<std::mutex> lock(odom_mutex_);
 
   // update cumulated odom only if history is not empty
   if (!odom_history_.empty()) {

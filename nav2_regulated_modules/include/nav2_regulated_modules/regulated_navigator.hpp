@@ -136,6 +136,7 @@ private:
   std::string navigation_service_action_;
   std::string fixed_path_visualization_topic_;
   std::string fixed_path_boundaries_topic_;
+  std::string fixed_path_controller_id_;
   std::string controller_cmd_vel_topic_;
   std::string smoothed_cmd_vel_topic_;
   std::string velocity_odom_topic_;

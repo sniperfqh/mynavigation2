@@ -16,17 +16,18 @@ void RegulatedNavigator::sendFollowPath(const nav_msgs::msg::Path & path) {
   const auto generation = task_.generation;
   const auto sequence = ++follow_sequence_;
   const bool replacing_path = active_follow_goal_ != nullptr;
+  const std::string & controller_id = task_.type == TaskType::NAVIGATION_SERVICE ? fixed_path_controller_id_ : control_module_.controllerId();
   FollowPath::Goal goal;
   goal.path = path;
-  goal.controller_id = control_module_.controllerId();
+  goal.controller_id = controller_id;
   goal.goal_checker_id = control_module_.goalCheckerId();
   if (replacing_path) {
-    LOG_DEBUG("更新 FollowPath，generation={}，follow_sequence={}，路径点数={}，controller_id={}", generation, sequence, path.poses.size(), control_module_.controllerId());
+    LOG_DEBUG("更新 FollowPath，generation={}，follow_sequence={}，路径点数={}，controller_id={}", generation, sequence, path.poses.size(), controller_id);
   } else {
-    LOG_INFO("下发 FollowPath，generation={}，follow_sequence={}，路径点数={}，controller_id={}，goal_checker_id={}", generation, sequence, path.poses.size(), control_module_.controllerId(), control_module_.goalCheckerId());
+    LOG_INFO("下发 FollowPath，generation={}，follow_sequence={}，路径点数={}，controller_id={}，goal_checker_id={}", generation, sequence, path.poses.size(), controller_id, control_module_.goalCheckerId());
   }
   auto options = rclcpp_action::Client<FollowPath>::SendGoalOptions();
-  options.goal_response_callback = [this, generation, sequence](auto handle) {if (isCurrentFollow(generation, sequence)) {active_follow_goal_ = handle; if (!handle) {startRecovery("控制 Goal 被拒绝");}}};
+  options.goal_response_callback = [this, generation, sequence](auto handle) {if (isCurrentFollow(generation, sequence)) {active_follow_goal_ = handle; if (!handle) {startRecovery("控制 Goal 被拒绝"); return;} if (task_.type == TaskType::NAVIGATION_SERVICE && speed_limit_pub_) {nav2_msgs::msg::SpeedLimit speed_limit; speed_limit.percentage = false; speed_limit.speed_limit = task_.requested_speed; speed_limit_pub_->publish(speed_limit);}}};
   options.feedback_callback = [this, generation, sequence](auto, const std::shared_ptr<const FollowPath::Feedback> controller_feedback) {if (isCurrentFollow(generation, sequence)) {task_.distance_remaining = static_cast<double>(controller_feedback->distance_to_goal); current_speed_ = controller_feedback->speed; if (task_.total_path_length > 0.0) {const double completed_ratio = (task_.total_path_length - task_.distance_remaining) / task_.total_path_length; task_.progress = std::max(task_.progress, static_cast<float>(std::clamp(completed_ratio, 0.0, 1.0)));} if (active_navigation_service_goal_) {auto feedback = std::make_shared<NavigationService::Feedback>(); feedback->cur_task_id = task_.task_id; feedback->cur_seg_id = ""; feedback->progress = task_.progress; active_navigation_service_goal_->publish_feedback(feedback);}}};
   options.result_callback = [this, generation, sequence](const auto & result) {if (!isCurrentFollow(generation, sequence)) {return;} active_follow_goal_.reset(); if (result.code == rclcpp_action::ResultCode::SUCCEEDED) {succeedTask();} else if (task_.state != NavigationState::CANCELING) {startRecovery("控制器执行路径失败");}};
   follow_client_->async_send_goal(goal, options);

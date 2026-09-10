@@ -11,7 +11,7 @@ install(DIRECTORY urdf DESTINATION share/${PROJECT_NAME})
 
 install(PROGRAMS
   scripts/cpu_lidar.py
-  scripts/robot_description_publisher.py
+  scripts/odom_to_motion_state.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

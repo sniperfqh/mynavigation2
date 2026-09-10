@@ -161,9 +161,9 @@ Visualization Manager:
       Size (m): 0.009999999776482582
       Style: Points
       Topic:
-        Depth: 5
+        Depth: 1
         Durability Policy: Volatile
-        Filter size: 100
+        Filter size: 1
         History Policy: Keep Last
         Reliability Policy: Best Effort
         Value: /scan
@@ -172,20 +172,48 @@ Visualization Manager:
       Value: true
     - Class: rviz_common/Group
       Displays:
+        - Alpha: 1
+          Buffer Length: 1
+          Class: rviz_default_plugins/Path
+          Color: 0; 220; 255
+          Enabled: true
+          Head Diameter: 0.08
+          Head Length: 0.06
+          Length: 0.12
+          Line Style: Lines
+          Line Width: 0.04
+          Name: Fixed Path Plan
+          Offset:
+            X: 0
+            Y: 0
+            Z: 0
+          Pose Color: 0; 255; 160
+          Pose Style: Arrows
+          Radius: 0.03
+          Shaft Diameter: 0.02
+          Shaft Length: 0.05
+          Topic:
+            Depth: 1
+            Durability Policy: Transient Local
+            Filter size: 100
+            History Policy: Keep Last
+            Reliability Policy: Reliable
+            Value: /fixed_path_plan
+          Value: true
         - Class: rviz_default_plugins/MarkerArray
           Enabled: true
-          Name: Deep Boundary Lines and Labels
+          Name: Fixed Path Boundaries
           Namespaces:
             {}
           Topic:
-            Depth: 5
+            Depth: 1
             Durability Policy: Transient Local
             History Policy: Keep Last
             Reliability Policy: Reliable
-            Value: /collision_monitor_boundaries
+            Value: /fixed_path_boundaries
           Value: true
       Enabled: true
-      Name: Collision Monitor Boundaries
+      Name: Fixed Path
     - Alpha: 1
       Autocompute Intensity Bounds: true
       Autocompute Value Bounds:
@@ -339,9 +367,9 @@ Visualization Manager:
           Size (m): 0.05000000074505806
           Style: Boxes
           Topic:
-            Depth: 5
+            Depth: 1
             Durability Policy: Volatile
-            Filter size: 100
+            Filter size: 1
             History Policy: Keep Last
             Reliability Policy: Reliable
             Value: /global_costmap/voxel_marked_cloud
@@ -464,9 +492,9 @@ Visualization Manager:
           Size (m): 0.009999999776482582
           Style: Flat Squares
           Topic:
-            Depth: 5
+            Depth: 1
             Durability Policy: Volatile
-            Filter size: 100
+            Filter size: 1
             History Policy: Keep Last
             Reliability Policy: Reliable
             Value: /local_costmap/voxel_marked_cloud

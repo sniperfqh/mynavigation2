@@ -17,6 +17,7 @@
 
 #include "rclcpp/rclcpp.hpp"
 #include "nav2_util/odometry_utils.hpp"
+#include "byd_custom_msgs/msg/motion_state.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "geometry_msgs/msg/twist.hpp"
 #include "gtest/gtest.h"
@@ -111,4 +112,19 @@ TEST(OdometryUtils, test_smoothed_velocity) {
   EXPECT_EQ(twist_msg.linear.x, 5.0);
   EXPECT_EQ(twist_msg.linear.y, 5.0);
   EXPECT_EQ(twist_msg.angular.z, 5.0);
+}
+
+TEST(OdometryUtils, test_motion_state_velocity) {
+  auto node = std::make_shared<rclcpp::Node>("test_motion_state_node");
+  auto motion_state_pub = node->create_publisher<byd_custom_msgs::msg::MotionState>("motion_state", 1);
+  nav2_util::OdomSmoother odom_smoother(node, 0.3, "motion_state");
+  byd_custom_msgs::msg::MotionState motion_state_msg;
+  motion_state_msg.header.stamp = node->now();
+  motion_state_msg.v_car = 1.25;
+  motion_state_msg.w_car = 0.5;
+  motion_state_pub->publish(motion_state_msg);
+  rclcpp::spin_some(node);
+  const auto twist_msg = odom_smoother.getTwist();
+  EXPECT_FLOAT_EQ(twist_msg.linear.x, 1.25);
+  EXPECT_FLOAT_EQ(twist_msg.angular.z, 0.5);
 }

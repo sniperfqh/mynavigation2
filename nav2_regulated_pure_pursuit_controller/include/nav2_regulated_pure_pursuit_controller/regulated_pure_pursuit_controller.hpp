@@ -275,7 +275,9 @@ protected:
   double max_angular_accel_;
   double rotate_to_heading_min_angle_;
   double goal_dist_tol_;
+  double goal_yaw_tol_;
   bool allow_reversing_;
+  double speed_limit_sign_{1.0};
   double max_robot_pose_search_dist_;
   bool use_interpolation_;
   double max_start_distance_;

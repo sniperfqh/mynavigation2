@@ -1,0 +1,7 @@
+<class_libraries>
+  <library path="nav2_regulated_modules_fixed_path_controller">
+    <class type="nav2_regulated_modules::FixedPathController" base_class_type="nav2_core::Controller">
+      <description>Direction-aware fixed-path controller with start and goal heading alignment.</description>
+    </class>
+  </library>
+</class_libraries>

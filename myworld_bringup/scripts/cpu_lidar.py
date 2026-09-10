@@ -56,6 +56,7 @@ class CpuLidar(Node):
         update_rate = self.get_parameter('update_rate').value
 
         self.pose = None
+        self.pose_stamp = None
         self.scan_publisher = self.create_publisher(LaserScan, 'scan', 10)
         self.create_subscription(Odometry, 'odom', self.odom_callback, 10)
         self.create_timer(1.0 / update_rate, self.publish_scan)
@@ -71,6 +72,7 @@ class CpuLidar(Node):
                 + orientation.z * orientation.z))
         position = msg.pose.pose.position
         self.pose = (position.x, position.y, yaw)
+        self.pose_stamp = msg.header.stamp
 
     def occupied(self, grid_x, grid_y):
         if (grid_x < 0 or grid_x >= self.width
@@ -114,7 +116,7 @@ class CpuLidar(Node):
         return math.inf
 
     def publish_scan(self):
-        if self.pose is None:
+        if self.pose is None or self.pose_stamp is None:
             return
         x, y, yaw = self.pose
         sensor_x = x + self.sensor_offset_x * math.cos(yaw)
@@ -123,7 +125,9 @@ class CpuLidar(Node):
         angle_increment = 2.0 * math.pi / self.samples
 
         msg = LaserScan()
-        msg.header.stamp = self.get_clock().now().to_msg()
+        # The ranges are calculated from the latest odometry pose. Stamp the
+        # scan with that same sample so RViz and AMCL use the matching TF.
+        msg.header.stamp = self.pose_stamp
         msg.header.frame_id = 'base_scan'
         msg.angle_min = angle_min
         msg.angle_max = math.pi - angle_increment

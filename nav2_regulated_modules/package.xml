@@ -10,12 +10,15 @@
   <buildtool_depend>ament_cmake</buildtool_depend>
 
   <depend>geometry_msgs</depend>
+  <depend>nav2_core</depend>
+  <depend>nav2_costmap_2d</depend>
   <depend>nav2_msgs</depend>
   <depend>nav_msgs</depend>
   <depend>byd_custom_msgs</depend>
   <depend>rclcpp</depend>
   <depend>rclcpp_action</depend>
   <depend>rclcpp_lifecycle</depend>
+  <depend>pluginlib</depend>
   <depend>nav2_util</depend>
   <depend>tf2</depend>
   <depend>tf2_ros</depend>
@@ -32,7 +35,6 @@
   <exec_depend>nav2_collision_monitor</exec_depend>
   <exec_depend>nav2_lifecycle_manager</exec_depend>
   <exec_depend>nav2_map_server</exec_depend>
-  <exec_depend>nav2_costmap_2d</exec_depend>
   <exec_depend>nav2_navfn_planner</exec_depend>
   <exec_depend>nav2_smac_planner</exec_depend>
   <exec_depend>nav2_theta_star_planner</exec_depend>
@@ -48,5 +50,6 @@
 
   <export>
     <build_type>ament_cmake</build_type>
+    <nav2_core plugin="${prefix}/fixed_path_controller_plugin.xml" />
   </export>
 </package>

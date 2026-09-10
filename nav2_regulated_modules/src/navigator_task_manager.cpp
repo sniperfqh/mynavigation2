@@ -154,6 +154,13 @@ void RegulatedNavigator::failTask(const std::string & reason) {
 }
 
 void RegulatedNavigator::resetTask() {
+  if (task_.type == TaskType::NAVIGATION_SERVICE && speed_limit_pub_)
+  {
+    nav2_msgs::msg::SpeedLimit speed_limit;
+    speed_limit.percentage = false;
+    speed_limit.speed_limit = 0.0;
+    speed_limit_pub_->publish(speed_limit);
+  }
   task_ = NavigationTask();
   task_.generation = task_generation_;
   updating_path_ = false;

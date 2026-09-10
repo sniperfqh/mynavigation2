@@ -5,5 +5,5 @@ negate: 0
 occupied_thresh: 0.65
 free_thresh: 0.196
 
-# Current simulation and AMCL initial position.
-# x: -3.68, y: 4.02
+# Current simulation and AMCL initial position, matching the fixed-path start.
+# x: -2.8, y: -1.7, yaw: -0.5838703956621151

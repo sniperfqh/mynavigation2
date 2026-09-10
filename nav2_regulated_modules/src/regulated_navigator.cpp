@@ -28,6 +28,7 @@ RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : na
   declare_parameter("follow_path_action", "follow_path");
   declare_parameter("planner_id", "GridBasedAstar");
   declare_parameter("controller_id", "RPP");
+  declare_parameter("fixed_path_controller_id", "FixedPathController");
   declare_parameter("goal_checker_id", "stopped_goal_checker");
   declare_parameter("smoother_id", "simple_smoother");
   declare_parameter("use_smoother", true);
@@ -91,6 +92,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   navigation_service_action_ = get_parameter("navigation_service_action").as_string();
   fixed_path_visualization_topic_ = get_parameter("fixed_path_visualization_topic").as_string();
   fixed_path_boundaries_topic_ = get_parameter("fixed_path_boundaries_topic").as_string();
+  fixed_path_controller_id_ = get_parameter("fixed_path_controller_id").as_string();
   server_timeout_ = get_parameter("server_timeout").as_double();
   cancel_timeout_ = get_parameter("cancel_timeout").as_double();
   smoothing_duration_ = get_parameter("max_smoothing_duration").as_double();
@@ -124,6 +126,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
     LOG_ERROR("velocity_log_frequency 必须为有限正数，当前值={}", velocity_log_frequency_);
     return nav2_util::CallbackReturn::FAILURE;
   }
+  if (fixed_path_controller_id_.empty()) {LOG_ERROR("fixed_path_controller_id 不能为空"); return nav2_util::CallbackReturn::FAILURE;}
 
   planning_module_.configure(get_parameter("planner_id").as_string(), get_parameter("smoother_id").as_string(), get_parameter("use_smoother").as_bool(), get_parameter("replan_frequency").as_double(), get_parameter("max_consecutive_planning_failures").as_int());
   control_module_.configure(get_parameter("controller_id").as_string(), get_parameter("goal_checker_id").as_string(), get_parameter("progress_timeout").as_double());

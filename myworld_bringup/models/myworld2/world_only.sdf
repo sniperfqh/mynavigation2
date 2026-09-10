@@ -35,14 +35,6 @@
       name="ignition::gazebo::systems::Imu">
     </plugin>
 
-
-        <!--model name="aws_robomaker_warehouse_RoofB_01_001">
-        <include>
-            <uri>model://aws_robomaker_warehouse_RoofB_01</uri>
-        </include>
-        <pose frame="">0.0 0.0 0 0 0 0</pose>
-	</model-->
-
         <model name="aws_robomaker_warehouse_ShelfF_01_001">
         <include>
             <uri>model://aws_robomaker_warehouse_ShelfF_01</uri>
@@ -243,10 +235,83 @@
         <pose frame=''>-0.276098 -9.481944 0.023266 0 0 0</pose>
 		</model>
 
+    <model name="fixed_path_demo_lane">
+      <static>true</static>
+      <link name="lane_visuals">
+        <visual name="center_line">
+          <pose>0.0 -3.55 0.015 0 0 -0.5838703956621151</pose>
+          <geometry>
+            <box>
+              <size>0.03 6.7119296778 0.01</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.0 0.55 1.0 1.0</ambient>
+            <diffuse>0.0 0.55 1.0 1.0</diffuse>
+            <emissive>0.0 0.25 0.8 1.0</emissive>
+          </material>
+        </visual>
+        <visual name="left_boundary">
+          <pose>0.2205029062 -3.2162658717 0.016 0 0 -0.5838703956621151</pose>
+          <geometry>
+            <box>
+              <size>0.04 6.7119296778 0.012</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.0 0.95 1.0 1.0</ambient>
+            <diffuse>0.0 0.95 1.0 1.0</diffuse>
+            <emissive>0.0 0.5 0.8 1.0</emissive>
+          </material>
+        </visual>
+        <visual name="right_boundary">
+          <pose>-0.2205029062 -3.8837341283 0.016 0 0 -0.5838703956621151</pose>
+          <geometry>
+            <box>
+              <size>0.04 6.7119296778 0.012</size>
+            </box>
+          </geometry>
+          <material>
+            <ambient>0.75 0.2 1.0 1.0</ambient>
+            <diffuse>0.75 0.2 1.0 1.0</diffuse>
+            <emissive>0.4 0.05 0.8 1.0</emissive>
+          </material>
+        </visual>
+        <visual name="start_marker">
+          <pose>-2.8 -1.7 0.02 0 0 0</pose>
+          <geometry>
+            <cylinder>
+              <radius>0.16</radius>
+              <length>0.02</length>
+            </cylinder>
+          </geometry>
+          <material>
+            <ambient>0.0 1.0 0.35 1.0</ambient>
+            <diffuse>0.0 1.0 0.35 1.0</diffuse>
+            <emissive>0.0 0.5 0.15 1.0</emissive>
+          </material>
+        </visual>
+        <visual name="goal_marker">
+          <pose>2.8 -5.4 0.02 0 0 0</pose>
+          <geometry>
+            <cylinder>
+              <radius>0.16</radius>
+              <length>0.02</length>
+            </cylinder>
+          </geometry>
+          <material>
+            <ambient>1.0 0.25 0.15 1.0</ambient>
+            <diffuse>1.0 0.25 0.15 1.0</diffuse>
+            <emissive>0.6 0.1 0.05 1.0</emissive>
+          </material>
+        </visual>
+      </link>
+    </model>
+
     <include>
       <uri>model://diffbot</uri>
       <name>diffbot</name>
-      <pose>-3.68 4.02 0.01 0 0 -1.5707963267948966</pose>
+      <pose>-2.8 -1.7 0.01 0 0 2.557722257927678</pose>
     </include>
 
 

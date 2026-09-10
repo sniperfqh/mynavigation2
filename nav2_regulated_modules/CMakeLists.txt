@@ -10,9 +10,12 @@ find_package(rclcpp REQUIRED)
 find_package(rclcpp_action REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(geometry_msgs REQUIRED)
+find_package(nav2_core REQUIRED)
+find_package(nav2_costmap_2d REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(nav2_util REQUIRED)
 find_package(nav_msgs REQUIRED)
+find_package(pluginlib REQUIRED)
 find_package(byd_custom_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
@@ -54,9 +57,20 @@ ament_target_dependencies(regulated_navigator_node
   visualization_msgs
 )
 
+add_library(nav2_regulated_modules_fixed_path_controller SHARED src/fixed_path_controller.cpp)
+target_include_directories(nav2_regulated_modules_fixed_path_controller PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>)
+target_compile_features(nav2_regulated_modules_fixed_path_controller PUBLIC cxx_std_17)
+ament_target_dependencies(nav2_regulated_modules_fixed_path_controller rclcpp rclcpp_lifecycle geometry_msgs nav2_core nav2_costmap_2d nav2_util nav_msgs pluginlib tf2 tf2_ros tf2_geometry_msgs spdlog_wrapper)
+
 add_executable(collision_boundary_visualizer_node src/collision_boundary_visualizer.cpp)
 target_compile_features(collision_boundary_visualizer_node PUBLIC c_std_99 cxx_std_17)
 ament_target_dependencies(collision_boundary_visualizer_node rclcpp geometry_msgs visualization_msgs)
+
+install(TARGETS nav2_regulated_modules_fixed_path_controller
+  ARCHIVE DESTINATION lib
+  LIBRARY DESTINATION lib
+  RUNTIME DESTINATION bin
+)
 
 install(TARGETS regulated_navigator_node collision_boundary_visualizer_node
   DESTINATION lib/${PROJECT_NAME})
@@ -74,5 +88,10 @@ install(DIRECTORY
   src
   DESTINATION share/${PROJECT_NAME}
 )
+
+pluginlib_export_plugin_description_file(nav2_core fixed_path_controller_plugin.xml)
+ament_export_include_directories(include)
+ament_export_libraries(nav2_regulated_modules_fixed_path_controller)
+ament_export_dependencies(nav2_core nav2_costmap_2d pluginlib)
 
 ament_package()

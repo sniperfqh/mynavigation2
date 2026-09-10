@@ -59,6 +59,10 @@ struct NavigationTask
   double distance_remaining{0.0};
   std::string task_id;
   double total_path_length{0.0};
+  double requested_speed{0.0};
+  double start_yaw{0.0};
+  double goal_yaw{0.0};
+  uint8_t motion_direction{0};
   float progress{0.0F};
   std::string last_error;
 };

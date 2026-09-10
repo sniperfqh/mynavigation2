@@ -54,8 +54,9 @@ void RegulatedPurePursuitController::configure(const rclcpp_lifecycle::Lifecycle
   clock_ = node->get_clock();
 
   double transform_tolerance = 0.1;
-  double control_frequency = 20.0;
-  goal_dist_tol_ = 0.25;  // reasonable default before first update
+  double control_frequency = 50.0;
+  goal_dist_tol_ = 0.15;  // reasonable default before first update
+  goal_yaw_tol_ = 0.15;
 
   declare_parameter_if_not_declared(node, plugin_name_ + ".desired_linear_vel", rclcpp::ParameterValue(0.5));
   declare_parameter_if_not_declared(node, plugin_name_ + ".lookahead_dist", rclcpp::ParameterValue(0.6));
@@ -224,6 +225,7 @@ geometry_msgs::msg::TwistStamped RegulatedPurePursuitController::computeVelocity
     RCLCPP_WARN(logger_, "Unable to retrieve goal checker's tolerances!");
   } else {
     goal_dist_tol_ = pose_tolerance.position.x;
+    goal_yaw_tol_ = fabs(tf2::getYaw(pose_tolerance.orientation));
   }
 
   // Transform path to robot base frame
@@ -267,8 +269,8 @@ geometry_msgs::msg::TwistStamped RegulatedPurePursuitController::computeVelocity
   }
 
   // Setting the velocity direction
-  double sign = 1.0;
-  if (allow_reversing_) {
+  double sign = speed_limit_sign_;
+  if (allow_reversing_ && speed_limit_sign_ > 0.0) {
     sign = carrot_pose.pose.position.x >= 0.0 ? 1.0 : -1.0;
   }
 
@@ -276,10 +278,18 @@ geometry_msgs::msg::TwistStamped RegulatedPurePursuitController::computeVelocity
 
   // Make sure we're in compliance with basic constraints
   double angle_to_heading;
-  if (shouldRotateToGoalHeading(carrot_pose)) {
-    double angle_to_goal = tf2::getYaw(transformed_plan.poses.back().pose.orientation);
+  const double distance_to_goal = std::hypot(transformed_plan.poses.back().pose.position.x, transformed_plan.poses.back().pose.position.y);
+  const double angle_to_goal = tf2::getYaw(transformed_plan.poses.back().pose.orientation);
+  if (!use_rotate_to_heading_ && distance_to_goal <= goal_dist_tol_) {
+    if (fabs(angle_to_goal) > goal_yaw_tol_) {
+      rotateToHeading(linear_vel, angular_vel, angle_to_goal, speed);
+    } else {
+      linear_vel = 0.0;
+      angular_vel = 0.0;
+    }
+  } else if (shouldRotateToGoalHeading(carrot_pose)) {
     rotateToHeading(linear_vel, angular_vel, angle_to_goal, speed);
-  } else if (shouldRotateToPath(carrot_pose, angle_to_heading)) {
+  } else if (speed_limit_sign_ > 0.0 && shouldRotateToPath(carrot_pose, angle_to_heading)) {
     rotateToHeading(linear_vel, angular_vel, angle_to_heading, speed);
   } else {
     applyConstraints(curvature, speed, costAtPose(pose.pose.position.x, pose.pose.position.y), transformed_plan, linear_vel, sign);
@@ -558,13 +568,15 @@ void RegulatedPurePursuitController::setSpeedLimit(const double & speed_limit, c
   if (speed_limit == nav2_costmap_2d::NO_SPEED_LIMIT) {
     // Restore default value
     desired_linear_vel_ = base_desired_linear_vel_;
+    speed_limit_sign_ = 1.0;
   } else {
+    speed_limit_sign_ = speed_limit < 0.0 ? -1.0 : 1.0;
     if (percentage) {
       // Speed limit is expressed in % from maximum speed of robot
-      desired_linear_vel_ = base_desired_linear_vel_ * speed_limit / 100.0;
+      desired_linear_vel_ = base_desired_linear_vel_ * fabs(speed_limit) / 100.0;
     } else {
       // Speed limit is expressed in absolute value
-      desired_linear_vel_ = speed_limit;
+      desired_linear_vel_ = fabs(speed_limit);
     }
   }
 }

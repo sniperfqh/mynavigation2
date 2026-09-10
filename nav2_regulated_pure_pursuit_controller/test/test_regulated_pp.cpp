@@ -289,11 +289,11 @@ TEST(RegulatedPurePursuitTest, rotateTests) {
   EXPECT_EQ(ctrl->shouldRotateToGoalHeadingWrapper(carrot), true);
 
   carrot.pose.position.x = 0.0;
-  carrot.pose.position.y = 0.24;
+  carrot.pose.position.y = 0.14;
   EXPECT_EQ(ctrl->shouldRotateToGoalHeadingWrapper(carrot), true);
 
   carrot.pose.position.x = 0.0;
-  carrot.pose.position.y = 0.26;
+  carrot.pose.position.y = 0.16;
   EXPECT_EQ(ctrl->shouldRotateToGoalHeadingWrapper(carrot), false);
 
   // rotateToHeading
@@ -318,16 +318,16 @@ TEST(RegulatedPurePursuitTest, rotateTests) {
   angle_to_path = 0.4;
   curr_speed.angular.z = 0.0;
   ctrl->rotateToHeadingWrapper(lin_v, ang_v, angle_to_path, curr_speed);
-  EXPECT_NEAR(ang_v, 0.16, 0.01);
+  EXPECT_NEAR(ang_v, 0.064, 0.01);
 
   curr_speed.angular.z = 1.0;
   ctrl->rotateToHeadingWrapper(lin_v, ang_v, angle_to_path, curr_speed);
-  EXPECT_NEAR(ang_v, 1.16, 0.01);
+  EXPECT_NEAR(ang_v, 1.064, 0.01);
 
   angle_to_path = -0.4;
   curr_speed.angular.z = 1.0;
   ctrl->rotateToHeadingWrapper(lin_v, ang_v, angle_to_path, curr_speed);
-  EXPECT_NEAR(ang_v, 0.84, 0.01);
+  EXPECT_NEAR(ang_v, 0.936, 0.01);
 }
 
 TEST(RegulatedPurePursuitTest, applyConstraints) {
