@@ -210,8 +210,8 @@ controller_server:
     stopped_goal_checker:
       stateful: False
       plugin: "nav2_controller::StoppedGoalChecker"
-      xy_goal_tolerance: 0.01
-      yaw_goal_tolerance: 0.08726646259971647
+      xy_goal_tolerance: 0.03
+      yaw_goal_tolerance: 0.15726646259971647
       trans_stopped_velocity: 0.01
       rot_stopped_velocity: 0.05
     # DWB critic-based sampling controller. Stable default for TurtleBot3.
@@ -300,8 +300,6 @@ controller_server:
       min_approach_linear_velocity: 0.01
       approach_velocity_scaling_dist: 0.8
       goal_position_hysteresis: 1.5
-      linear_stopped_velocity: 0.005
-      angular_stopped_velocity: 0.02
       alignment_stable_cycles: 5
       transform_tolerance: 0.2
 

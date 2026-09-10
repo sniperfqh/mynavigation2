@@ -458,7 +458,7 @@ ros2 action send_goal --feedback /navigation_service byd_custom_msgs/action/Navi
 
 前进仿真视频（约 63 秒）：
 
-<video src="./vedio/forward.webm" controls="controls" width="900"></video>
+[![前进固定路径仿真](./vedio/forward-preview.gif)](./vedio/forward.webm)
 
 [直接播放或下载前进仿真视频](./vedio/forward.webm)
 
@@ -471,9 +471,15 @@ ros2 action send_goal --feedback /navigation_service byd_custom_msgs/action/Navi
 
 后退仿真视频（约 32 秒）：
 
-<video src="./vedio/back.webm" controls="controls" width="900"></video>
+[![后退固定路径仿真](./vedio/back-preview.gif)](./vedio/back.webm)
 
 [直接播放或下载后退仿真视频](./vedio/back.webm)
+
+前进与后退连续仿真视频（约 272 秒）：
+
+[![前进与后退连续固定路径仿真](./vedio/backandforward-preview.gif)](./vedio/backandforward.webm)
+
+[直接播放或下载前进与后退连续仿真视频](./vedio/backandforward.webm)
 
 前进和后退示例必须分别从路径起点附近运行。完成其中一个任务后，如需验证另一个方向，应停止并重新启动
 `myworld_bringup`，确认机器人重新位于 `node1=(-2.8,-1.7)` 附近后再发送 Goal。实车运行时不要启动
@@ -601,8 +607,9 @@ ros2 action send_goal /navigation_service \
 
 固定路径仍使用以下控制参数：
 
-- `regulated_navigator.controller_id` 和 `goal_checker_id`。
+- `regulated_navigator.fixed_path_controller_id` 和 `goal_checker_id`。
 - `controller_server` 对应控制器插件参数。
+- `controller_server.stopped_goal_checker` 是终点位置、终点航向、停止线速度和停止角速度阈值的唯一来源；Launch 和 `FixedPathController` 不再重复配置这些阈值。
 - `velocity_smoother` 的速度、加减速度和 `/odometry` 闭环参数。
 
 它不使用 `planner_id`、`use_smoother` 或 `replan_frequency` 执行规划。

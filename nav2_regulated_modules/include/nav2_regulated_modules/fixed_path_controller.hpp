@@ -72,8 +72,6 @@ private:
   double min_approach_linear_velocity_{0.01};
   double approach_velocity_scaling_dist_{0.8};
   double goal_position_hysteresis_{1.5};
-  double linear_stopped_velocity_{0.005};
-  double angular_stopped_velocity_{0.02};
   double transform_tolerance_{0.2};
   double control_duration_{0.02};
   int alignment_stable_cycles_{5};

@@ -266,8 +266,6 @@ controller_server:
       min_approach_linear_velocity: 0.01
       approach_velocity_scaling_dist: 0.8
       goal_position_hysteresis: 1.5
-      linear_stopped_velocity: 0.005
-      angular_stopped_velocity: 0.02
       alignment_stable_cycles: 5
       transform_tolerance: 0.2
 

@@ -44,13 +44,6 @@ def generate_launch_description():
         "'", fixed_path_max_linear_velocity, "'"])
     fixed_path_approach_distance = PythonExpression([
         "'", fixed_path_approach_velocity_scaling_dist, "'"])
-    fixed_path_yaw_tolerance = PythonExpression([
-        "'0.08726646259971647' if ", fixed_path, " else '0.1'"])
-    fixed_path_stop_velocity = PythonExpression([
-        "'0.005' if ", fixed_path, " else '0.01'"])
-    fixed_path_stop_angular_velocity = PythonExpression([
-        "'0.02' if ", fixed_path, " else '0.05'"])
-
     configured_params = RewrittenYaml(
         source_file=params_file,
         param_rewrites={
@@ -70,14 +63,6 @@ def generate_launch_description():
                 fixed_path_controller_velocity,
             'controller_server.ros__parameters.FixedPathController.approach_velocity_scaling_dist':
                 fixed_path_approach_distance,
-            'controller_server.ros__parameters.stopped_goal_checker.xy_goal_tolerance':
-                '0.01',
-            'controller_server.ros__parameters.stopped_goal_checker.yaw_goal_tolerance':
-                fixed_path_yaw_tolerance,
-            'controller_server.ros__parameters.stopped_goal_checker.trans_stopped_velocity':
-                fixed_path_stop_velocity,
-            'controller_server.ros__parameters.stopped_goal_checker.rot_stopped_velocity':
-                fixed_path_stop_angular_velocity,
         },
         convert_types=True)
 

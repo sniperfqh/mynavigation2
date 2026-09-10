@@ -38,8 +38,6 @@ void FixedPathController::configure(const rclcpp_lifecycle::LifecycleNode::WeakP
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".min_approach_linear_velocity", rclcpp::ParameterValue(0.01));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".approach_velocity_scaling_dist", rclcpp::ParameterValue(0.8));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_position_hysteresis", rclcpp::ParameterValue(1.5));
-  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".linear_stopped_velocity", rclcpp::ParameterValue(0.005));
-  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".angular_stopped_velocity", rclcpp::ParameterValue(0.02));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".alignment_stable_cycles", rclcpp::ParameterValue(5));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".transform_tolerance", rclcpp::ParameterValue(0.2));
   double controller_frequency = 50.0;
@@ -55,8 +53,6 @@ void FixedPathController::configure(const rclcpp_lifecycle::LifecycleNode::WeakP
   node->get_parameter(plugin_name_ + ".min_approach_linear_velocity", min_approach_linear_velocity_);
   node->get_parameter(plugin_name_ + ".approach_velocity_scaling_dist", approach_velocity_scaling_dist_);
   node->get_parameter(plugin_name_ + ".goal_position_hysteresis", goal_position_hysteresis_);
-  node->get_parameter(plugin_name_ + ".linear_stopped_velocity", linear_stopped_velocity_);
-  node->get_parameter(plugin_name_ + ".angular_stopped_velocity", angular_stopped_velocity_);
   node->get_parameter(plugin_name_ + ".alignment_stable_cycles", alignment_stable_cycles_);
   node->get_parameter(plugin_name_ + ".transform_tolerance", transform_tolerance_);
   node->get_parameter("controller_frequency", controller_frequency);
@@ -98,19 +94,19 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
   if (!transformPose(global_plan_.header.frame_id, pose, robot_pose)) {throw nav2_core::PlannerException("Unable to transform robot pose into fixed path frame");}
   geometry_msgs::msg::Pose pose_tolerance;
   geometry_msgs::msg::Twist velocity_tolerance;
-  double goal_xy_tolerance = 0.01;
-  double goal_yaw_tolerance = 0.08726646259971647;
-  if (goal_checker->getTolerances(pose_tolerance, velocity_tolerance)) {
-    goal_xy_tolerance = std::max(1e-4, std::abs(pose_tolerance.position.x));
-    goal_yaw_tolerance = std::max(1e-4, std::abs(tf2::getYaw(pose_tolerance.orientation)));
-  }
+  if (!goal_checker->getTolerances(pose_tolerance, velocity_tolerance)) {throw nav2_core::PlannerException("FixedPathController failed to read StoppedGoalChecker tolerances");}
+  const double goal_xy_tolerance = pose_tolerance.position.x;
+  const double goal_yaw_tolerance = std::abs(tf2::getYaw(pose_tolerance.orientation));
+  const double linear_stopped_velocity = velocity_tolerance.linear.x;
+  const double angular_stopped_velocity = velocity_tolerance.angular.z;
+  if (!std::isfinite(goal_xy_tolerance) || !std::isfinite(goal_yaw_tolerance) || !std::isfinite(linear_stopped_velocity) || !std::isfinite(angular_stopped_velocity) || goal_xy_tolerance <= 0.0 || goal_yaw_tolerance <= 0.0 || linear_stopped_velocity < 0.0 || angular_stopped_velocity < 0.0) {throw nav2_core::PlannerException("FixedPathController requires valid StoppedGoalChecker pose and velocity tolerances");}
   const double start_distance = poseDistance(robot_pose, global_plan_.poses.front());
   if (phase_ == Phase::ALIGN_START) {
     if (start_distance > start_position_tolerance_) {
       throw nav2_core::PlannerException("Robot is outside fixed path start position tolerance");
     }
     const double yaw_error = normalizeAngle(start_yaw_ - poseYaw(robot_pose));
-    if (std::abs(yaw_error) <= initial_yaw_tolerance_ && std::abs(velocity.linear.x) <= linear_stopped_velocity_ && std::abs(velocity.angular.z) <= angular_stopped_velocity_) {
+    if (std::abs(yaw_error) <= initial_yaw_tolerance_ && std::abs(velocity.linear.x) <= linear_stopped_velocity && std::abs(velocity.angular.z) <= angular_stopped_velocity) {
       ++stable_cycles_;
     } else {
       stable_cycles_ = 0;
@@ -132,7 +128,7 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
   }
   if (phase_ == Phase::ALIGN_GOAL) {
     const double yaw_error = normalizeAngle(goal_yaw_ - poseYaw(robot_pose));
-    if (std::abs(yaw_error) <= goal_yaw_tolerance && std::abs(velocity.linear.x) <= linear_stopped_velocity_ && std::abs(velocity.angular.z) <= angular_stopped_velocity_) {
+    if (std::abs(yaw_error) <= goal_yaw_tolerance && std::abs(velocity.linear.x) <= linear_stopped_velocity && std::abs(velocity.angular.z) <= angular_stopped_velocity) {
       ++stable_cycles_;
     } else {
       stable_cycles_ = 0;
