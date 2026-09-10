@@ -173,7 +173,11 @@ void RegulatedNavigator::handleNavigationServiceAccepted(const std::shared_ptr<N
   task_.task_id = goal->get_goal()->task_id;
   task_.goal = prepared_path->poses.back();
   task_.active_path = *prepared_path;
-  for (std::size_t index = 1; index < prepared_path->poses.size(); ++index) {const auto & previous = prepared_path->poses[index - 1].pose.position; const auto & current = prepared_path->poses[index].pose.position; task_.total_path_length += std::hypot(current.x - previous.x, current.y - previous.y);}
+  for (std::size_t index = 1; index < prepared_path->poses.size(); ++index) {
+    const auto & previous = prepared_path->poses[index - 1].pose.position;
+    const auto & current = prepared_path->poses[index].pose.position;
+    task_.total_path_length += std::hypot(current.x - previous.x, current.y - previous.y);
+  }
   task_.distance_remaining = task_.total_path_length;
   task_.start_time = now();
   task_.last_progress_time = task_.start_time;
@@ -182,7 +186,9 @@ void RegulatedNavigator::handleNavigationServiceAccepted(const std::shared_ptr<N
   task_.start_yaw = start_yaw;
   task_.goal_yaw = goal_yaw;
   task_.requested_speed = std::numeric_limits<double>::max();
-  for (const auto & segment : goal->get_goal()->navi_segment) {task_.requested_speed = std::min(task_.requested_speed, static_cast<double>(segment.max_speed));}
+  for (const auto & segment : goal->get_goal()->navi_segment) {
+    task_.requested_speed = std::min(task_.requested_speed, static_cast<double>(segment.max_speed));
+  }
   const bool is_backward = first_segment.motion_direction == byd_custom_msgs::msg::NaviSegment::MOTION_DIRECTION_BACKWARD;
   has_last_pose_ = false;
   LOG_INFO("接受 NavigationService Action，generation={}，task_id={}，frame={}，路径点数={}，总长度={:.3f}m", task_.generation, task_.task_id, prepared_path->header.frame_id, prepared_path->poses.size(), task_.total_path_length);
