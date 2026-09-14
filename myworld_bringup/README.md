@@ -41,7 +41,55 @@ ros2 launch myworld_bringup entry.launch.py \
   headless:=true
 ```
 
-统一算法链为：
+遥控仿真使用独立的 `remote` 模式。该模式只启动 Gazebo、传感器桥接和
+`chassis_control_to_twist`，不启动 AMCL、Planner、Controller、Velocity Smoother、
+`regulated_navigator` 或 `controlpub`，保证 `/cmd_vel` 只有遥控网关一个控制源：
+
+```bash
+ros2 launch myworld_bringup entry.launch.py \
+  operation_mode:=remote \
+  use_rviz:=false \
+  headless:=false
+```
+
+遥控网关以 Reliable／Volatile QoS 订阅
+`/downstream/chassis_control` 的 `byd_custom_msgs/msg/ChassisControl`，把前进、后退、
+左转和右转分别映射为 `/cmd_vel` 的正／负线速度和正／负角速度。遥控端应以
+`20-50 Hz` 连续发布；超过 `0.5 s` 没有新消息时，网关发布一次零速度并清除当前命令。
+换向或直行／旋转切换时会先按加速度约束减速到零，再执行新命令。
+
+例如以 `20 Hz` 持续前进：
+
+```bash
+ros2 topic pub -r 20 \
+  /downstream/chassis_control \
+  byd_custom_msgs/msg/ChassisControl \
+  "{op: 0, linear_velocity: 0.2, angular_velocity: 0.0, acceleration: 0.5}"
+```
+
+原地左转：
+
+```bash
+ros2 topic pub -r 20 \
+  /downstream/chassis_control \
+  byd_custom_msgs/msg/ChassisControl \
+  "{op: 2, linear_velocity: 0.0, angular_velocity: 0.4, acceleration: 1.0}"
+```
+
+显式停车：
+
+```bash
+ros2 topic pub --once \
+  /downstream/chassis_control \
+  byd_custom_msgs/msg/ChassisControl \
+  "{op: 0, linear_velocity: 0.0, angular_velocity: 0.0, acceleration: 0.5}"
+```
+
+`ChassisControl` 当前一次只能表示直行或原地旋转，不能同时表达非零线速度和角速度。
+网关默认将线速度限制在 `0.52 m/s`、角速度限制在 `2.0 rad/s`；非法数值、未知
+`op` 或多个 `/cmd_vel` Publisher 会触发停车并等待新的有效遥控命令。
+
+自主与固定路径模式的统一算法链为：
 
 ```text
 /navigate_to_pose 或 /navigation_service -> regulated_navigator
@@ -97,7 +145,7 @@ RViz 对 `/scan` 及全局、局部体素点云只保留最新一帧，避免图
 `/clock` 和 `/odom/tf`。联调外部 Ignition 工具时可显式传入
 `ign_partition:=myworld_debug`，并在工具终端设置同名 `IGN_PARTITION`。
 
-仿真模式启动 `controlpub`，仅把统一规控链的 `/cmd_vel` 转换为
+自主与固定路径仿真模式启动 `controlpub`，仅把统一规控链的 `/cmd_vel` 转换为
 `/control_to_uart`。`regulated_navigator` 仍监听 `/downstream/chassis_control`；没有
 收到该话题时，不会由 ChassisControl 分支向 `/control_to_uart` 发布控制消息。
 

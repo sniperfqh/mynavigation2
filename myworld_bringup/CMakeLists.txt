@@ -10,6 +10,7 @@ install(DIRECTORY models DESTINATION share/${PROJECT_NAME})
 install(DIRECTORY urdf DESTINATION share/${PROJECT_NAME})
 
 install(PROGRAMS
+  scripts/chassis_control_to_twist.py
   scripts/cpu_lidar.py
   scripts/odom_to_motion_state.py
   DESTINATION lib/${PROJECT_NAME}

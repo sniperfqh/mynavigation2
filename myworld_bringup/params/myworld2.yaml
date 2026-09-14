@@ -751,3 +751,19 @@ velocity_smoother:
     odom_duration: 0.1
     deadband_velocity: [0.0, 0.0, 0.0]
     velocity_timeout: 1.0
+
+chassis_control_to_twist:
+  ros__parameters:
+    use_sim_time: True
+    input_topic: "/downstream/chassis_control"
+    output_topic: "/cmd_vel"
+    publish_frequency: 50.0
+    command_timeout: 0.5
+    max_linear_velocity: 0.52
+    max_angular_velocity: 2.0
+    default_linear_acceleration: 0.5
+    default_angular_acceleration: 1.0
+    max_linear_acceleration: 2.5
+    max_angular_acceleration: 3.2
+    linear_stop_threshold: 0.01
+    angular_stop_threshold: 0.05

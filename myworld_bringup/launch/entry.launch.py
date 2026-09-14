@@ -34,6 +34,8 @@ def generate_launch_description():
         "'", operation_mode, "' == 'autonomous'"])
     is_fixed_path = PythonExpression([
         "'", operation_mode, "' == 'fixed_path'"])
+    is_remote = PythonExpression([
+        "'", operation_mode, "' == 'remote'"])
     is_autonomous_gui = PythonExpression([
         "'", operation_mode, "' == 'autonomous' and '", headless,
         "' == 'false'"])
@@ -42,6 +44,9 @@ def generate_launch_description():
         "' == 'true'"])
     is_fixed_path_gui = PythonExpression([
         "'", operation_mode, "' == 'fixed_path' and '", headless,
+        "' == 'false'"])
+    is_remote_gui = PythonExpression([
+        "'", operation_mode, "' == 'remote' and '", headless,
         "' == 'false'"])
 
     bringup_dir = get_package_share_directory('myworld_bringup')
@@ -82,6 +87,14 @@ def generate_launch_description():
         output='screen')
     fixed_path_ignition_server = ExecuteProcess(
         condition=IfCondition(is_fixed_path),
+        cmd=['ign', 'gazebo', '-r', '-s', '-v', '3', world_only],
+        output='screen')
+    remote_ignition_gui = ExecuteProcess(
+        condition=IfCondition(is_remote_gui),
+        cmd=['ign', 'gazebo', '-g', '-v', '3', world_only],
+        output='screen')
+    remote_ignition_server = ExecuteProcess(
+        condition=IfCondition(is_remote),
         cmd=['ign', 'gazebo', '-r', '-s', '-v', '3', world_only],
         output='screen')
 
@@ -130,6 +143,8 @@ def generate_launch_description():
         ignition_server,
         fixed_path_ignition_sim,
         fixed_path_ignition_server,
+        remote_ignition_gui,
+        remote_ignition_server,
 
         Node(
             package='robot_state_publisher',
@@ -159,8 +174,8 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'operation_mode',
             default_value='autonomous',
-            choices=['autonomous', 'fixed_path'],
-            description='Select the regulated navigation mode'),
+            choices=['remote', 'autonomous', 'fixed_path'],
+            description='Select the robot operation mode'),
         DeclareLaunchArgument(
             'fixed_path_progress_timeout',
             default_value='120.0',
@@ -196,6 +211,13 @@ def generate_launch_description():
                 'use_sim_time': use_sim_time,
                 'input_topic': '/odom',
                 'output_topic': '/motion_state'}]),
+        Node(
+            condition=IfCondition(is_remote),
+            package='myworld_bringup',
+            executable='chassis_control_to_twist.py',
+            name='chassis_control_to_twist',
+            output='screen',
+            parameters=[params_file, {'use_sim_time': use_sim_time}]),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
                 [launch_file_dir, '/localization_launch.py']),
@@ -208,7 +230,9 @@ def generate_launch_description():
 
         TimerAction(
             period=rviz_start_delay,
-            condition=IfCondition(use_rviz),
+            condition=IfCondition(PythonExpression([
+                "'", operation_mode, "' != 'remote' and '", use_rviz,
+                "' == 'true'"])),
             actions=[
                 Node(
                     package='rviz2',
