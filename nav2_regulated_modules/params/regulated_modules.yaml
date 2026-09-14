@@ -259,7 +259,7 @@ controller_server:
       min_lookahead_dist: 0.25
       max_lookahead_dist: 0.75
       lookahead_time: 1.5
-      start_position_tolerance: 0.10
+      start_position_tolerance: 0.70
       initial_yaw_tolerance: 0.03490658503988659
       rotate_to_heading_angular_vel: 0.4
       max_angular_accel: 0.8

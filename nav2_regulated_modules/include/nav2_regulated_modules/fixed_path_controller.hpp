@@ -65,7 +65,7 @@ private:
   double min_lookahead_dist_{0.25};
   double max_lookahead_dist_{0.75};
   double lookahead_time_{1.5};
-  double start_position_tolerance_{0.10};
+  double start_position_tolerance_{0.70};
   double initial_yaw_tolerance_{0.03490658503988659};
   double rotate_to_heading_angular_vel_{0.4};
   double max_angular_accel_{0.8};
