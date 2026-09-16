@@ -20,6 +20,7 @@ This package was created to do the following:
 - Provide open loop and closed loop options
 - Component nodes for use in single-process systems and stand-alone node format
 - Dynamically reconfigurable parameters
+- Treat absolute `nav2_msgs/msg/SpeedLimit` values as symmetric linear speed bounds, so one magnitude limit applies to both forward and reverse commands
 
 ## Design
 
@@ -68,6 +69,7 @@ velocity_smoother:
 |------------------|-------------------------|-------------------------------|
 | smoothed_cmd_vel | geometry_msgs/Twist     | Publish smoothed velocities   |
 | cmd_vel          | geometry_msgs/Twist     | Subscribe to input velocities |
+| speed_limit      | nav2_msgs/SpeedLimit    | Subscribe to symmetric absolute linear speed limits |
 
 
 ## Install
@@ -96,3 +98,5 @@ nav2_velocity_smoother 是一个 Lifecycle Component 节点，用于平滑 Nav2 
 该包支持差分、全向和部分 Ackermann 平台，输入 cmd_vel，输出 smoothed_cmd_vel。节点按定时器频率运行，可高于控制器频率以插值速度。OPEN_LOOP 假定机器人实现了上一条平滑命令，CLOSED_LOOP 则读取里程计估计实际速度。
 
 参数包括平滑频率、比例缩放、反馈模式、最大／最小速度、死区、超时、最大加减速度、里程计窗口和关键速度链日志频率。速度超时后会发布零速度。低频或高延迟里程计适合 OPEN_LOOP；高频里程计可使用 CLOSED_LOOP，但平滑频率不应超过里程计频率。旋转速度上下限应使用带符号的成对值，减速度为负数；死区用于过滤低于静摩擦阈值的微小命令。
+
+非百分比 `/speed_limit` 表示线速度绝对值上限：例如 `0.20 m/s` 会生成 `[-0.20, +0.20] m/s` 的对称区间，同时允许等幅前进和后退；`0.0` 会把上下限同时收敛为零，用于任务结束、取消或失败时停车。

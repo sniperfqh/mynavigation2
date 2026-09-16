@@ -46,24 +46,45 @@ struct BoundaryStyle
 
 class CollisionBoundaryVisualizer : public rclcpp::Node
 {
-public:
-  CollisionBoundaryVisualizer() : Node("collision_boundary_visualizer") {
+  public:
+  CollisionBoundaryVisualizer() : Node("collision_boundary_visualizer")
+  {
     marker_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>("collision_monitor_boundaries", rclcpp::QoS(rclcpp::KeepLast(1)).reliable().transient_local());
-    polygon_subs_[0] = create_subscription<geometry_msgs::msg::PolygonStamped>("collision_stop_zone", rclcpp::SystemDefaultsQoS(), [this](geometry_msgs::msg::PolygonStamped::SharedPtr message) {handlePolygon(std::move(message), 0);});
-    polygon_subs_[1] = create_subscription<geometry_msgs::msg::PolygonStamped>("collision_slowdown_zone", rclcpp::SystemDefaultsQoS(), [this](geometry_msgs::msg::PolygonStamped::SharedPtr message) {handlePolygon(std::move(message), 1);});
-    polygon_subs_[2] = create_subscription<geometry_msgs::msg::PolygonStamped>("collision_approach_footprint", rclcpp::SystemDefaultsQoS(), [this](geometry_msgs::msg::PolygonStamped::SharedPtr message) {handlePolygon(std::move(message), 2);});
-    approach_footprint_sub_ = create_subscription<geometry_msgs::msg::PolygonStamped>("local_costmap/published_footprint", rclcpp::QoS(rclcpp::KeepLast(1)).reliable(), [this](geometry_msgs::msg::PolygonStamped::SharedPtr message) {handlePolygon(std::move(message), 2);});
+    polygon_subs_[0] = create_subscription<geometry_msgs::msg::PolygonStamped>("collision_stop_zone", rclcpp::SystemDefaultsQoS(), [this](geometry_msgs::msg::PolygonStamped::SharedPtr message)
+    {
+      handlePolygon(std::move(message), 0);
+    }
+    );
+    polygon_subs_[1] = create_subscription<geometry_msgs::msg::PolygonStamped>("collision_slowdown_zone", rclcpp::SystemDefaultsQoS(), [this](geometry_msgs::msg::PolygonStamped::SharedPtr message)
+    {
+      handlePolygon(std::move(message), 1);
+    }
+    );
+    polygon_subs_[2] = create_subscription<geometry_msgs::msg::PolygonStamped>("collision_approach_footprint", rclcpp::SystemDefaultsQoS(), [this](geometry_msgs::msg::PolygonStamped::SharedPtr message)
+    {
+      handlePolygon(std::move(message), 2);
+    }
+    );
+    approach_footprint_sub_ = create_subscription<geometry_msgs::msg::PolygonStamped>("local_costmap/published_footprint", rclcpp::QoS(rclcpp::KeepLast(1)).reliable(), [this](geometry_msgs::msg::PolygonStamped::SharedPtr message)
+    {
+      handlePolygon(std::move(message), 2);
+    }
+    );
   }
 
 private:
-  void handlePolygon(geometry_msgs::msg::PolygonStamped::SharedPtr message, std::size_t index) {
-    if (message->polygon.points.empty()) {
+  void handlePolygon(geometry_msgs::msg::PolygonStamped::SharedPtr message, std::size_t index)
+  {
+    if (message->polygon.points.empty())
+    {
       return;
     }
     polygons_[index] = std::move(message);
     visualization_msgs::msg::MarkerArray marker_array;
-    for (std::size_t boundary_index = 0; boundary_index < polygons_.size(); ++boundary_index) {
-      if (!polygons_[boundary_index] || polygons_[boundary_index]->polygon.points.empty()) {
+    for (std::size_t boundary_index = 0; boundary_index < polygons_.size(); ++boundary_index)
+    {
+      if (!polygons_[boundary_index] || polygons_[boundary_index]->polygon.points.empty())
+      {
         continue;
       }
       marker_array.markers.push_back(makeLineMarker(*polygons_[boundary_index], boundary_index));
@@ -72,7 +93,8 @@ private:
     marker_pub_->publish(marker_array);
   }
 
-  visualization_msgs::msg::Marker makeLineMarker(const geometry_msgs::msg::PolygonStamped & polygon, std::size_t index) const {
+  visualization_msgs::msg::Marker makeLineMarker(const geometry_msgs::msg::PolygonStamped & polygon, std::size_t index) const
+  {
     visualization_msgs::msg::Marker marker;
     marker.header = polygon.header;
     marker.ns = "collision_monitor_boundary_lines";
@@ -83,7 +105,8 @@ private:
     marker.scale.x = 0.025;
     setColor(marker, styles_[index]);
     marker.frame_locked = true;
-    for (const auto & polygon_point : polygon.polygon.points) {
+    for (const auto & polygon_point : polygon.polygon.points)
+    {
       geometry_msgs::msg::Point marker_point;
       marker_point.x = polygon_point.x;
       marker_point.y = polygon_point.y;
@@ -94,7 +117,8 @@ private:
     return marker;
   }
 
-  visualization_msgs::msg::Marker makeTextMarker(const geometry_msgs::msg::PolygonStamped & polygon, std::size_t index) const {
+  visualization_msgs::msg::Marker makeTextMarker(const geometry_msgs::msg::PolygonStamped & polygon, std::size_t index) const
+  {
     visualization_msgs::msg::Marker marker;
     marker.header = polygon.header;
     marker.ns = "collision_monitor_boundary_labels";
@@ -110,12 +134,14 @@ private:
     return marker;
   }
 
-  geometry_msgs::msg::Point labelPosition(const geometry_msgs::msg::PolygonStamped & polygon, LabelCorner corner) const {
+  geometry_msgs::msg::Point labelPosition(const geometry_msgs::msg::PolygonStamped & polygon, LabelCorner corner) const
+  {
     double min_x = std::numeric_limits<double>::max();
     double max_x = std::numeric_limits<double>::lowest();
     double min_y = std::numeric_limits<double>::max();
     double max_y = std::numeric_limits<double>::lowest();
-    for (const auto & point : polygon.polygon.points) {
+    for (const auto & point : polygon.polygon.points)
+    {
       min_x = std::min(min_x, static_cast<double>(point.x));
       max_x = std::max(max_x, static_cast<double>(point.x));
       min_y = std::min(min_y, static_cast<double>(point.y));
@@ -128,23 +154,41 @@ private:
     return position;
   }
 
-  void setColor(visualization_msgs::msg::Marker & marker, const BoundaryStyle & style) const {
+  void setColor(visualization_msgs::msg::Marker & marker, const BoundaryStyle & style) const
+  {
     marker.color.r = style.red;
     marker.color.g = style.green;
     marker.color.b = style.blue;
     marker.color.a = 1.0;
   }
 
-  const std::array<BoundaryStyle, 3> styles_{{{"STOP", 0.55F, 0.02F, 0.02F, LabelCorner::UpperLeft}, {"SLOWDOWN", 0.02F, 0.15F, 0.55F, LabelCorner::UpperRight}, {"APPROACH", 0.02F, 0.45F, 0.18F, LabelCorner::LowerRight}}};
+  const std::array<BoundaryStyle, 3> styles_
+  {
+    {
+      {
+        "STOP", 0.55F, 0.02F, 0.02F, LabelCorner::UpperLeft
+      }
+      ,
+      {
+        "SLOWDOWN", 0.02F, 0.15F, 0.55F, LabelCorner::UpperRight
+      }
+      ,
+      {
+        "APPROACH", 0.02F, 0.45F, 0.18F, LabelCorner::LowerRight
+      }
+    }
+  };
   std::array<geometry_msgs::msg::PolygonStamped::SharedPtr, 3> polygons_;
   std::array<rclcpp::Subscription<geometry_msgs::msg::PolygonStamped>::SharedPtr, 3> polygon_subs_;
   rclcpp::Subscription<geometry_msgs::msg::PolygonStamped>::SharedPtr approach_footprint_sub_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
 };
 
-}  // namespace nav2_regulated_modules
+}
+// namespace nav2_regulated_modules
 
-int main(int argc, char ** argv) {
+int main(int argc, char ** argv)
+{
   rclcpp::init(argc, argv);
   rclcpp::spin(std::make_shared<nav2_regulated_modules::CollisionBoundaryVisualizer>());
   rclcpp::shutdown();

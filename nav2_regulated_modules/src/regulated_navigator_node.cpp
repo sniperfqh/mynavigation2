@@ -3,7 +3,8 @@
 #include "nav2_regulated_modules/regulated_navigator.hpp"
 #include "rclcpp/rclcpp.hpp"
 
-int main(int argc, char ** argv) {
+int main(int argc, char ** argv)
+{
   rclcpp::init(argc, argv);
   SpdlogWrapper::init("nav2_regulated_modules", "regulated_navigator");
   auto node = std::make_shared<nav2_regulated_modules::RegulatedNavigator>();

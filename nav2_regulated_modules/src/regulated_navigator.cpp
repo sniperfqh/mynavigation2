@@ -11,7 +11,8 @@ using namespace std::chrono_literals;
 namespace nav2_regulated_modules
 {
 
-RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : nav2_util::LifecycleNode("regulated_navigator", "", options) {
+RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : nav2_util::LifecycleNode("regulated_navigator", "", options)
+{
   declare_parameter("global_frame", "map");
   declare_parameter("robot_base_frame", "base_link");
   declare_parameter("operation_mode", "autonomous");
@@ -74,17 +75,25 @@ RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : na
   declare_parameter("chassis_angular_integral_limit", 0.5);
 }
 
-nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycle::State &) {
+nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycle::State &)
+{
   global_frame_ = get_parameter("global_frame").as_string();
   robot_base_frame_ = get_parameter("robot_base_frame").as_string();
   const auto operation_mode = get_parameter("operation_mode").as_string();
-  if (operation_mode == "remote") {
+  if (operation_mode == "remote")
+  {
     operation_mode_ = NavigationMode::REMOTE;
-  } else if (operation_mode == "autonomous") {
+  }
+  else if (operation_mode == "autonomous")
+  {
     operation_mode_ = NavigationMode::AUTONOMOUS;
-  } else if (operation_mode == "fixed_path") {
+  }
+  else if (operation_mode == "fixed_path")
+  {
     operation_mode_ = NavigationMode::FIXED_PATH;
-  } else {
+  }
+  else
+  {
     LOG_ERROR("不支持的 operation_mode：{}", operation_mode);
     return nav2_util::CallbackReturn::FAILURE;
   }
@@ -114,19 +123,26 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   velocity_odom_topic_ = get_parameter("velocity_odom_topic").as_string();
   speed_limit_topic_ = get_parameter("speed_limit_topic").as_string();
   velocity_log_frequency_ = get_parameter("velocity_log_frequency").as_double();
-  if (!std::isfinite(fixed_path_step_) || fixed_path_step_ <= 0.0) {
+  if (!std::isfinite(fixed_path_step_) || fixed_path_step_ <= 0.0)
+  {
     LOG_ERROR("fixed_path_step 必须为有限正数，当前值={}", fixed_path_step_);
     return nav2_util::CallbackReturn::FAILURE;
   }
-  if (!std::isfinite(fixed_path_boundary_half_width_) || fixed_path_boundary_half_width_ <= 0.0) {
+  if (!std::isfinite(fixed_path_boundary_half_width_) || fixed_path_boundary_half_width_ <= 0.0)
+  {
     LOG_ERROR("fixed_path_boundary_half_width 必须为有限正数，当前值={}", fixed_path_boundary_half_width_);
     return nav2_util::CallbackReturn::FAILURE;
   }
-  if (!std::isfinite(velocity_log_frequency_) || velocity_log_frequency_ <= 0.0) {
+  if (!std::isfinite(velocity_log_frequency_) || velocity_log_frequency_ <= 0.0)
+  {
     LOG_ERROR("velocity_log_frequency 必须为有限正数，当前值={}", velocity_log_frequency_);
     return nav2_util::CallbackReturn::FAILURE;
   }
-  if (fixed_path_controller_id_.empty()) {LOG_ERROR("fixed_path_controller_id 不能为空"); return nav2_util::CallbackReturn::FAILURE;}
+  if (fixed_path_controller_id_.empty())
+  {
+    LOG_ERROR("fixed_path_controller_id 不能为空");
+    return nav2_util::CallbackReturn::FAILURE;
+  }
 
   planning_module_.configure(get_parameter("planner_id").as_string(), get_parameter("smoother_id").as_string(), get_parameter("use_smoother").as_bool(), get_parameter("replan_frequency").as_double(), get_parameter("max_consecutive_planning_failures").as_int());
   control_module_.configure(get_parameter("controller_id").as_string(), get_parameter("goal_checker_id").as_string(), get_parameter("progress_timeout").as_double());
@@ -148,9 +164,12 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   chassis_control_config.angular_ki = get_parameter("chassis_angular_ki").as_double();
   chassis_control_config.linear_integral_limit = get_parameter("chassis_linear_integral_limit").as_double();
   chassis_control_config.angular_integral_limit = get_parameter("chassis_angular_integral_limit").as_double();
-  try {
+  try
+  {
     chassis_control_subscriber_ = std::make_unique<ChassisControlSubscriber>(*this, *motion_state_subscriber_, chassis_control_config);
-  } catch (const std::invalid_argument & error) {
+  }
+  catch (const std::invalid_argument & error)
+  {
     LOG_ERROR("ChassisControl 闭环配置失败：{}", error.what());
     motion_state_subscriber_.reset();
     return nav2_util::CallbackReturn::FAILURE;
@@ -167,7 +186,8 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   navigate_poses_server_ = rclcpp_action::create_server<NavigateThroughPoses>(this, get_parameter("navigate_through_poses_action").as_string(), std::bind(&RegulatedNavigator::handlePosesGoal, this, std::placeholders::_1, std::placeholders::_2), std::bind(&RegulatedNavigator::handlePosesCancel, this, std::placeholders::_1), std::bind(&RegulatedNavigator::handlePosesAccepted, this, std::placeholders::_1));
 
   goal_sub_ = create_subscription<geometry_msgs::msg::PoseStamped>(goal_topic_, rclcpp::SystemDefaultsQoS(), std::bind(&RegulatedNavigator::onTopicGoal, this, std::placeholders::_1));
-  if (operation_mode_ == NavigationMode::FIXED_PATH) {
+  if (operation_mode_ == NavigationMode::FIXED_PATH)
+  {
     navigation_service_server_ = rclcpp_action::create_server<NavigationService>(this, navigation_service_action_, std::bind(&RegulatedNavigator::handleNavigationServiceGoal, this, std::placeholders::_1, std::placeholders::_2), std::bind(&RegulatedNavigator::handleNavigationServiceCancel, this, std::placeholders::_1), std::bind(&RegulatedNavigator::handleNavigationServiceAccepted, this, std::placeholders::_1));
     fixed_path_pub_ = create_publisher<nav_msgs::msg::Path>(fixed_path_visualization_topic_, rclcpp::QoS(rclcpp::KeepLast(1)).reliable().transient_local());
     fixed_path_boundaries_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>(fixed_path_boundaries_topic_, rclcpp::QoS(rclcpp::KeepLast(1)).reliable().transient_local());
@@ -192,28 +212,49 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
-nav2_util::CallbackReturn RegulatedNavigator::on_activate(const rclcpp_lifecycle::State &) {
-  if (fixed_path_pub_) {fixed_path_pub_->on_activate();}
-  if (fixed_path_boundaries_pub_) {fixed_path_boundaries_pub_->on_activate();}
-  if (chassis_control_subscriber_) {chassis_control_subscriber_->activate();}
+nav2_util::CallbackReturn RegulatedNavigator::on_activate(const rclcpp_lifecycle::State &)
+{
+  if (fixed_path_pub_)
+  {
+    fixed_path_pub_->on_activate();
+  }
+  if (fixed_path_boundaries_pub_)
+  {
+    fixed_path_boundaries_pub_->on_activate();
+  }
+  if (chassis_control_subscriber_)
+  {
+    chassis_control_subscriber_->activate();
+  }
   active_ = true;
   createBond();
   LOG_INFO("独立规控导航器已激活");
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
-nav2_util::CallbackReturn RegulatedNavigator::on_deactivate(const rclcpp_lifecycle::State &) {
+nav2_util::CallbackReturn RegulatedNavigator::on_deactivate(const rclcpp_lifecycle::State &)
+{
   active_ = false;
-  if (chassis_control_subscriber_) {chassis_control_subscriber_->deactivate();}
+  if (chassis_control_subscriber_)
+  {
+    chassis_control_subscriber_->deactivate();
+  }
   cancelTask("节点停用");
-  if (fixed_path_pub_) {fixed_path_pub_->on_deactivate();}
-  if (fixed_path_boundaries_pub_) {fixed_path_boundaries_pub_->on_deactivate();}
+  if (fixed_path_pub_)
+  {
+    fixed_path_pub_->on_deactivate();
+  }
+  if (fixed_path_boundaries_pub_)
+  {
+    fixed_path_boundaries_pub_->on_deactivate();
+  }
   destroyBond();
   LOG_INFO("独立规控导航器已停用");
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
-nav2_util::CallbackReturn RegulatedNavigator::on_cleanup(const rclcpp_lifecycle::State &) {
+nav2_util::CallbackReturn RegulatedNavigator::on_cleanup(const rclcpp_lifecycle::State &)
+{
   cancelTask("节点清理");
   navigate_pose_server_.reset();
   navigate_poses_server_.reset();
@@ -224,7 +265,10 @@ nav2_util::CallbackReturn RegulatedNavigator::on_cleanup(const rclcpp_lifecycle:
   follow_client_.reset();
   clear_local_client_.reset();
   clear_global_client_.reset();
-  if (chassis_control_subscriber_) {chassis_control_subscriber_->reset();}
+  if (chassis_control_subscriber_)
+  {
+    chassis_control_subscriber_->reset();
+  }
   chassis_control_subscriber_.reset();
   motion_state_subscriber_.reset();
   goal_sub_.reset();
@@ -250,11 +294,16 @@ nav2_util::CallbackReturn RegulatedNavigator::on_cleanup(const rclcpp_lifecycle:
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
-nav2_util::CallbackReturn RegulatedNavigator::on_shutdown(const rclcpp_lifecycle::State &) {
-  if (chassis_control_subscriber_) {chassis_control_subscriber_->deactivate();}
+nav2_util::CallbackReturn RegulatedNavigator::on_shutdown(const rclcpp_lifecycle::State &)
+{
+  if (chassis_control_subscriber_)
+  {
+    chassis_control_subscriber_->deactivate();
+  }
   cancelTask("节点关闭");
   LOG_INFO("独立规控导航器已关闭");
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
-}  // namespace nav2_regulated_modules
+}
+// namespace nav2_regulated_modules

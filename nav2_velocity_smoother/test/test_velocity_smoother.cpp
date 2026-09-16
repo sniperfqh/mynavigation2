@@ -49,7 +49,40 @@ public:
   geometry_msgs::msg::Twist::SharedPtr lastCommandMsg() {return command_;}
 
   void sendCommandMsg(geometry_msgs::msg::Twist::SharedPtr msg) {inputCommandCallback(msg);}
+  void sendSpeedLimit(double speed, bool percentage = false)
+  {
+    auto msg = std::make_shared<nav2_msgs::msg::SpeedLimit>();
+    msg->speed_limit = speed;
+    msg->percentage = percentage;
+    speedLimitCallback(msg);
+  }
+  double targetMaxVelocity() const {return target_maxvx_;}
+  double targetMinVelocity() const {return target_minvx_;}
+  bool isLimitTransitionPending() const {return limitv2target;}
 };
+
+TEST(VelocitySmootherTest, absoluteSpeedLimitIsSymmetric)
+{
+  auto smoother = std::make_shared<VelSmootherShim>();
+
+  smoother->sendSpeedLimit(0.2);
+  EXPECT_DOUBLE_EQ(smoother->targetMaxVelocity(), 0.2);
+  EXPECT_DOUBLE_EQ(smoother->targetMinVelocity(), -0.2);
+  EXPECT_TRUE(smoother->isLimitTransitionPending());
+
+  smoother->sendSpeedLimit(0.0);
+  EXPECT_DOUBLE_EQ(smoother->targetMaxVelocity(), 0.0);
+  EXPECT_DOUBLE_EQ(smoother->targetMinVelocity(), 0.0);
+
+  smoother->sendSpeedLimit(-0.25);
+  EXPECT_DOUBLE_EQ(smoother->targetMaxVelocity(), 0.25);
+  EXPECT_DOUBLE_EQ(smoother->targetMinVelocity(), -0.25);
+
+  smoother->sendSpeedLimit(0.3);
+  smoother->sendSpeedLimit(50.0, true);
+  EXPECT_DOUBLE_EQ(smoother->targetMaxVelocity(), 0.3);
+  EXPECT_DOUBLE_EQ(smoother->targetMinVelocity(), -0.3);
+}
 
 TEST(VelocitySmootherTest, openLoopTestTimer) {
   auto smoother = std::make_shared<VelSmootherShim>();

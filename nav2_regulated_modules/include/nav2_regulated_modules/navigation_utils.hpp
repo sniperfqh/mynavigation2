@@ -6,7 +6,7 @@
 
 namespace nav2_regulated_modules
 {
-namespace navigation_utils
+  namespace navigation_utils
 {
 
 builtin_interfaces::msg::Duration durationFromSeconds(double seconds);
@@ -19,7 +19,9 @@ double normalizeAngle(double angle);
 
 bool validPose(const geometry_msgs::msg::PoseStamped & pose);
 
-}  // namespace navigation_utils
-}  // namespace nav2_regulated_modules
+}
+// namespace navigation_utils
+}
+// namespace nav2_regulated_modules
 
 #endif  // NAV2_REGULATED_MODULES__NAVIGATION_UTILS_HPP_

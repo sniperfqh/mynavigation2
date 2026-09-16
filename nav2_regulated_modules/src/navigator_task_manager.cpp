@@ -6,39 +6,50 @@
 namespace nav2_regulated_modules
 {
 
-void RegulatedNavigator::cancelSubGoals(const bool invalidate_callbacks) {
+void RegulatedNavigator::cancelSubGoals(const bool invalidate_callbacks)
+{
   const bool had_compute_pose = active_compute_pose_goal_ != nullptr;
   const bool had_compute_poses = active_compute_poses_goal_ != nullptr;
   const bool had_smooth = active_smooth_goal_ != nullptr;
   const bool had_follow = active_follow_goal_ != nullptr;
-  if (invalidate_callbacks) {
+  if (invalidate_callbacks)
+  {
     ++plan_sequence_;
     ++follow_sequence_;
   }
   planning_active_ = false;
-  if (active_compute_pose_goal_) {
+  if (active_compute_pose_goal_)
+  {
     compute_pose_client_->async_cancel_goal(active_compute_pose_goal_);
     active_compute_pose_goal_.reset();
   }
-  if (active_compute_poses_goal_) {
+  if (active_compute_poses_goal_)
+  {
     compute_poses_client_->async_cancel_goal(active_compute_poses_goal_);
     active_compute_poses_goal_.reset();
   }
-  if (active_smooth_goal_) {
+  if (active_smooth_goal_)
+  {
     smooth_client_->async_cancel_goal(active_smooth_goal_);
     active_smooth_goal_.reset();
   }
-  if (active_follow_goal_) {
+  if (active_follow_goal_)
+  {
     follow_client_->async_cancel_goal(active_follow_goal_);
     active_follow_goal_.reset();
   }
-  if (had_compute_pose || had_compute_poses || had_smooth || had_follow) {
+  if (had_compute_pose || had_compute_poses || had_smooth || had_follow)
+  {
     LOG_DEBUG("取消子 Goal，compute_pose={}，compute_poses={}，smooth={}，follow={}，invalidate_callbacks={}", had_compute_pose, had_compute_poses, had_smooth, had_follow, invalidate_callbacks);
   }
 }
 
-void RegulatedNavigator::cancelTask(const std::string & reason) {
-  if (task_.type == TaskType::NONE) {return;}
+void RegulatedNavigator::cancelTask(const std::string & reason)
+{
+  if (task_.type == TaskType::NONE)
+  {
+    return;
+  }
   const auto generation = task_.generation;
   task_.state = NavigationState::CANCELING;
   ++task_generation_;
@@ -46,28 +57,40 @@ void RegulatedNavigator::cancelTask(const std::string & reason) {
   stopRobot();
   auto pose_result = std::make_shared<NavigateToPose::Result>();
   auto poses_result = std::make_shared<NavigateThroughPoses::Result>();
-  if (active_pose_goal_) {
-    if (active_pose_goal_->is_canceling()) {
+  if (active_pose_goal_)
+  {
+    if (active_pose_goal_->is_canceling())
+    {
       active_pose_goal_->canceled(pose_result);
-    } else {
+    }
+    else
+    {
       active_pose_goal_->abort(pose_result);
     }
     active_pose_goal_.reset();
   }
-  if (active_poses_goal_) {
-    if (active_poses_goal_->is_canceling()) {
+  if (active_poses_goal_)
+  {
+    if (active_poses_goal_->is_canceling())
+    {
       active_poses_goal_->canceled(poses_result);
-    } else {
+    }
+    else
+    {
       active_poses_goal_->abort(poses_result);
     }
     active_poses_goal_.reset();
   }
-  if (active_navigation_service_goal_) {
+  if (active_navigation_service_goal_)
+  {
     auto navigation_service_result = std::make_shared<NavigationService::Result>();
     navigation_service_result->finish = false;
-    if (active_navigation_service_goal_->is_canceling()) {
+    if (active_navigation_service_goal_->is_canceling())
+    {
       active_navigation_service_goal_->canceled(navigation_service_result);
-    } else {
+    }
+    else
+    {
       active_navigation_service_goal_->abort(navigation_service_result);
     }
     active_navigation_service_goal_.reset();
@@ -77,8 +100,12 @@ void RegulatedNavigator::cancelTask(const std::string & reason) {
   resetTask();
 }
 
-void RegulatedNavigator::preemptCurrentTask() {
-  if (task_.type == TaskType::NONE) {return;}
+void RegulatedNavigator::preemptCurrentTask()
+{
+  if (task_.type == TaskType::NONE)
+  {
+    return;
+  }
   const auto generation = task_.generation;
   const char * task_type = task_.type == TaskType::TO_POSE ? "to_pose" : task_.type == TaskType::THROUGH_POSES ? "through_poses" : task_.type == TaskType::TOPIC_GOAL ? "topic_goal" : "navigation_service";
   ++task_generation_;
@@ -86,15 +113,18 @@ void RegulatedNavigator::preemptCurrentTask() {
   stopRobot();
   auto pose_result = std::make_shared<NavigateToPose::Result>();
   auto poses_result = std::make_shared<NavigateThroughPoses::Result>();
-  if (active_pose_goal_) {
+  if (active_pose_goal_)
+  {
     active_pose_goal_->abort(pose_result);
     active_pose_goal_.reset();
   }
-  if (active_poses_goal_) {
+  if (active_poses_goal_)
+  {
     active_poses_goal_->abort(poses_result);
     active_poses_goal_.reset();
   }
-  if (active_navigation_service_goal_) {
+  if (active_navigation_service_goal_)
+  {
     auto navigation_service_result = std::make_shared<NavigationService::Result>();
     navigation_service_result->finish = false;
     active_navigation_service_goal_->abort(navigation_service_result);
@@ -104,19 +134,23 @@ void RegulatedNavigator::preemptCurrentTask() {
   resetTask();
 }
 
-void RegulatedNavigator::succeedTask() {
+void RegulatedNavigator::succeedTask()
+{
   const auto generation = task_.generation;
   const auto elapsed = (now() - task_.start_time).seconds();
   task_.state = NavigationState::SUCCEEDED;
-  if (active_pose_goal_) {
+  if (active_pose_goal_)
+  {
     active_pose_goal_->succeed(std::make_shared<NavigateToPose::Result>());
     active_pose_goal_.reset();
   }
-  if (active_poses_goal_) {
+  if (active_poses_goal_)
+  {
     active_poses_goal_->succeed(std::make_shared<NavigateThroughPoses::Result>());
     active_poses_goal_.reset();
   }
-  if (active_navigation_service_goal_) {
+  if (active_navigation_service_goal_)
+  {
     auto feedback = std::make_shared<NavigationService::Feedback>();
     feedback->cur_task_id = task_.task_id;
     feedback->cur_seg_id = "";
@@ -131,19 +165,23 @@ void RegulatedNavigator::succeedTask() {
   resetTask();
 }
 
-void RegulatedNavigator::failTask(const std::string & reason) {
+void RegulatedNavigator::failTask(const std::string & reason)
+{
   const auto generation = task_.generation;
   task_.state = NavigationState::FAILED;
   cancelSubGoals(true);
-  if (active_pose_goal_) {
+  if (active_pose_goal_)
+  {
     active_pose_goal_->abort(std::make_shared<NavigateToPose::Result>());
     active_pose_goal_.reset();
   }
-  if (active_poses_goal_) {
+  if (active_poses_goal_)
+  {
     active_poses_goal_->abort(std::make_shared<NavigateThroughPoses::Result>());
     active_poses_goal_.reset();
   }
-  if (active_navigation_service_goal_) {
+  if (active_navigation_service_goal_)
+  {
     auto navigation_service_result = std::make_shared<NavigationService::Result>();
     navigation_service_result->finish = false;
     active_navigation_service_goal_->abort(navigation_service_result);
@@ -153,7 +191,8 @@ void RegulatedNavigator::failTask(const std::string & reason) {
   resetTask();
 }
 
-void RegulatedNavigator::resetTask() {
+void RegulatedNavigator::resetTask()
+{
   if (task_.type == TaskType::NAVIGATION_SERVICE && speed_limit_pub_)
   {
     nav2_msgs::msg::SpeedLimit speed_limit;
@@ -171,4 +210,5 @@ void RegulatedNavigator::resetTask() {
   active_navigation_service_goal_.reset();
 }
 
-}  // namespace nav2_regulated_modules
+}
+// namespace nav2_regulated_modules

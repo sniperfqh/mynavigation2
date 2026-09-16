@@ -14,8 +14,10 @@
 namespace nav2_regulated_modules
 {
 
-std::optional<nav_msgs::msg::Path> RegulatedNavigator::prepareFixedPath(const std::vector<byd_custom_msgs::msg::NaviSegment> & segments) {
-  if (segments.empty()) {
+std::optional<nav_msgs::msg::Path> RegulatedNavigator::prepareFixedPath(const std::vector<byd_custom_msgs::msg::NaviSegment> & segments)
+{
+  if (segments.empty())
+  {
     LOG_ERROR("导航服务至少需要一个有效分段");
     return std::nullopt;
   }
@@ -24,10 +26,12 @@ std::optional<nav_msgs::msg::Path> RegulatedNavigator::prepareFixedPath(const st
   output.header.frame_id = global_frame_;
   output.header.stamp = now();
   constexpr double distance_tolerance = 1e-3;
-  const auto valid_point = [](const geometry_msgs::msg::Point & point) {
+  const auto valid_point = [](const geometry_msgs::msg::Point & point)
+  {
     return std::isfinite(point.x) && std::isfinite(point.y) && std::isfinite(point.z);
   };
-  const auto make_pose = [&output](const geometry_msgs::msg::Point & point) {
+  const auto make_pose = [&output](const geometry_msgs::msg::Point & point)
+  {
     geometry_msgs::msg::PoseStamped pose;
     pose.header = output.header;
     pose.pose.position.x = point.x;
@@ -36,96 +40,124 @@ std::optional<nav_msgs::msg::Path> RegulatedNavigator::prepareFixedPath(const st
     pose.pose.orientation.w = 1.0;
     return pose;
   };
-  for (std::size_t index = 0; index < segments.size(); ++index) {
+  for (std::size_t index = 0; index < segments.size(); ++index)
+  {
     const auto & input = segments[index];
-    if (!valid_point(input.node1) || !valid_point(input.node2) || !valid_point(input.control_pos1) || !valid_point(input.control_pos2)) {
+    if (!valid_point(input.node1) || !valid_point(input.node2) || !valid_point(input.control_pos1) || !valid_point(input.control_pos2))
+    {
       LOG_ERROR("导航服务第 {} 段包含非有限坐标", index);
       return std::nullopt;
     }
     const double endpoint_delta_x = input.node2.x - input.node1.x;
     const double endpoint_delta_y = input.node2.y - input.node1.y;
-    if (endpoint_delta_x * endpoint_delta_x + endpoint_delta_y * endpoint_delta_y <= distance_tolerance * distance_tolerance) {
+    if (endpoint_delta_x * endpoint_delta_x + endpoint_delta_y * endpoint_delta_y <= distance_tolerance * distance_tolerance)
+    {
       LOG_ERROR("导航服务第 {} 段起终点重合", index);
       return std::nullopt;
     }
-    if (index > 0) {
+    if (index > 0)
+    {
       const double join_delta_x = input.node1.x - segments[index - 1].node2.x;
       const double join_delta_y = input.node1.y - segments[index - 1].node2.y;
-      if (join_delta_x * join_delta_x + join_delta_y * join_delta_y > distance_tolerance * distance_tolerance) {
+      if (join_delta_x * join_delta_x + join_delta_y * join_delta_y > distance_tolerance * distance_tolerance)
+      {
         LOG_ERROR("导航服务第 {} 段与前一段不连续", index);
         return std::nullopt;
       }
     }
     nav_msgs::msg::Path four_points;
     four_points.header = output.header;
-    if (input.segment_type == byd_custom_msgs::msg::NaviSegment::SEGMENT_TYPR_LINE) {
+    if (input.segment_type == byd_custom_msgs::msg::NaviSegment::SEGMENT_TYPR_LINE)
+    {
       nav_msgs::msg::Path line;
       line.header = output.header;
       line.poses.push_back(make_pose(input.node1));
       line.poses.push_back(make_pose(input.node2));
       liner2to4point(line, four_points);
-    } else if (input.segment_type == byd_custom_msgs::msg::NaviSegment::SEGMENT_TYPR_BEZIER) {
+    }
+    else if (input.segment_type == byd_custom_msgs::msg::NaviSegment::SEGMENT_TYPR_BEZIER)
+    {
       four_points.poses.push_back(make_pose(input.node1));
       four_points.poses.push_back(make_pose(input.control_pos1));
       four_points.poses.push_back(make_pose(input.control_pos2));
       four_points.poses.push_back(make_pose(input.node2));
-    } else {
+    }
+    else
+    {
       LOG_ERROR("导航服务第 {} 段类型 {} 不受支持", index, input.segment_type);
       return std::nullopt;
     }
     nav_msgs::msg::Path bezier_points;
     generateBezierUniformPoints(four_points, fixed_path_step_, bezier_points);
-    if (bezier_points.poses.empty()) {
+    if (bezier_points.poses.empty())
+    {
       LOG_ERROR("导航服务第 {} 段插值失败", index);
       return std::nullopt;
     }
-    if (!output.poses.empty()) {output.poses.pop_back();}
+    if (!output.poses.empty())
+    {
+      output.poses.pop_back();
+    }
     output.poses.insert(output.poses.end(), std::make_move_iterator(bezier_points.poses.begin()), std::make_move_iterator(bezier_points.poses.end()));
   }
-  if (output.poses.size() < 2) {
+  if (output.poses.size() < 2)
+  {
     LOG_ERROR("导航服务生成的路径点不足两个");
     return std::nullopt;
   }
   const bool backward = segments.front().motion_direction == byd_custom_msgs::msg::NaviSegment::MOTION_DIRECTION_BACKWARD;
-  for (std::size_t index = 0; index < output.poses.size(); ++index) {
+  for (std::size_t index = 0; index < output.poses.size(); ++index)
+  {
     const std::size_t previous_index = index == 0 ? 0 : index - 1;
     const std::size_t next_index = index + 1 < output.poses.size() ? index + 1 : index;
     const double tangent_x = output.poses[next_index].pose.position.x - output.poses[previous_index].pose.position.x;
     const double tangent_y = output.poses[next_index].pose.position.y - output.poses[previous_index].pose.position.y;
-    if (std::hypot(tangent_x, tangent_y) <= 1e-9) {LOG_ERROR("固定路径第 {} 个路径点无法计算有效切线", index); return std::nullopt;}
+    if (std::hypot(tangent_x, tangent_y) <= 1e-9)
+    {
+      LOG_ERROR("固定路径第 {} 个路径点无法计算有效切线", index);
+      return std::nullopt;
+    }
     const double vehicle_yaw = std::atan2(tangent_y, tangent_x) + (backward ? M_PI : 0.0);
     tf2::Quaternion orientation;
     orientation.setRPY(0.0, 0.0, std::atan2(std::sin(vehicle_yaw), std::cos(vehicle_yaw)));
     orientation.normalize();
     output.poses[index].pose.orientation = tf2::toMsg(orientation);
   }
-  for (const auto & pose : output.poses) {
+  for (const auto & pose : output.poses)
+  {
     LOG_INFO("Path Point -> x: {}, y: {}", pose.pose.position.x, pose.pose.position.y);
   }
   return output;
 }
 
-rclcpp_action::GoalResponse RegulatedNavigator::handleNavigationServiceGoal(const rclcpp_action::GoalUUID &, const std::shared_ptr<const NavigationService::Goal> goal) {
-  if (operation_mode_ != NavigationMode::FIXED_PATH) {
+rclcpp_action::GoalResponse RegulatedNavigator::handleNavigationServiceGoal(const rclcpp_action::GoalUUID &, const std::shared_ptr<const NavigationService::Goal> goal)
+{
+  if (operation_mode_ != NavigationMode::FIXED_PATH)
+  {
     LOG_WARN("当前模式不接受 NavigationService Action Goal");
     return rclcpp_action::GoalResponse::REJECT;
   }
-  if (!active_ || goal->navi_segment.empty()) {
+  if (!active_ || goal->navi_segment.empty())
+  {
     LOG_WARN("拒绝 NavigationService Goal：节点未激活或分段数组为空");
     return rclcpp_action::GoalResponse::REJECT;
   }
   const uint8_t requested_direction = goal->navi_segment.front().motion_direction;
-  for (std::size_t index = 0; index < goal->navi_segment.size(); ++index) {
+  for (std::size_t index = 0; index < goal->navi_segment.size(); ++index)
+  {
     const auto & segment = goal->navi_segment[index];
-    if (segment.motion_direction != byd_custom_msgs::msg::NaviSegment::MOTION_DIRECTION_FORWARD && segment.motion_direction != byd_custom_msgs::msg::NaviSegment::MOTION_DIRECTION_BACKWARD) {
+    if (segment.motion_direction != byd_custom_msgs::msg::NaviSegment::MOTION_DIRECTION_FORWARD && segment.motion_direction != byd_custom_msgs::msg::NaviSegment::MOTION_DIRECTION_BACKWARD)
+    {
       LOG_WARN("拒绝 NavigationService Goal：第 {} 段 motion_direction={} 无效，仅支持 1 前进或 2 倒车", index, segment.motion_direction);
       return rclcpp_action::GoalResponse::REJECT;
     }
-    if (segment.motion_direction != requested_direction) {
+    if (segment.motion_direction != requested_direction)
+    {
       LOG_WARN("拒绝 NavigationService Goal：当前仅支持整条 Action 使用同一运动方向，第 {} 段方向={}，首段方向={}", index, segment.motion_direction, requested_direction);
       return rclcpp_action::GoalResponse::REJECT;
     }
-    if (!std::isfinite(static_cast<double>(segment.max_speed)) || segment.max_speed <= 0.0F) {
+    if (!std::isfinite(static_cast<double>(segment.max_speed)) || segment.max_speed <= 0.0F)
+    {
       LOG_WARN("拒绝 NavigationService Goal：第 {} 段 max_speed={}，必须为有限正数", index, segment.max_speed);
       return rclcpp_action::GoalResponse::REJECT;
     }
@@ -133,24 +165,29 @@ rclcpp_action::GoalResponse RegulatedNavigator::handleNavigationServiceGoal(cons
   return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
 
-rclcpp_action::CancelResponse RegulatedNavigator::handleNavigationServiceCancel(const std::shared_ptr<NavigationServiceHandle> goal) {
-  if (goal == active_navigation_service_goal_) {
+rclcpp_action::CancelResponse RegulatedNavigator::handleNavigationServiceCancel(const std::shared_ptr<NavigationServiceHandle> goal)
+{
+  if (goal == active_navigation_service_goal_)
+  {
     cancel_requested_ = true;
     LOG_DEBUG("收到 NavigationService 取消请求，generation={}", task_.generation);
   }
   return rclcpp_action::CancelResponse::ACCEPT;
 }
 
-void RegulatedNavigator::handleNavigationServiceAccepted(const std::shared_ptr<NavigationServiceHandle> goal) {
+void RegulatedNavigator::handleNavigationServiceAccepted(const std::shared_ptr<NavigationServiceHandle> goal)
+{
   auto prepared_path = prepareFixedPath(goal->get_goal()->navi_segment);
-  if (!prepared_path) {
+  if (!prepared_path)
+  {
     auto result = std::make_shared<NavigationService::Result>();
     result->finish = false;
     goal->abort(result);
     LOG_ERROR("NavigationService Goal 已接受但分段路径生成失败");
     return;
   }
-  if (!follow_client_->wait_for_action_server(std::chrono::duration<double>(server_timeout_))) {
+  if (!follow_client_->wait_for_action_server(std::chrono::duration<double>(server_timeout_)))
+  {
     auto result = std::make_shared<NavigationService::Result>();
     result->finish = false;
     goal->abort(result);
@@ -173,7 +210,8 @@ void RegulatedNavigator::handleNavigationServiceAccepted(const std::shared_ptr<N
   task_.task_id = goal->get_goal()->task_id;
   task_.goal = prepared_path->poses.back();
   task_.active_path = *prepared_path;
-  for (std::size_t index = 1; index < prepared_path->poses.size(); ++index) {
+  for (std::size_t index = 1; index < prepared_path->poses.size(); ++index)
+  {
     const auto & previous = prepared_path->poses[index - 1].pose.position;
     const auto & current = prepared_path->poses[index].pose.position;
     task_.total_path_length += std::hypot(current.x - previous.x, current.y - previous.y);
@@ -186,7 +224,8 @@ void RegulatedNavigator::handleNavigationServiceAccepted(const std::shared_ptr<N
   task_.start_yaw = start_yaw;
   task_.goal_yaw = goal_yaw;
   task_.requested_speed = std::numeric_limits<double>::max();
-  for (const auto & segment : goal->get_goal()->navi_segment) {
+  for (const auto & segment : goal->get_goal()->navi_segment)
+  {
     task_.requested_speed = std::min(task_.requested_speed, static_cast<double>(segment.max_speed));
   }
   const bool is_backward = first_segment.motion_direction == byd_custom_msgs::msg::NaviSegment::MOTION_DIRECTION_BACKWARD;
@@ -194,25 +233,69 @@ void RegulatedNavigator::handleNavigationServiceAccepted(const std::shared_ptr<N
   LOG_INFO("接受 NavigationService Action，generation={}，task_id={}，frame={}，路径点数={}，总长度={:.3f}m", task_.generation, task_.task_id, prepared_path->header.frame_id, prepared_path->poses.size(), task_.total_path_length);
   publishFixedPath(task_.active_path);
   publishSpeedLimit(goal);
-  LOG_INFO("固定路径{}保持车辆当前位置不变，由专用控制器先原地对齐起点车头，再以{}速度跟踪并在终点对齐停车，generation={}", is_backward ? "后退" : "前进", is_backward ? "负" : "正", task_.generation);
+  LOG_INFO("固定路径{}保持车辆当前位置不变，由专用控制器根据起点横向与运动方向航向误差选择直接跟踪或原地对齐，再以{}速度跟踪并在终点对齐停车，generation={}", is_backward ? "后退" : "前进", is_backward ? "负" : "正", task_.generation);
   sendFollowPath(*prepared_path);
 }
 
-void RegulatedNavigator::publishFixedPath(const nav_msgs::msg::Path & path) {
-  if (!fixed_path_pub_ || !fixed_path_pub_->is_activated() || !fixed_path_boundaries_pub_ || !fixed_path_boundaries_pub_->is_activated()) {
+void RegulatedNavigator::publishFixedPath(const nav_msgs::msg::Path & path)
+{
+  if (!fixed_path_pub_ || !fixed_path_pub_->is_activated() || !fixed_path_boundaries_pub_ || !fixed_path_boundaries_pub_->is_activated())
+  {
     LOG_WARN("固定路径可视化发布器未激活，跳过发布");
     return;
   }
-  if (path.poses.empty()) {
+  if (path.poses.empty())
+  {
     LOG_WARN("固定路径为空，跳过 RViz2 可视化发布");
     return;
   }
   auto visualization_path = path;
   visualization_path.header.stamp = now();
-  for (auto & pose : visualization_path.poses) {pose.header = visualization_path.header;}
+  for (auto & pose : visualization_path.poses)
+  {
+    pose.header = visualization_path.header;
+  }
   fixed_path_pub_->publish(visualization_path);
   visualization_msgs::msg::MarkerArray boundaries;
-  const auto make_line = [&visualization_path](const int id, const double lateral_offset, const double height, const double width, const float red, const float green, const float blue, const float alpha) {visualization_msgs::msg::Marker marker; marker.header = visualization_path.header; marker.ns = "fixed_path_tech_boundaries"; marker.id = id; marker.type = visualization_msgs::msg::Marker::LINE_STRIP; marker.action = visualization_msgs::msg::Marker::ADD; marker.pose.orientation.w = 1.0; marker.scale.x = width; marker.color.r = red; marker.color.g = green; marker.color.b = blue; marker.color.a = alpha; marker.frame_locked = true; marker.points.reserve(visualization_path.poses.size()); for (std::size_t index = 0; index < visualization_path.poses.size(); ++index) {const std::size_t previous_index = index == 0 ? 0 : index - 1; const std::size_t next_index = index + 1 < visualization_path.poses.size() ? index + 1 : index; const auto & previous = visualization_path.poses[previous_index].pose.position; const auto & next = visualization_path.poses[next_index].pose.position; const auto & current = visualization_path.poses[index].pose.position; const double tangent_x = next.x - previous.x; const double tangent_y = next.y - previous.y; const double tangent_length = std::hypot(tangent_x, tangent_y); geometry_msgs::msg::Point point; point.x = current.x; point.y = current.y; point.z = height; if (tangent_length > 1e-9) {point.x -= lateral_offset * tangent_y / tangent_length; point.y += lateral_offset * tangent_x / tangent_length;} marker.points.push_back(point);} return marker;};
+  const auto make_line = [&visualization_path](const int id, const double lateral_offset, const double height, const double width, const float red, const float green, const float blue, const float alpha)
+  {
+    visualization_msgs::msg::Marker marker;
+    marker.header = visualization_path.header;
+    marker.ns = "fixed_path_tech_boundaries";
+    marker.id = id;
+    marker.type = visualization_msgs::msg::Marker::LINE_STRIP;
+    marker.action = visualization_msgs::msg::Marker::ADD;
+    marker.pose.orientation.w = 1.0;
+    marker.scale.x = width;
+    marker.color.r = red;
+    marker.color.g = green;
+    marker.color.b = blue;
+    marker.color.a = alpha;
+    marker.frame_locked = true;
+    marker.points.reserve(visualization_path.poses.size());
+    for (std::size_t index = 0; index < visualization_path.poses.size(); ++index)
+    {
+      const std::size_t previous_index = index == 0 ? 0 : index - 1;
+      const std::size_t next_index = index + 1 < visualization_path.poses.size() ? index + 1 : index;
+      const auto & previous = visualization_path.poses[previous_index].pose.position;
+      const auto & next = visualization_path.poses[next_index].pose.position;
+      const auto & current = visualization_path.poses[index].pose.position;
+      const double tangent_x = next.x - previous.x;
+      const double tangent_y = next.y - previous.y;
+      const double tangent_length = std::hypot(tangent_x, tangent_y);
+      geometry_msgs::msg::Point point;
+      point.x = current.x;
+      point.y = current.y;
+      point.z = height;
+      if (tangent_length > 1e-9)
+      {
+        point.x -= lateral_offset * tangent_y / tangent_length;
+        point.y += lateral_offset * tangent_x / tangent_length;
+      }
+      marker.points.push_back(point);
+    }
+    return marker;
+  };
   boundaries.markers.push_back(make_line(0, fixed_path_boundary_half_width_, 0.035, 0.14, 0.0F, 0.55F, 1.0F, 0.20F));
   boundaries.markers.push_back(make_line(1, -fixed_path_boundary_half_width_, 0.035, 0.14, 0.45F, 0.0F, 1.0F, 0.20F));
   boundaries.markers.push_back(make_line(2, fixed_path_boundary_half_width_, 0.055, 0.035, 0.0F, 0.95F, 1.0F, 1.0F));
@@ -232,15 +315,24 @@ void RegulatedNavigator::publishFixedPath(const nav_msgs::msg::Path & path) {
   nodes.color.b = 1.0F;
   nodes.color.a = 0.9F;
   nodes.frame_locked = true;
-  for (std::size_t index = 0; index < visualization_path.poses.size(); index += 5) {const auto left_point = boundaries.markers[2].points[index]; const auto right_point = boundaries.markers[3].points[index]; nodes.points.push_back(left_point); nodes.points.push_back(right_point);}
+  for (std::size_t index = 0; index < visualization_path.poses.size(); index += 5)
+  {
+    const auto left_point = boundaries.markers[2].points[index];
+    const auto right_point = boundaries.markers[3].points[index];
+    nodes.points.push_back(left_point);
+    nodes.points.push_back(right_point);
+  }
   boundaries.markers.push_back(std::move(nodes));
   fixed_path_boundaries_pub_->publish(boundaries);
   LOG_INFO("固定路径与科技风边界已发布到 RViz2，path_topic={}，boundaries_topic={}，frame={}，路径点数={}，左右半宽={:.2f}m", fixed_path_visualization_topic_, fixed_path_boundaries_topic_, visualization_path.header.frame_id, visualization_path.poses.size(), fixed_path_boundary_half_width_);
 }
 
-void RegulatedNavigator::resumeCurrentTask() {
-  if (task_.type == TaskType::NAVIGATION_SERVICE) {
-    if (task_.active_path.poses.empty()) {
+void RegulatedNavigator::resumeCurrentTask()
+{
+  if (task_.type == TaskType::NAVIGATION_SERVICE)
+  {
+    if (task_.active_path.poses.empty())
+    {
       failTask("没有可恢复的固定路径");
       return;
     }
@@ -253,7 +345,8 @@ void RegulatedNavigator::resumeCurrentTask() {
   startPlanning(false);
 }
 
-void RegulatedNavigator::liner2to4point(const nav_msgs::msg::Path & input_path, nav_msgs::msg::Path & output_path) {
+void RegulatedNavigator::liner2to4point(const nav_msgs::msg::Path & input_path, nav_msgs::msg::Path & output_path)
+{
   const auto & start = input_path.poses[0].pose.position;
   const auto & end = input_path.poses[1].pose.position;
   output_path.header = input_path.header;
@@ -277,7 +370,8 @@ void RegulatedNavigator::liner2to4point(const nav_msgs::msg::Path & input_path, 
   output_path.poses.push_back(input_path.poses[1]);
 }
 
-geometry_msgs::msg::PoseStamped RegulatedNavigator::bezier3(const nav_msgs::msg::Path & input_path, const double t, const bool use_result) {
+geometry_msgs::msg::PoseStamped RegulatedNavigator::bezier3(const nav_msgs::msg::Path & input_path, const double t, const bool use_result)
+{
   const double inverse_t = 1.0 - t;
   const double basis0 = inverse_t * inverse_t * inverse_t;
   const double basis1 = 3.0 * inverse_t * inverse_t * t;
@@ -292,7 +386,8 @@ geometry_msgs::msg::PoseStamped RegulatedNavigator::bezier3(const nav_msgs::msg:
   result.pose.position.x = basis0 * point0.x + basis1 * point1.x + basis2 * point2.x + basis3 * point3.x;
   result.pose.position.y = basis0 * point0.y + basis1 * point1.y + basis2 * point2.y + basis3 * point3.y;
   result.pose.position.z = 0.0;
-  if (!use_result) {
+  if (!use_result)
+  {
     result.pose.orientation.w = 1.0;
     return result;
   }
@@ -305,35 +400,50 @@ geometry_msgs::msg::PoseStamped RegulatedNavigator::bezier3(const nav_msgs::msg:
   return result;
 }
 
-void RegulatedNavigator::computeArcLengths(const std::vector<geometry_msgs::msg::PoseStamped> & poses, std::vector<double> & arc_lengths) {
+void RegulatedNavigator::computeArcLengths(const std::vector<geometry_msgs::msg::PoseStamped> & poses, std::vector<double> & arc_lengths)
+{
   arc_lengths.assign(poses.size(), 0.0);
-  for (std::size_t index = 1; index < poses.size(); ++index) {
+  for (std::size_t index = 1; index < poses.size(); ++index)
+  {
     const double delta_x = poses[index].pose.position.x - poses[index - 1].pose.position.x;
     const double delta_y = poses[index].pose.position.y - poses[index - 1].pose.position.y;
     arc_lengths[index] = arc_lengths[index - 1] + std::hypot(delta_x, delta_y);
   }
 }
 
-double RegulatedNavigator::findTfromArcLength(const std::vector<double> & arc_lengths, const std::vector<double> & ts, const double target_length) {
-  if (target_length <= arc_lengths.front()) {return ts.front();}
-  if (target_length >= arc_lengths.back()) {return ts.back();}
+double RegulatedNavigator::findTfromArcLength(const std::vector<double> & arc_lengths, const std::vector<double> & ts, const double target_length)
+{
+  if (target_length <= arc_lengths.front())
+  {
+    return ts.front();
+  }
+  if (target_length >= arc_lengths.back())
+  {
+    return ts.back();
+  }
   const auto upper = std::upper_bound(arc_lengths.begin(), arc_lengths.end(), target_length);
   const std::size_t upper_index = static_cast<std::size_t>(std::distance(arc_lengths.begin(), upper));
   const std::size_t lower_index = upper_index - 1;
   const double lower_length = arc_lengths[lower_index];
   const double upper_length = arc_lengths[upper_index];
-  if (upper_length <= lower_length) {return ts[upper_index];}
+  if (upper_length <= lower_length)
+  {
+    return ts[upper_index];
+  }
   return ts[lower_index] + (target_length - lower_length) / (upper_length - lower_length) * (ts[upper_index] - ts[lower_index]);
 }
 
-void RegulatedNavigator::generateBezierUniformPoints(const nav_msgs::msg::Path & input_path, const double interval, nav_msgs::msg::Path & output_path) {
+void RegulatedNavigator::generateBezierUniformPoints(const nav_msgs::msg::Path & input_path, const double interval, nav_msgs::msg::Path & output_path)
+{
   output_path = nav_msgs::msg::Path();
-  if (input_path.poses.size() != 4 || !std::isfinite(interval) || interval <= 0.0) {
+  if (input_path.poses.size() != 4 || !std::isfinite(interval) || interval <= 0.0)
+  {
     LOG_ERROR("贝塞尔插值要求四个控制点和有限正采样间距，控制点数={}，间距={}", input_path.poses.size(), interval);
     return;
   }
   double control_polygon_length = 0.0;
-  for (std::size_t index = 1; index < input_path.poses.size(); ++index) {
+  for (std::size_t index = 1; index < input_path.poses.size(); ++index)
+  {
     const double delta_x = input_path.poses[index].pose.position.x - input_path.poses[index - 1].pose.position.x;
     const double delta_y = input_path.poses[index].pose.position.y - input_path.poses[index - 1].pose.position.y;
     control_polygon_length += std::hypot(delta_x, delta_y);
@@ -343,7 +453,8 @@ void RegulatedNavigator::generateBezierUniformPoints(const nav_msgs::msg::Path &
   std::vector<double> parameters;
   dense_poses.reserve(static_cast<std::size_t>(dense_count));
   parameters.reserve(static_cast<std::size_t>(dense_count));
-  for (int index = 0; index < dense_count; ++index) {
+  for (int index = 0; index < dense_count; ++index)
+  {
     const double parameter = static_cast<double>(index) / static_cast<double>(dense_count - 1);
     parameters.push_back(parameter);
     dense_poses.push_back(bezier3(input_path, parameter, false));
@@ -354,13 +465,17 @@ void RegulatedNavigator::generateBezierUniformPoints(const nav_msgs::msg::Path &
   const int sample_count = static_cast<int>(std::floor(total_length / interval)) + 1;
   output_path.header = input_path.header;
   output_path.poses.reserve(static_cast<std::size_t>(sample_count + 1));
-  for (int index = 0; index < sample_count; ++index) {
+  for (int index = 0; index < sample_count; ++index)
+  {
     const double target_length = std::min(static_cast<double>(index) * interval, total_length);
     output_path.poses.push_back(bezier3(input_path, findTfromArcLength(arc_lengths, parameters, target_length), true));
   }
   const auto & last_position = output_path.poses.back().pose.position;
   const auto & end_position = input_path.poses.back().pose.position;
-  if (last_position.x != end_position.x || last_position.y != end_position.y) {output_path.poses.push_back(bezier3(input_path, 1.0, true));}
+  if (last_position.x != end_position.x || last_position.y != end_position.y)
+  {
+    output_path.poses.push_back(bezier3(input_path, 1.0, true));
+  }
 }
 
 void RegulatedNavigator::publishSpeedLimit(const std::shared_ptr<NavigationServiceHandle> goal)
@@ -371,10 +486,14 @@ void RegulatedNavigator::publishSpeedLimit(const std::shared_ptr<NavigationServi
   // 不使用百分比模式（与订阅端逻辑对应：percentage 为 true 会报错）
   msg.percentage = false;
   double speed_magnitude = std::numeric_limits<double>::max();
-  for (const auto & segment : goal->get_goal()->navi_segment) {speed_magnitude = std::min(speed_magnitude, static_cast<double>(segment.max_speed));}
+  for (const auto & segment : goal->get_goal()->navi_segment)
+  {
+    speed_magnitude = std::min(speed_magnitude, static_cast<double>(segment.max_speed));
+  }
   msg.speed_limit = speed_magnitude;
   speed_limit_pub_->publish(msg);
   LOG_INFO("固定路径速度限制按绝对值发布，motion_direction={}，speed_limit={:.3f}m/s", goal->get_goal()->navi_segment.front().motion_direction, msg.speed_limit);
 }
 
-}  // namespace nav2_regulated_modules
+}
+// namespace nav2_regulated_modules

@@ -20,7 +20,7 @@ namespace nav2_regulated_modules
 
 class FixedPathController : public nav2_core::Controller
 {
-public:
+  public:
   FixedPathController() = default;
   ~FixedPathController() override = default;
 
@@ -33,7 +33,10 @@ public:
   void setSpeedLimit(const double & speed_limit, const bool & percentage) override;
 
 private:
-  enum class Phase {ALIGN_START, TRACK_PATH, ALIGN_GOAL, SETTLE};
+  enum class Phase
+  {
+    ALIGN_START, TRACK_PATH, ALIGN_GOAL, SETTLE
+  };
 
   bool transformPose(const std::string & frame, const geometry_msgs::msg::PoseStamped & input, geometry_msgs::msg::PoseStamped & output) const;
   std::size_t findNearestIndex(const geometry_msgs::msg::PoseStamped & robot_pose);
@@ -48,35 +51,121 @@ private:
   rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
   std::shared_ptr<tf2_ros::Buffer> tf_;
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
-  rclcpp::Logger logger_{rclcpp::get_logger("FixedPathController")};
+  rclcpp::Logger logger_
+  {
+    rclcpp::get_logger("FixedPathController")
+  };
   rclcpp::Clock::SharedPtr clock_;
   std::string plugin_name_;
   nav_msgs::msg::Path global_plan_;
   std::mutex mutex_;
-  Phase phase_{Phase::ALIGN_START};
-  std::size_t nearest_index_{0};
-  int direction_sign_{1};
-  int stable_cycles_{0};
-  double start_yaw_{0.0};
-  double goal_yaw_{0.0};
-  double base_linear_velocity_{0.52};
-  double speed_limit_{0.52};
-  double lookahead_dist_{0.45};
-  double min_lookahead_dist_{0.25};
-  double max_lookahead_dist_{0.75};
-  double lookahead_time_{1.5};
-  double start_position_tolerance_{0.70};
-  double initial_yaw_tolerance_{0.03490658503988659};
-  double rotate_to_heading_angular_vel_{0.4};
-  double max_angular_accel_{0.8};
-  double min_approach_linear_velocity_{0.01};
-  double approach_velocity_scaling_dist_{0.8};
-  double goal_position_hysteresis_{1.5};
-  double transform_tolerance_{0.2};
-  double control_duration_{0.02};
-  int alignment_stable_cycles_{5};
+  Phase phase_
+  {
+    Phase::ALIGN_START
+  };
+  std::size_t nearest_index_
+  {
+    0
+  };
+  int direction_sign_
+  {
+    1
+  };
+  int stable_cycles_
+  {
+    0
+  };
+  bool start_strategy_evaluated_
+  {
+    false
+  };
+  bool direct_start_tracking_
+  {
+    false
+  };
+  double start_path_yaw_
+  {
+    0.0
+  };
+  double goal_path_yaw_
+  {
+    0.0
+  };
+  double base_linear_velocity_
+  {
+    0.52
+  };
+  double speed_limit_
+  {
+    0.52
+  };
+  double lookahead_dist_
+  {
+    0.45
+  };
+  double min_lookahead_dist_
+  {
+    0.25
+  };
+  double max_lookahead_dist_
+  {
+    0.75
+  };
+  double lookahead_time_
+  {
+    1.5
+  };
+  double start_position_tolerance_
+  {
+    0.70
+  };
+  double direct_tracking_lateral_tolerance_
+  {
+    0.20
+  };
+  double direct_tracking_max_yaw_error_
+  {
+    0.2617993877991494
+  };
+  double initial_yaw_tolerance_
+  {
+    0.12217304763960307
+  };
+  double rotate_to_heading_angular_vel_
+  {
+    0.4
+  };
+  double max_angular_accel_
+  {
+    0.8
+  };
+  double min_approach_linear_velocity_
+  {
+    0.01
+  };
+  double approach_velocity_scaling_dist_
+  {
+    0.8
+  };
+  double goal_position_hysteresis_
+  {
+    1.5
+  };
+  double transform_tolerance_
+  {
+    0.2
+  };
+  double control_duration_
+  {
+    0.02
+  };
+  int alignment_stable_cycles_
+  {
+    5
+  };
 };
 
-}  // namespace nav2_regulated_modules
+}
+// namespace nav2_regulated_modules
 
 #endif  // NAV2_REGULATED_MODULES__FIXED_PATH_CONTROLLER_HPP_

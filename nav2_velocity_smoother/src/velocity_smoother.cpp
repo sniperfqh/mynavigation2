@@ -323,16 +323,18 @@ void VelocitySmoother::smootherTimer() {
   smoothed_cmd_pub_->publish(std::move(cmd_vel));
 }
 
-void VelocitySmoother::speedLimitCallback(const nav2_msgs::msg::SpeedLimit::SharedPtr msg) {
-  if (msg->percentage) {
-      RCLCPP_ERROR(this->get_logger(), "Percentage mode is not supported");
-      return;
+void VelocitySmoother::speedLimitCallback(const nav2_msgs::msg::SpeedLimit::SharedPtr msg)
+{
+  if (msg->percentage)
+  {
+    RCLCPP_ERROR(this->get_logger(), "Percentage mode is not supported");
+    return;
   }
 
-  double speed = msg->speed_limit;
-  RCLCPP_INFO(this->get_logger(), "set speed = {%0.3f}",speed);
-  target_maxvx_ = std::max(0.0, speed);   // 正数保留，负数归零
-  target_minvx_ = std::min(0.0, speed);   // 负数保留，正数归零
+  const double speed_magnitude = std::abs(msg->speed_limit);
+  RCLCPP_INFO(this->get_logger(), "set symmetric speed limit = [-%0.3f, %0.3f]", speed_magnitude, speed_magnitude);
+  target_maxvx_ = speed_magnitude;
+  target_minvx_ = -speed_magnitude;
   limitv2target = true;
 }
 

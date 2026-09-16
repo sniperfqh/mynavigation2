@@ -40,7 +40,7 @@ namespace nav2_regulated_modules
 
 class RegulatedNavigator : public nav2_util::LifecycleNode
 {
-public:
+  public:
   using ComputePathToPose = nav2_msgs::action::ComputePathToPose;
   using ComputePathThroughPoses = nav2_msgs::action::ComputePathThroughPoses;
   using SmoothPath = nav2_msgs::action::SmoothPath;
@@ -114,17 +114,47 @@ private:
   void failTask(const std::string & reason);
   void resetTask();
 
-  bool configured_{false};
-  bool active_{false};
-  bool planning_active_{false};
-  bool updating_path_{false};
-  bool has_last_pose_{false};
-  bool cancel_requested_{false};
-  uint64_t task_generation_{0};
-  uint64_t plan_sequence_{0};
-  uint64_t follow_sequence_{0};
+  bool configured_
+  {
+    false
+  };
+  bool active_
+  {
+    false
+  };
+  bool planning_active_
+  {
+    false
+  };
+  bool updating_path_
+  {
+    false
+  };
+  bool has_last_pose_
+  {
+    false
+  };
+  bool cancel_requested_
+  {
+    false
+  };
+  uint64_t task_generation_
+  {
+    0
+  };
+  uint64_t plan_sequence_
+  {
+    0
+  };
+  uint64_t follow_sequence_
+  {
+    0
+  };
   NavigationTask task_;
-  NavigationMode operation_mode_{NavigationMode::AUTONOMOUS};
+  NavigationMode operation_mode_
+  {
+    NavigationMode::AUTONOMOUS
+  };
   std::unique_ptr<MotionStateSubscriber> motion_state_subscriber_;
   std::unique_ptr<ChassisControlSubscriber> chassis_control_subscriber_;
   PlanningModule planning_module_;
@@ -141,38 +171,113 @@ private:
   std::string smoothed_cmd_vel_topic_;
   std::string velocity_odom_topic_;
   std::string speed_limit_topic_;
-  double server_timeout_{5.0};
-  double cancel_timeout_{2.0};
-  double smoothing_duration_{2.0};
-  double feedback_frequency_{5.0};
-  double costmap_wait_duration_{0.8};
-  double passed_goal_radius_{0.7};
-  double localization_timeout_{0.3};
-  double max_translation_jump_{0.3};
-  double max_rotation_jump_{0.35};
-  double progress_min_translation_{0.1};
-  double localization_recovery_timeout_{10.0};
-  double localization_stable_duration_{0.5};
-  int max_recovery_rounds_{2};
-  bool check_smoother_collisions_{true};
-  double current_speed_{0.0};
-  double fixed_path_step_{0.1};
-  double fixed_path_boundary_half_width_{0.4};
-  double velocity_log_frequency_{1.0};
+  double server_timeout_
+  {
+    5.0
+  };
+  double cancel_timeout_
+  {
+    2.0
+  };
+  double smoothing_duration_
+  {
+    2.0
+  };
+  double feedback_frequency_
+  {
+    5.0
+  };
+  double costmap_wait_duration_
+  {
+    0.8
+  };
+  double passed_goal_radius_
+  {
+    0.7
+  };
+  double localization_timeout_
+  {
+    0.3
+  };
+  double max_translation_jump_
+  {
+    0.3
+  };
+  double max_rotation_jump_
+  {
+    0.35
+  };
+  double progress_min_translation_
+  {
+    0.1
+  };
+  double localization_recovery_timeout_
+  {
+    10.0
+  };
+  double localization_stable_duration_
+  {
+    0.5
+  };
+  int max_recovery_rounds_
+  {
+    2
+  };
+  bool check_smoother_collisions_
+  {
+    true
+  };
+  double current_speed_
+  {
+    0.0
+  };
+  double fixed_path_step_
+  {
+    0.1
+  };
+  double fixed_path_boundary_half_width_
+  {
+    0.4
+  };
+  double velocity_log_frequency_
+  {
+    1.0
+  };
 
-  rclcpp::Time last_valid_tf_time_{0, 0, RCL_ROS_TIME};
-  rclcpp::Time localization_lost_time_{0, 0, RCL_ROS_TIME};
-  rclcpp::Time localization_stable_since_{0, 0, RCL_ROS_TIME};
-  rclcpp::Time recovery_ready_time_{0, 0, RCL_ROS_TIME};
+  rclcpp::Time last_valid_tf_time_
+  {
+    0, 0, RCL_ROS_TIME
+  };
+  rclcpp::Time localization_lost_time_
+  {
+    0, 0, RCL_ROS_TIME
+  };
+  rclcpp::Time localization_stable_since_
+  {
+    0, 0, RCL_ROS_TIME
+  };
+  rclcpp::Time recovery_ready_time_
+  {
+    0, 0, RCL_ROS_TIME
+  };
   geometry_msgs::msg::PoseStamped last_pose_;
   nav_msgs::msg::Path pending_raw_path_;
   geometry_msgs::msg::Twist latest_controller_velocity_;
   geometry_msgs::msg::Twist latest_smoothed_velocity_;
   nav_msgs::msg::Odometry latest_velocity_odometry_;
   std::mutex velocity_mutex_;
-  bool has_controller_velocity_{false};
-  bool has_smoothed_velocity_{false};
-  bool has_velocity_odometry_{false};
+  bool has_controller_velocity_
+  {
+    false
+  };
+  bool has_smoothed_velocity_
+  {
+    false
+  };
+  bool has_velocity_odometry_
+  {
+    false
+  };
 
   rclcpp_action::Client<ComputePathToPose>::SharedPtr compute_pose_client_;
   rclcpp_action::Client<ComputePathThroughPoses>::SharedPtr compute_poses_client_;
@@ -207,6 +312,7 @@ private:
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
 };
 
-}  // namespace nav2_regulated_modules
+}
+// namespace nav2_regulated_modules
 
 #endif  // NAV2_REGULATED_MODULES__REGULATED_NAVIGATOR_HPP_

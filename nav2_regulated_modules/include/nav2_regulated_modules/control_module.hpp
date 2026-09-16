@@ -8,7 +8,7 @@ namespace nav2_regulated_modules
 
 class ControlModule
 {
-public:
+  public:
   void configure(std::string controller_id, std::string goal_checker_id, double progress_timeout);
 
   const std::string & controllerId() const;
@@ -18,9 +18,13 @@ public:
 private:
   std::string controller_id_;
   std::string goal_checker_id_;
-  double progress_timeout_{10.0};
+  double progress_timeout_
+  {
+    10.0
+  };
 };
 
-}  // namespace nav2_regulated_modules
+}
+// namespace nav2_regulated_modules
 
 #endif  // NAV2_REGULATED_MODULES__CONTROL_MODULE_HPP_

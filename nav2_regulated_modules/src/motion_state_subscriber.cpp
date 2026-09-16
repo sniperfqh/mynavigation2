@@ -8,12 +8,15 @@
 namespace nav2_regulated_modules
 {
 
-MotionStateSubscriber::MotionStateSubscriber(nav2_util::LifecycleNode & node) {
+MotionStateSubscriber::MotionStateSubscriber(nav2_util::LifecycleNode & node)
+{
   subscription_ = node.create_subscription<byd_custom_msgs::msg::MotionState>("/motion_state", rclcpp::SensorDataQoS(), std::bind(&MotionStateSubscriber::onMotionState, this, std::placeholders::_1));
 }
 
-void MotionStateSubscriber::onMotionState(const byd_custom_msgs::msg::MotionState::ConstSharedPtr message) {
-  if (!std::isfinite(message->v_car) || !std::isfinite(message->w_car)) {
+void MotionStateSubscriber::onMotionState(const byd_custom_msgs::msg::MotionState::ConstSharedPtr message)
+{
+  if (!std::isfinite(message->v_car) || !std::isfinite(message->w_car))
+  {
     LOG_WARN("忽略非法 MotionState：v_car={}，w_car={}", message->v_car, message->w_car);
     return;
   }
@@ -27,14 +30,19 @@ void MotionStateSubscriber::onMotionState(const byd_custom_msgs::msg::MotionStat
   LOG_DEBUG("收到 MotionState：v_car={}，w_car={}，v_lift={}，lift_height={}，w_shelf={}，yaw_shelf={}", message->v_car, message->w_car, message->v_lift, message->lift_height, message->w_shelf, message->yaw_shelf);
 }
 
-MotionStateSnapshot MotionStateSubscriber::latestState() const {
+MotionStateSnapshot MotionStateSubscriber::latestState() const
+{
   std::lock_guard<std::mutex> lock(mutex_);
   return latest_state_;
 }
 
-void MotionStateSubscriber::reset() {
+void MotionStateSubscriber::reset()
+{
   std::lock_guard<std::mutex> lock(mutex_);
-  latest_state_ = MotionStateSnapshot{};
+  latest_state_ = MotionStateSnapshot
+  {
+  };
 }
 
-}  // namespace nav2_regulated_modules
+}
+// namespace nav2_regulated_modules

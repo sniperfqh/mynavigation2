@@ -13,15 +13,26 @@ namespace nav2_regulated_modules
 
 struct MotionStateSnapshot
 {
-  double linear_velocity{0.0};
-  double angular_velocity{0.0};
-  std::chrono::steady_clock::time_point receive_time{};
-  bool valid{false};
+  double linear_velocity
+  {
+    0.0
+  };
+  double angular_velocity
+  {
+    0.0
+  };
+  std::chrono::steady_clock::time_point receive_time
+  {
+  };
+  bool valid
+  {
+    false
+  };
 };
 
 class MotionStateSubscriber
 {
-public:
+  public:
   explicit MotionStateSubscriber(nav2_util::LifecycleNode & node);
   MotionStateSnapshot latestState() const;
   void reset();
@@ -34,6 +45,7 @@ private:
   rclcpp::Subscription<byd_custom_msgs::msg::MotionState>::SharedPtr subscription_;
 };
 
-}  // namespace nav2_regulated_modules
+}
+// namespace nav2_regulated_modules
 
 #endif  // NAV2_REGULATED_MODULES__MOTION_STATE_SUBSCRIBER_HPP_

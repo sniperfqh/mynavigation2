@@ -13,9 +13,14 @@ using namespace std::chrono_literals;
 namespace nav2_regulated_modules
 {
 
-void RegulatedNavigator::startRecovery(const std::string & reason) {
-  if (task_.type == TaskType::NONE) {return;}
-  if (task_.recovery_count >= max_recovery_rounds_) {
+void RegulatedNavigator::startRecovery(const std::string & reason)
+{
+  if (task_.type == TaskType::NONE)
+  {
+    return;
+  }
+  if (task_.recovery_count >= max_recovery_rounds_)
+  {
     failTask(reason + "，恢复次数已用尽");
     return;
   }
@@ -27,29 +32,39 @@ void RegulatedNavigator::startRecovery(const std::string & reason) {
   stopRobot();
 
   auto request = std::make_shared<ClearCostmap::Request>();
-  if (clear_local_client_->service_is_ready()) {
+  if (clear_local_client_->service_is_ready())
+  {
     clear_local_client_->async_send_request(request);
   }
-  if (clear_global_client_->service_is_ready()) {
+  if (clear_global_client_->service_is_ready())
+  {
     clear_global_client_->async_send_request(request);
   }
   recovery_ready_time_ = now() + rclcpp::Duration::from_seconds(costmap_wait_duration_);
 }
 
-void RegulatedNavigator::monitorTask() {
-  if (!active_ || task_.type == TaskType::NONE) {return;}
-  if (cancel_requested_) {
+void RegulatedNavigator::monitorTask()
+{
+  if (!active_ || task_.type == TaskType::NONE)
+  {
+    return;
+  }
+  if (cancel_requested_)
+  {
     cancelTask("收到外层导航取消请求");
     return;
   }
-  if (task_.state == NavigationState::CLEARING_COSTMAP) {
-    if (now() >= recovery_ready_time_) {
+  if (task_.state == NavigationState::CLEARING_COSTMAP)
+  {
+    if (now() >= recovery_ready_time_)
+    {
       resumeCurrentTask();
     }
     return;
   }
   geometry_msgs::msg::PoseStamped current_pose;
-  if (!lookupCurrentPose(current_pose)) {
+  if (!lookupCurrentPose(current_pose))
+  {
     if ((now() - last_valid_tf_time_).seconds() > localization_timeout_ && task_.state != NavigationState::LOCALIZATION_LOST)
     {
       LOG_ERROR("自研定位 map->base_link 超时，取消控制并停车");
@@ -62,15 +77,19 @@ void RegulatedNavigator::monitorTask() {
     return;
   }
 
-  if (task_.state == NavigationState::LOCALIZATION_LOST) {
-    if ((now() - localization_lost_time_).seconds() > localization_recovery_timeout_) {
+  if (task_.state == NavigationState::LOCALIZATION_LOST)
+  {
+    if ((now() - localization_lost_time_).seconds() > localization_recovery_timeout_)
+    {
       failTask("自研定位恢复超时");
       return;
     }
-    if (localization_stable_since_.nanoseconds() == 0) {
+    if (localization_stable_since_.nanoseconds() == 0)
+    {
       localization_stable_since_ = now();
     }
-    if ((now() - localization_stable_since_).seconds() >= localization_stable_duration_) {
+    if ((now() - localization_stable_since_).seconds() >= localization_stable_duration_)
+    {
       LOG_INFO("自研定位连续稳定，重新规划当前任务");
       task_.state = NavigationState::PLANNING;
       resumeCurrentTask();
@@ -78,10 +97,12 @@ void RegulatedNavigator::monitorTask() {
     return;
   }
 
-  if (has_last_pose_) {
+  if (has_last_pose_)
+  {
     const double translation_jump = navigation_utils::poseDistance(current_pose, last_pose_);
     const double rotation_jump = std::abs(navigation_utils::normalizeAngle(navigation_utils::yawFromPose(current_pose) - navigation_utils::yawFromPose(last_pose_)));
-    if (translation_jump > max_translation_jump_ || rotation_jump > max_rotation_jump_) {
+    if (translation_jump > max_translation_jump_ || rotation_jump > max_rotation_jump_)
+    {
       LOG_WARN("检测到定位跳变，废弃旧路径并重新规划");
       cancelSubGoals(true);
       stopRobot();
@@ -93,12 +114,14 @@ void RegulatedNavigator::monitorTask() {
   last_pose_ = current_pose;
   has_last_pose_ = true;
 
-  if (task_.state == NavigationState::CONTROLLING) {
+  if (task_.state == NavigationState::CONTROLLING)
+  {
     if (task_.last_progress_pose.header.frame_id.empty() || navigation_utils::poseDistance(current_pose, task_.last_progress_pose) >= progress_min_translation_)
     {
       task_.last_progress_pose = current_pose;
       task_.last_progress_time = now();
-    } else if ((now() - task_.last_progress_time).seconds() >= control_module_.progressTimeout())
+    }
+    else if ((now() - task_.last_progress_time).seconds() >= control_module_.progressTimeout())
     {
       startRecovery("控制期间 map->base_link 位姿长时间无进展");
       return;
@@ -112,8 +135,10 @@ void RegulatedNavigator::monitorTask() {
   }
 }
 
-bool RegulatedNavigator::lookupCurrentPose(geometry_msgs::msg::PoseStamped & pose) {
-  try {
+bool RegulatedNavigator::lookupCurrentPose(geometry_msgs::msg::PoseStamped & pose)
+{
+  try
+  {
     const auto transform = tf_buffer_->lookupTransform(global_frame_, robot_base_frame_, tf2::TimePointZero, 50ms);
     pose.header = transform.header;
     pose.pose.position.x = transform.transform.translation.x;
@@ -122,21 +147,29 @@ bool RegulatedNavigator::lookupCurrentPose(geometry_msgs::msg::PoseStamped & pos
     pose.pose.orientation = transform.transform.rotation;
     last_valid_tf_time_ = now();
     return true;
-  } catch (const tf2::TransformException &) {
+  }
+  catch (const tf2::TransformException &)
+  {
     return false;
   }
 }
 
-void RegulatedNavigator::updatePassedGoals(const geometry_msgs::msg::PoseStamped & current_pose) {
-  if (task_.type != TaskType::THROUGH_POSES || task_.goals.size() <= 1) {return;}
+void RegulatedNavigator::updatePassedGoals(const geometry_msgs::msg::PoseStamped & current_pose)
+{
+  if (task_.type != TaskType::THROUGH_POSES || task_.goals.size() <= 1)
+  {
+    return;
+  }
   const auto previous_count = task_.goals.size();
   while (task_.goals.size() > 1 && navigation_utils::poseDistance(current_pose, task_.goals.front()) <= passed_goal_radius_)
   {
     task_.goals.erase(task_.goals.begin());
   }
-  if (task_.goals.size() != previous_count) {
+  if (task_.goals.size() != previous_count)
+  {
     LOG_INFO("多点导航已通过前置目标，generation={}，剩余目标数={}", task_.generation, task_.goals.size());
   }
 }
 
-}  // namespace nav2_regulated_modules
+}
+// namespace nav2_regulated_modules
