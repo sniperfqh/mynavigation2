@@ -612,6 +612,7 @@ ros2 action send_goal /navigation_service \
 - `FixedPathController.start_position_tolerance=0.70 m` 保持起点总距离安全门；首次横向误差不超过 `0.20 m` 且运动方向航向误差严格小于 `15°` 时直接进入 Pure Pursuit 跟踪，其他情况先对齐到 `7°` 内并满足停稳与稳定周期要求。后退航向误差使用车辆反向与路径切线之差。
 - `controller_server.stopped_goal_checker` 是终点位置、终点航向、停止线速度和停止角速度阈值的唯一来源；Launch 和 `FixedPathController` 不再重复配置这些阈值。
 - `velocity_smoother` 的速度、加减速度和 `/odometry` 闭环参数。
+- 默认 Launch 将 spdlog 控制台级别设为 `info`、文件级别设为 `trace`，并每秒刷新文件：初始化、Action 摘要、状态切换和警告错误显示在终端；逐帧原始速度、完整速度链、Costmap 更新／发布／膨胀统计与 `/control_to_uart` 输出以 `DEBUG` 高频保存到 `SPDLOG_WRAPPER_LOG_DIR`。车辆运动期间，终端另以 1 秒间隔显示一次最终 `/control_to_uart` 的 `v/w`，零速度和 Costmap 更新期间不循环打印。
 
 它不使用 `planner_id`、`use_smoother` 或 `replan_frequency` 执行规划。
 

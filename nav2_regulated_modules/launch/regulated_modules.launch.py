@@ -78,6 +78,15 @@ def generate_launch_description():
     spdlog_log_dir_envvar = SetEnvironmentVariable(
         'SPDLOG_WRAPPER_LOG_DIR', '/tmp/nav2_logs')
 
+    spdlog_console_level_envvar = SetEnvironmentVariable(
+        'SPDLOG_WRAPPER_CONSOLE_LEVEL', 'info')
+
+    spdlog_file_level_envvar = SetEnvironmentVariable(
+        'SPDLOG_WRAPPER_FILE_LEVEL', 'trace')
+
+    spdlog_flush_interval_envvar = SetEnvironmentVariable(
+        'SPDLOG_WRAPPER_FLUSH_INTERVAL_SECONDS', '1')
+
     declare_namespace_cmd = DeclareLaunchArgument(
         'namespace',
         default_value='',
@@ -394,6 +403,9 @@ def generate_launch_description():
 
     ld.add_action(stdout_linebuf_envvar)
     ld.add_action(spdlog_log_dir_envvar)
+    ld.add_action(spdlog_console_level_envvar)
+    ld.add_action(spdlog_file_level_envvar)
+    ld.add_action(spdlog_flush_interval_envvar)
     ld.add_action(declare_namespace_cmd)
     ld.add_action(declare_use_namespace_cmd)
     ld.add_action(declare_map_yaml_cmd)

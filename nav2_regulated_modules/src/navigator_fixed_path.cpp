@@ -125,7 +125,7 @@ std::optional<nav_msgs::msg::Path> RegulatedNavigator::prepareFixedPath(const st
   }
   for (const auto & pose : output.poses)
   {
-    LOG_INFO("Path Point -> x: {}, y: {}", pose.pose.position.x, pose.pose.position.y);
+    LOG_DEBUG("Path Point -> x: {}, y: {}", pose.pose.position.x, pose.pose.position.y);
   }
   return output;
 }

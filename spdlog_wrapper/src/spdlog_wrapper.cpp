@@ -34,6 +34,7 @@ void SpdlogWrapper::init(const std::string &module, const std::string &node_name
         console_sink->set_level(spdlog::level::from_str(g_config.console_level));
         file_sink->set_level(spdlog::level::from_str(g_config.file_level));
         g_min_level = std::min(console_sink->level(), file_sink->level());
+        g_logger->set_level(g_min_level);
 
         if (g_config.flush_interval_seconds > 0)
         {
@@ -131,6 +132,12 @@ SpdlogConfig SpdlogWrapper::load_from_yaml(const std::string &node_name)
         cfg.max_file_size_mb = env_cfg.max_file_size_mb;
     if (std::getenv("SPDLOG_WRAPPER_MAX_FILES"))
         cfg.max_files = env_cfg.max_files;
+    if (std::getenv("SPDLOG_WRAPPER_CONSOLE_LEVEL"))
+        cfg.console_level = env_cfg.console_level;
+    if (std::getenv("SPDLOG_WRAPPER_FILE_LEVEL"))
+        cfg.file_level = env_cfg.file_level;
+    if (std::getenv("SPDLOG_WRAPPER_FLUSH_INTERVAL_SECONDS"))
+        cfg.flush_interval_seconds = env_cfg.flush_interval_seconds;
 
     return cfg;
 }
@@ -155,6 +162,19 @@ SpdlogConfig SpdlogWrapper::load_config_from_env()
         int num = std::atoi(env);
         if (num > 0)
             cfg.max_files = static_cast<size_t>(num);
+    }
+
+    if (const char *env = std::getenv("SPDLOG_WRAPPER_CONSOLE_LEVEL"))
+        cfg.console_level = env;
+
+    if (const char *env = std::getenv("SPDLOG_WRAPPER_FILE_LEVEL"))
+        cfg.file_level = env;
+
+    if (const char *env = std::getenv("SPDLOG_WRAPPER_FLUSH_INTERVAL_SECONDS"))
+    {
+        int seconds = std::atoi(env);
+        if (seconds > 0)
+            cfg.flush_interval_seconds = seconds;
     }
 
     return cfg;

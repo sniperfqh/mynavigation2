@@ -421,7 +421,7 @@ void Costmap2DROS::mapUpdateLoop(double frequency) {
       timer.end();
 
       RCLCPP_DEBUG(get_logger(), "Map update time: %.9f", timer.elapsed_time_in_seconds());
-      LOG_INFO("Costmap2DROS '{}' update cycle elapsed={}s initialized={}", name_.c_str(), timer.elapsed_time_in_seconds(), layered_costmap_->isInitialized());
+      LOG_DEBUG("Costmap2DROS '{}' update cycle elapsed={}s initialized={}", name_.c_str(), timer.elapsed_time_in_seconds(), layered_costmap_->isInitialized());
       if (publish_cycle_ > rclcpp::Duration(0s) && layered_costmap_->isInitialized()) {
         unsigned int x0, y0, xn, yn;
         layered_costmap_->getBounds(&x0, &xn, &y0, &yn);
@@ -435,7 +435,7 @@ void Costmap2DROS::mapUpdateLoop(double frequency) {
           RCLCPP_DEBUG(get_logger(), "Publish costmap at %s", name_.c_str());
           costmap_publisher_->publishCostmap();
           last_publish_ = current_time;
-          LOG_INFO("Costmap2DROS '{}' published costmap cycle", name_.c_str());
+          LOG_DEBUG("Costmap2DROS '{}' published costmap cycle", name_.c_str());
         }
       }
     }
@@ -462,7 +462,7 @@ void Costmap2DROS::updateMap() {
       const double & x = pose.pose.position.x;
       const double & y = pose.pose.position.y;
       const double yaw = tf2::getYaw(pose.pose.orientation);
-      LOG_INFO("Costmap2DROS '{}' updateMap robot_pose=({}, {}, yaw={})", name_.c_str(), x, y, yaw);
+      LOG_DEBUG("Costmap2DROS '{}' updateMap robot_pose=({}, {}, yaw={})", name_.c_str(), x, y, yaw);
       layered_costmap_->updateMap(x, y, yaw);
 
       auto footprint = std::make_unique<geometry_msgs::msg::PolygonStamped>();
@@ -472,9 +472,9 @@ void Costmap2DROS::updateMap() {
       RCLCPP_DEBUG(get_logger(), "Publishing footprint");
       footprint_pub_->publish(std::move(footprint));
       initialized_ = true;
-      LOG_INFO("Costmap2DROS '{}' updateMap completed and footprint published", name_.c_str());
+      LOG_DEBUG("Costmap2DROS '{}' updateMap completed and footprint published", name_.c_str());
     } else {
-      LOG_INFO("Costmap2DROS '{}' skipped updateMap because robot pose is unavailable", name_.c_str());
+      LOG_DEBUG("Costmap2DROS '{}' skipped updateMap because robot pose is unavailable", name_.c_str());
     }
   }
 }

@@ -173,7 +173,7 @@ void VelocitySmoother::inputCommandCallback(const geometry_msgs::msg::Twist::Sha
 
   command_ = msg;
   last_command_time_ = now();
-  LOG_INFO("Received raw cmd_vel linear=({:.3f}, {:.3f}) angular_z={:.3f}", msg->linear.x, msg->linear.y, msg->angular.z);
+  LOG_DEBUG("Received raw cmd_vel linear=({:.3f}, {:.3f}) angular_z={:.3f}", msg->linear.x, msg->linear.y, msg->angular.z);
 }
 
 double VelocitySmoother::findEtaConstraint(const double v_curr, const double v_cmd, const double accel, const double decel) {

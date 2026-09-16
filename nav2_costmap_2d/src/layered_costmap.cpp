@@ -120,7 +120,7 @@ void LayeredCostmap::updateMap(double robot_x, double robot_y, double robot_yaw)
     double new_origin_y = robot_y - combined_costmap_.getSizeInMetersY() / 2;
     primary_costmap_.updateOrigin(new_origin_x, new_origin_y);
     combined_costmap_.updateOrigin(new_origin_x, new_origin_y);
-    LOG_INFO("LayeredCostmap rolling window origin updated to ({}, {}) from robot_pose=({}, {})", new_origin_x, new_origin_y, robot_x, robot_y);
+    LOG_DEBUG("LayeredCostmap rolling window origin updated to ({}, {}) from robot_pose=({}, {})", new_origin_x, new_origin_y, robot_x, robot_y);
   }
 
   if (isOutofBounds(robot_x, robot_y)) {
@@ -128,7 +128,7 @@ void LayeredCostmap::updateMap(double robot_x, double robot_y, double robot_yaw)
   }
 
   if (plugins_.size() == 0 && filters_.size() == 0) {
-    LOG_INFO("LayeredCostmap update skipped because no plugins or filters are loaded");
+    LOG_DEBUG("LayeredCostmap update skipped because no plugins or filters are loaded");
     return;
   }
 
@@ -170,7 +170,7 @@ void LayeredCostmap::updateMap(double robot_x, double robot_y, double robot_yaw)
   RCLCPP_DEBUG(rclcpp::get_logger("nav2_costmap_2d"), "Updating area x: [%d, %d] y: [%d, %d]", x0, xn, y0, yn);
 
   if (xn < x0 || yn < y0) {
-    LOG_INFO("LayeredCostmap update skipped invalid bounds x=[{}, {}], y=[{}, {}]", x0, xn, y0, yn);
+    LOG_DEBUG("LayeredCostmap update skipped invalid bounds x=[{}, {}], y=[{}, {}]", x0, xn, y0, yn);
     return;
   }
 
@@ -211,7 +211,7 @@ void LayeredCostmap::updateMap(double robot_x, double robot_y, double robot_yaw)
   byn_ = yn;
 
   initialized_ = true;
-  LOG_INFO("LayeredCostmap updateMap robot_pose=({}, {}, yaw={}), world_bounds=({}, {})-({}, {}), cell_bounds=({}, {})-({}, {}), plugins={}, filters={}", robot_x, robot_y, robot_yaw, minx_, miny_, maxx_, maxy_, bx0_, by0_, bxn_, byn_, plugins_.size(), filters_.size());
+  LOG_DEBUG("LayeredCostmap updateMap robot_pose=({}, {}, yaw={}), world_bounds=({}, {})-({}, {}), cell_bounds=({}, {})-({}, {}), plugins={}, filters={}", robot_x, robot_y, robot_yaw, minx_, miny_, maxx_, maxy_, bx0_, by0_, bxn_, byn_, plugins_.size(), filters_.size());
 }
 
 bool LayeredCostmap::isCurrent() {

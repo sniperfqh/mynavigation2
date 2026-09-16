@@ -130,7 +130,7 @@ void Costmap2DPublisher::prepareGrid() {
   for (unsigned int i = 0; i < grid_->data.size(); i++) {
     grid_->data[i] = cost_translation_table_[data[i]];
   }
-  LOG_INFO("Costmap2DPublisher prepared OccupancyGrid topic='{}', width={}, height={}, resolution={}, origin=({}, {})", topic_name_.c_str(), grid_width, grid_height, grid_resolution, grid_->info.origin.position.x, grid_->info.origin.position.y);
+  LOG_DEBUG("Costmap2DPublisher prepared OccupancyGrid topic='{}', width={}, height={}, resolution={}, origin=({}, {})", topic_name_.c_str(), grid_width, grid_height, grid_resolution, grid_->info.origin.position.x, grid_->info.origin.position.y);
 }
 
 void Costmap2DPublisher::prepareCostmap() {
@@ -162,14 +162,14 @@ void Costmap2DPublisher::prepareCostmap() {
   for (unsigned int i = 0; i < costmap_raw_->data.size(); i++) {
     costmap_raw_->data[i] = data[i];
   }
-  LOG_INFO("Costmap2DPublisher prepared raw Costmap topic='{}_raw', size_x={}, size_y={}, resolution={}, origin=({}, {})", topic_name_.c_str(), costmap_raw_->metadata.size_x, costmap_raw_->metadata.size_y, resolution, costmap_raw_->metadata.origin.position.x, costmap_raw_->metadata.origin.position.y);
+  LOG_DEBUG("Costmap2DPublisher prepared raw Costmap topic='{}_raw', size_x={}, size_y={}, resolution={}, origin=({}, {})", topic_name_.c_str(), costmap_raw_->metadata.size_x, costmap_raw_->metadata.size_y, resolution, costmap_raw_->metadata.origin.position.x, costmap_raw_->metadata.origin.position.y);
 }
 
 void Costmap2DPublisher::publishCostmap() {
   if (costmap_raw_pub_->get_subscription_count() > 0) {
     prepareCostmap();
     costmap_raw_pub_->publish(std::move(costmap_raw_));
-    LOG_INFO("Costmap2DPublisher published raw costmap topic='{}_raw'", topic_name_.c_str());
+    LOG_DEBUG("Costmap2DPublisher published raw costmap topic='{}_raw'", topic_name_.c_str());
   }
   float resolution = costmap_->getResolution();
 
@@ -178,7 +178,7 @@ void Costmap2DPublisher::publishCostmap() {
     if (costmap_pub_->get_subscription_count() > 0) {
       prepareGrid();
       costmap_pub_->publish(std::move(grid_));
-      LOG_INFO("Costmap2DPublisher published full OccupancyGrid topic='{}'", topic_name_.c_str());
+      LOG_DEBUG("Costmap2DPublisher published full OccupancyGrid topic='{}'", topic_name_.c_str());
     }
   } else if (x0_ < xn_) {
     if (costmap_update_pub_->get_subscription_count() > 0) {
@@ -200,7 +200,7 @@ void Costmap2DPublisher::publishCostmap() {
         }
       }
       costmap_update_pub_->publish(std::move(update));
-      LOG_INFO("Costmap2DPublisher published OccupancyGridUpdate topic='{}_updates', x={}, y={}, width={}, height={}", topic_name_.c_str(), x0_, y0_, xn_ - x0_, yn_ - y0_);
+      LOG_DEBUG("Costmap2DPublisher published OccupancyGridUpdate topic='{}_updates', x={}, y={}, width={}, height={}", topic_name_.c_str(), x0_, y0_, xn_ - x0_, yn_ - y0_);
     }
   }
 

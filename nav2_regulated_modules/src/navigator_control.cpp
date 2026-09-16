@@ -155,7 +155,7 @@ void RegulatedNavigator::logVelocityChain()
   {
     return;
   }
-  LOG_INFO("关键速度链：反馈 {} [vx={:.3f} m/s, wz={:.3f} rad/s, received={}] -> 控制器输出/平滑器输入 {} [vx={:.3f} m/s, wz={:.3f} rad/s, received={}] -> 平滑器输出 {} [vx={:.3f} m/s, wz={:.3f} rad/s, received={}]", velocity_odom_topic_, velocity_odometry.twist.twist.linear.x, velocity_odometry.twist.twist.angular.z, has_velocity_odometry, controller_cmd_vel_topic_, controller_velocity.linear.x, controller_velocity.angular.z, has_controller_velocity, smoothed_cmd_vel_topic_, smoothed_velocity.linear.x, smoothed_velocity.angular.z, has_smoothed_velocity);
+  LOG_DEBUG("关键速度链：反馈 {} [vx={:.3f} m/s, wz={:.3f} rad/s, received={}] -> 控制器输出/平滑器输入 {} [vx={:.3f} m/s, wz={:.3f} rad/s, received={}] -> 平滑器输出 {} [vx={:.3f} m/s, wz={:.3f} rad/s, received={}]", velocity_odom_topic_, velocity_odometry.twist.twist.linear.x, velocity_odometry.twist.twist.angular.z, has_velocity_odometry, controller_cmd_vel_topic_, controller_velocity.linear.x, controller_velocity.angular.z, has_controller_velocity, smoothed_cmd_vel_topic_, smoothed_velocity.linear.x, smoothed_velocity.angular.z, has_smoothed_velocity);
 }
 
 }

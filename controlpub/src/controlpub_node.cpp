@@ -1,3 +1,4 @@
+#include <chrono>
 #include <cmath>
 #include <functional>
 #include <memory>
@@ -34,12 +35,25 @@ private:
     control_msg.v_lift = 0.0;
     control_msg.w_rotation = 0.0;
     publisher_->publish(control_msg);
+    LOG_DEBUG("/control_to_uart 高频控制指令：v={:.3f}m/s，w={:.3f}rad/s", control_msg.v, control_msg.w);
+
+    constexpr double moving_epsilon = 1e-6;
+    const bool is_moving = std::abs(control_msg.v) > moving_epsilon || std::abs(control_msg.w) > moving_epsilon;
+    const auto now = std::chrono::steady_clock::now();
+    if (is_moving && (!was_moving_ || now - last_output_log_time_ >= std::chrono::seconds(1)))
+    {
+      LOG_INFO("/control_to_uart 控制指令：v={:.3f}m/s，w={:.3f}rad/s", control_msg.v, control_msg.w);
+      last_output_log_time_ = now;
+    }
+    was_moving_ = is_moving;
   }
 
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr subscription_;
   rclcpp::Publisher<byd_custom_msgs::msg::ControlRes>::SharedPtr publisher_;
   std::mutex publisher_mutex_;
   std::string output_topic_;
+  std::chrono::steady_clock::time_point last_output_log_time_;
+  bool was_moving_{false};
 };
 
 int main(int argc, char ** argv)

@@ -153,7 +153,7 @@ void InflationLayer::onFootprintChanged() {
 void InflationLayer::updateCosts( nav2_costmap_2d::Costmap2D & master_grid, int min_i, int min_j, int max_i, int max_j) {
   std::lock_guard<Costmap2D::mutex_t> guard(*getMutex());
   if (!enabled_ || (cell_inflation_radius_ == 0)) {
-    LOG_INFO( "InflationLayer '{}' skipped update enabled={}, cell_inflation_radius={}", name_.c_str(), enabled_, cell_inflation_radius_);
+    LOG_DEBUG( "InflationLayer '{}' skipped update enabled={}, cell_inflation_radius={}", name_.c_str(), enabled_, cell_inflation_radius_);
     return;
   }
 
@@ -277,7 +277,7 @@ void InflationLayer::updateCosts( nav2_costmap_2d::Costmap2D & master_grid, int 
   }
 
   current_ = true;
-  LOG_INFO( "InflationLayer '{}' updateCosts bounds=({}, {})-({}, {}), expanded_bounds=({}, {})-({}, {}), seeds={}, visited={}, written={}, inflation_radius={}, cost_scaling_factor={}, resolution={}", name_.c_str(), base_min_i, base_min_j, base_max_i, base_max_j, min_i, min_j, max_i, max_j, obstacle_seed_count, visited_cell_count, written_cell_count, inflation_radius_, cost_scaling_factor_, resolution_);
+  LOG_DEBUG( "InflationLayer '{}' updateCosts bounds=({}, {})-({}, {}), expanded_bounds=({}, {})-({}, {}), seeds={}, visited={}, written={}, inflation_radius={}, cost_scaling_factor={}, resolution={}", name_.c_str(), base_min_i, base_min_j, base_max_i, base_max_j, min_i, min_j, max_i, max_j, obstacle_seed_count, visited_cell_count, written_cell_count, inflation_radius_, cost_scaling_factor_, resolution_);
 }
 
 /**
