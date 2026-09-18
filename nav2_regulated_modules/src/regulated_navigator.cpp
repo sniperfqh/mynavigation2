@@ -57,22 +57,25 @@ RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : na
   declare_parameter("velocity_odom_topic", "/odometry");
   declare_parameter("velocity_log_frequency", 1.0);
   declare_parameter<std::string>("speed_limit_topic", "speed_limit");
+  declare_parameter<std::string>("chassis_input_topic", "/downstream/chassis_control");
   declare_parameter<std::string>("chassis_output_topic", "/control_to_uart");
-  declare_parameter("motion_state_timeout", 0.2);
-  declare_parameter("chassis_max_linear_velocity", 0.52);
-  declare_parameter("chassis_max_angular_velocity", 2.0);
-  declare_parameter("chassis_default_linear_acceleration", 0.5);
-  declare_parameter("chassis_default_angular_acceleration", 1.0);
-  declare_parameter("chassis_max_linear_acceleration", 2.5);
-  declare_parameter("chassis_max_angular_acceleration", 3.2);
-  declare_parameter("chassis_linear_stop_threshold", 0.01);
-  declare_parameter("chassis_angular_stop_threshold", 0.05);
-  declare_parameter("chassis_linear_kp", 0.2);
-  declare_parameter("chassis_linear_ki", 0.0);
-  declare_parameter("chassis_angular_kp", 0.2);
-  declare_parameter("chassis_angular_ki", 0.0);
-  declare_parameter("chassis_linear_integral_limit", 0.2);
-  declare_parameter("chassis_angular_integral_limit", 0.5);
+  declare_parameter("chassis_motion_state_timeout", 0.2);
+  declare_parameter("chassis_command_timeout", 0.15);
+  declare_parameter("chassis_publish_rate", 50.0);
+  declare_parameter("chassis_default_linear_speed_max", 0.5);
+  declare_parameter("chassis_linear_speed_max", 1.0);
+  declare_parameter("chassis_default_angular_speed_max", 0.5);
+  declare_parameter("chassis_angular_speed_max", 0.8);
+  declare_parameter("chassis_default_linear_accel_max", 2.0);
+  declare_parameter("chassis_linear_accel_max", 3.0);
+  declare_parameter("chassis_linear_decel_max", 4.0);
+  declare_parameter("chassis_default_angular_accel_max", 1.5);
+  declare_parameter("chassis_angular_accel_max", 2.0);
+  declare_parameter("chassis_angular_decel_max", 3.0);
+  declare_parameter("chassis_linear_accel_jerk_max", 6.0);
+  declare_parameter("chassis_linear_decel_jerk_max", 8.0);
+  declare_parameter("chassis_angular_accel_jerk_max", 4.0);
+  declare_parameter("chassis_angular_decel_jerk_max", 6.0);
 }
 
 nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycle::State &)
@@ -148,24 +151,27 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   control_module_.configure(get_parameter("controller_id").as_string(), get_parameter("goal_checker_id").as_string(), get_parameter("progress_timeout").as_double());
   motion_state_subscriber_ = std::make_unique<MotionStateSubscriber>(*this);
   ChassisControlConfig chassis_control_config;
+  chassis_control_config.input_topic = get_parameter("chassis_input_topic").as_string();
   chassis_control_config.output_topic = get_parameter("chassis_output_topic").as_string();
-  chassis_control_config.motion_state_timeout = get_parameter("motion_state_timeout").as_double();
-  chassis_control_config.max_linear_velocity = get_parameter("chassis_max_linear_velocity").as_double();
-  chassis_control_config.max_angular_velocity = get_parameter("chassis_max_angular_velocity").as_double();
-  chassis_control_config.default_linear_acceleration = get_parameter("chassis_default_linear_acceleration").as_double();
-  chassis_control_config.default_angular_acceleration = get_parameter("chassis_default_angular_acceleration").as_double();
-  chassis_control_config.max_linear_acceleration = get_parameter("chassis_max_linear_acceleration").as_double();
-  chassis_control_config.max_angular_acceleration = get_parameter("chassis_max_angular_acceleration").as_double();
-  chassis_control_config.linear_stop_threshold = get_parameter("chassis_linear_stop_threshold").as_double();
-  chassis_control_config.angular_stop_threshold = get_parameter("chassis_angular_stop_threshold").as_double();
-  chassis_control_config.linear_kp = get_parameter("chassis_linear_kp").as_double();
-  chassis_control_config.linear_ki = get_parameter("chassis_linear_ki").as_double();
-  chassis_control_config.angular_kp = get_parameter("chassis_angular_kp").as_double();
-  chassis_control_config.angular_ki = get_parameter("chassis_angular_ki").as_double();
-  chassis_control_config.linear_integral_limit = get_parameter("chassis_linear_integral_limit").as_double();
-  chassis_control_config.angular_integral_limit = get_parameter("chassis_angular_integral_limit").as_double();
-  try
-  {
+  chassis_control_config.motion_state_timeout = get_parameter("chassis_motion_state_timeout").as_double();
+  chassis_control_config.command_timeout = get_parameter("chassis_command_timeout").as_double();
+  chassis_control_config.publish_rate = get_parameter("chassis_publish_rate").as_double();
+  chassis_control_config.default_linear_speed_max = get_parameter("chassis_default_linear_speed_max").as_double();
+  chassis_control_config.linear_speed_max = get_parameter("chassis_linear_speed_max").as_double();
+  chassis_control_config.default_angular_speed_max = get_parameter("chassis_default_angular_speed_max").as_double();
+  chassis_control_config.angular_speed_max = get_parameter("chassis_angular_speed_max").as_double();
+  chassis_control_config.default_linear_accel_max = get_parameter("chassis_default_linear_accel_max").as_double();
+  chassis_control_config.linear_accel_max = get_parameter("chassis_linear_accel_max").as_double();
+  chassis_control_config.linear_decel_max = get_parameter("chassis_linear_decel_max").as_double();
+  chassis_control_config.default_angular_accel_max = get_parameter("chassis_default_angular_accel_max").as_double();
+  chassis_control_config.angular_accel_max = get_parameter("chassis_angular_accel_max").as_double();
+  chassis_control_config.angular_decel_max = get_parameter("chassis_angular_decel_max").as_double();
+  chassis_control_config.linear_accel_jerk_max = get_parameter("chassis_linear_accel_jerk_max").as_double();
+  chassis_control_config.linear_decel_jerk_max = get_parameter("chassis_linear_decel_jerk_max").as_double();
+  chassis_control_config.angular_accel_jerk_max = get_parameter("chassis_angular_accel_jerk_max").as_double();
+  chassis_control_config.angular_decel_jerk_max = get_parameter("chassis_angular_decel_jerk_max").as_double();
+
+  try {
     chassis_control_subscriber_ = std::make_unique<ChassisControlSubscriber>(*this, *motion_state_subscriber_, chassis_control_config);
   }
   catch (const std::invalid_argument & error)

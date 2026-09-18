@@ -134,22 +134,25 @@ regulated_navigator:
     progress_timeout: 10.0
     progress_min_translation: 0.1
     stop_cmd_vel_topic: "cmd_vel_nav"
+    chassis_input_topic: "/downstream/chassis_control"
     chassis_output_topic: "/control_to_uart"
-    motion_state_timeout: 0.2
-    chassis_max_linear_velocity: 0.52
-    chassis_max_angular_velocity: 2.0
-    chassis_default_linear_acceleration: 0.5
-    chassis_default_angular_acceleration: 1.0
-    chassis_max_linear_acceleration: 2.5
-    chassis_max_angular_acceleration: 3.2
-    chassis_linear_stop_threshold: 0.01
-    chassis_angular_stop_threshold: 0.05
-    chassis_linear_kp: 0.2
-    chassis_linear_ki: 0.0
-    chassis_angular_kp: 0.2
-    chassis_angular_ki: 0.0
-    chassis_linear_integral_limit: 0.2
-    chassis_angular_integral_limit: 0.5
+    chassis_motion_state_timeout: 0.2
+    chassis_command_timeout: 0.15
+    chassis_publish_rate: 50.0
+    chassis_default_linear_speed_max: 0.5
+    chassis_linear_speed_max: 1.0
+    chassis_default_angular_speed_max: 0.5
+    chassis_angular_speed_max: 0.8
+    chassis_default_linear_accel_max: 2.0
+    chassis_linear_accel_max: 3.0
+    chassis_linear_decel_max: 4.0
+    chassis_default_angular_accel_max: 1.5
+    chassis_angular_accel_max: 2.0
+    chassis_angular_decel_max: 3.0
+    chassis_linear_accel_jerk_max: 6.0
+    chassis_linear_decel_jerk_max: 8.0
+    chassis_angular_accel_jerk_max: 4.0
+    chassis_angular_decel_jerk_max: 6.0
 
 controller_server:
   ros__parameters:
