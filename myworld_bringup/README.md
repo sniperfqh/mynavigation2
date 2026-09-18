@@ -134,11 +134,13 @@ Gazebo 出生位姿与 AMCL 参数中的初始位姿保持一致，并设置
 `always_reset_initial_pose: true`，避免 Lifecycle 重启时沿用旧定位状态。
 
 为避免 RViz 在 AMCL 和传感器 TF 尚未就绪时显示首帧，固定路径控制节点默认延迟
-`3 s` 启动，RViz 默认延迟 `5 s` 启动。`cpu_lidar.py` 生成的 `/scan` 使用参与射线
-计算的同一帧 `/odom` 时间戳，使 AMCL、代价地图和 RViz 查询到同一时刻的 TF。
-RViz 对 `/scan` 及全局、局部体素点云只保留最新一帧，避免图形界面初始化期间积压
-旧时间戳数据并在 TF 就绪后集中重放。这两个延迟只影响启动显示和初始化顺序，不改变
-固定路径、速度或终端控制参数。
+`3 s` 启动，RViz 默认延迟 `5 s` 启动。Gazebo 原生 `gpu_lidar` 以 `base_scan`
+为坐标系发布 `/scan`，再由 `ros_gz_bridge` 桥接给 AMCL、代价地图和 RViz；Gazebo
+`VisualizeLidar` 可订阅同一雷达话题显示扫描射线。独立 Gazebo Server 使用
+`--headless-rendering` 生成 GPU 雷达数据，图形客户端只负责显示。RViz 对 `/scan` 及
+全局、局部体素点云只保留最新一帧，避免图形界面初始化期间积压旧时间戳数据并在 TF
+就绪后集中重放。这两个延迟只影响启动显示和初始化顺序，不改变固定路径、速度或终端
+控制参数。
 
 每次启动还会按 `ROS_DOMAIN_ID` 和当前 Launch PID 自动生成唯一 `IGN_PARTITION`。
 这样即使另一套 Gazebo 没有正常退出，新 Launch 的桥接也不会接入旧世界的 `/odom`、

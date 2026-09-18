@@ -22,9 +22,31 @@ def generate_launch_description():
     fixed_path_progress_timeout = LaunchConfiguration(
         'fixed_path_progress_timeout', default='120.0')
     fixed_path_max_linear_velocity = LaunchConfiguration(
-        'fixed_path_max_linear_velocity', default='0.8')
+        'fixed_path_max_linear_velocity', default='0.52')
     fixed_path_approach_velocity_scaling_dist = LaunchConfiguration(
         'fixed_path_approach_velocity_scaling_dist', default='0.8')
+    fixed_path_xy_goal_tolerance = LaunchConfiguration(
+        'fixed_path_xy_goal_tolerance', default='0.01')
+    fixed_path_yaw_goal_tolerance = LaunchConfiguration(
+        'fixed_path_yaw_goal_tolerance', default='0.08726646259971647')
+    fixed_path_goal_position_hysteresis = LaunchConfiguration(
+        'fixed_path_goal_position_hysteresis', default='1.0')
+    fixed_path_rotate_to_heading_angular_vel = LaunchConfiguration(
+        'fixed_path_rotate_to_heading_angular_vel', default='0.4')
+    fixed_path_max_angular_accel = LaunchConfiguration(
+        'fixed_path_max_angular_accel', default='0.8')
+    fixed_path_rotate_to_heading_kp = LaunchConfiguration(
+        'fixed_path_rotate_to_heading_kp', default='1.5')
+    fixed_path_goal_rotate_to_heading_angular_vel = LaunchConfiguration(
+        'fixed_path_goal_rotate_to_heading_angular_vel', default='0.8')
+    fixed_path_goal_max_angular_accel = LaunchConfiguration(
+        'fixed_path_goal_max_angular_accel', default='1.6')
+    fixed_path_goal_rotate_to_heading_kp = LaunchConfiguration(
+        'fixed_path_goal_rotate_to_heading_kp', default='3.0')
+    fixed_path_goal_position_entry_tolerance = LaunchConfiguration(
+        'fixed_path_goal_position_entry_tolerance', default='0.008')
+    fixed_path_goal_error_log_frequency = LaunchConfiguration(
+        'fixed_path_goal_error_log_frequency', default='1.0')
     fixed_path_stack_start_delay = LaunchConfiguration(
         'fixed_path_stack_start_delay', default='3.0')
     rviz_start_delay = LaunchConfiguration(
@@ -79,7 +101,8 @@ def generate_launch_description():
         output='screen')
     ignition_server = ExecuteProcess(
         condition=IfCondition(is_autonomous_headless),
-        cmd=['ign', 'gazebo', '-r', '-s', '-v', '3', world_only],
+        cmd=['ign', 'gazebo', '-r', '-s', '--headless-rendering',
+             '-v', '3', world_only],
         output='screen')
     fixed_path_ignition_sim = ExecuteProcess(
         condition=IfCondition(is_fixed_path_gui),
@@ -87,7 +110,8 @@ def generate_launch_description():
         output='screen')
     fixed_path_ignition_server = ExecuteProcess(
         condition=IfCondition(is_fixed_path),
-        cmd=['ign', 'gazebo', '-r', '-s', '-v', '3', world_only],
+        cmd=['ign', 'gazebo', '-r', '-s', '--headless-rendering',
+             '-v', '3', world_only],
         output='screen')
     remote_ignition_gui = ExecuteProcess(
         condition=IfCondition(is_remote_gui),
@@ -95,7 +119,8 @@ def generate_launch_description():
         output='screen')
     remote_ignition_server = ExecuteProcess(
         condition=IfCondition(is_remote),
-        cmd=['ign', 'gazebo', '-r', '-s', '-v', '3', world_only],
+        cmd=['ign', 'gazebo', '-r', '-s', '--headless-rendering',
+             '-v', '3', world_only],
         output='screen')
 
     localization_arguments = {
@@ -120,6 +145,24 @@ def generate_launch_description():
         'fixed_path_max_linear_velocity': fixed_path_max_linear_velocity,
         'fixed_path_approach_velocity_scaling_dist':
             fixed_path_approach_velocity_scaling_dist,
+        'fixed_path_xy_goal_tolerance': fixed_path_xy_goal_tolerance,
+        'fixed_path_yaw_goal_tolerance': fixed_path_yaw_goal_tolerance,
+        'fixed_path_goal_position_hysteresis':
+            fixed_path_goal_position_hysteresis,
+        'fixed_path_rotate_to_heading_angular_vel':
+            fixed_path_rotate_to_heading_angular_vel,
+        'fixed_path_max_angular_accel': fixed_path_max_angular_accel,
+        'fixed_path_rotate_to_heading_kp': fixed_path_rotate_to_heading_kp,
+        'fixed_path_goal_rotate_to_heading_angular_vel':
+            fixed_path_goal_rotate_to_heading_angular_vel,
+        'fixed_path_goal_max_angular_accel':
+            fixed_path_goal_max_angular_accel,
+        'fixed_path_goal_rotate_to_heading_kp':
+            fixed_path_goal_rotate_to_heading_kp,
+        'fixed_path_goal_position_entry_tolerance':
+            fixed_path_goal_position_entry_tolerance,
+        'fixed_path_goal_error_log_frequency':
+            fixed_path_goal_error_log_frequency,
     }
 
     regulated_autonomous = IncludeLaunchDescription(
@@ -182,12 +225,56 @@ def generate_launch_description():
             description='Maximum stationary time in fixed-path mode'),
         DeclareLaunchArgument(
             'fixed_path_max_linear_velocity',
-            default_value='0.8',
-            description='Fixed-path RPP maximum linear velocity (m/s)'),
+            default_value='0.52',
+            description='Fixed-path controller maximum linear velocity (m/s)'),
         DeclareLaunchArgument(
             'fixed_path_approach_velocity_scaling_dist',
             default_value='0.8',
-            description='Fixed-path RPP approach scaling distance (m)'),
+            description='Fixed-path controller approach scaling distance (m)'),
+        DeclareLaunchArgument(
+            'fixed_path_xy_goal_tolerance',
+            default_value='0.01',
+            description='Fixed-path position goal tolerance (m)'),
+        DeclareLaunchArgument(
+            'fixed_path_yaw_goal_tolerance',
+            default_value='0.08726646259971647',
+            description='Fixed-path heading goal tolerance (rad)'),
+        DeclareLaunchArgument(
+            'fixed_path_goal_position_hysteresis',
+            default_value='1.0',
+            description='Fixed-path position reacquisition multiplier'),
+        DeclareLaunchArgument(
+            'fixed_path_rotate_to_heading_angular_vel',
+            default_value='0.4',
+            description='Fixed-path heading alignment velocity (rad/s)'),
+        DeclareLaunchArgument(
+            'fixed_path_max_angular_accel',
+            default_value='0.8',
+            description='Fixed-path heading alignment acceleration (rad/s^2)'),
+        DeclareLaunchArgument(
+            'fixed_path_rotate_to_heading_kp',
+            default_value='1.5',
+            description='Fixed-path heading alignment proportional gain'),
+        DeclareLaunchArgument(
+            'fixed_path_goal_rotate_to_heading_angular_vel',
+            default_value='0.8',
+            description='Fixed-path goal heading maximum velocity (rad/s)'),
+        DeclareLaunchArgument(
+            'fixed_path_goal_max_angular_accel',
+            default_value='1.6',
+            description='Fixed-path goal heading acceleration (rad/s^2)'),
+        DeclareLaunchArgument(
+            'fixed_path_goal_rotate_to_heading_kp',
+            default_value='3.0',
+            description='Fixed-path goal heading proportional gain'),
+        DeclareLaunchArgument(
+            'fixed_path_goal_position_entry_tolerance',
+            default_value='0.008',
+            description='Fixed-path goal alignment entry tolerance (m)'),
+        DeclareLaunchArgument(
+            'fixed_path_goal_error_log_frequency',
+            default_value='1.0',
+            description='Fixed-path goal error log frequency (Hz)'),
         DeclareLaunchArgument(
             'fixed_path_stack_start_delay',
             default_value='3.0',

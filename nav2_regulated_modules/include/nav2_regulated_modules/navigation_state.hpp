@@ -44,71 +44,26 @@ enum class TaskType
 
 struct NavigationTask
 {
-  uint64_t generation
-  {
-    0
-  };
-  TaskType type
-  {
-    TaskType::NONE
-  };
-  NavigationState state
-  {
-    NavigationState::IDLE
-  };
+  uint64_t generation { 0 };
+  TaskType type { TaskType::NONE };
+  NavigationState state { NavigationState::IDLE };
   geometry_msgs::msg::PoseStamped goal;
   std::vector<geometry_msgs::msg::PoseStamped> goals;
   nav_msgs::msg::Path active_path;
-  rclcpp::Time start_time
-  {
-    0, 0, RCL_ROS_TIME
-  };
-  rclcpp::Time last_replan_time
-  {
-    0, 0, RCL_ROS_TIME
-  };
-  rclcpp::Time last_progress_time
-  {
-    0, 0, RCL_ROS_TIME
-  };
+  rclcpp::Time start_time { 0, 0, RCL_ROS_TIME };
+  rclcpp::Time last_replan_time { 0, 0, RCL_ROS_TIME };
+  rclcpp::Time last_progress_time { 0, 0, RCL_ROS_TIME };
   geometry_msgs::msg::PoseStamped last_progress_pose;
-  int recovery_count
-  {
-    0
-  };
-  int consecutive_planning_failures
-  {
-    0
-  };
-  double distance_remaining
-  {
-    0.0
-  };
+  int recovery_count { 0 };
+  int consecutive_planning_failures { 0 };
+  double distance_remaining { 0.0 };
   std::string task_id;
-  double total_path_length
-  {
-    0.0
-  };
-  double requested_speed
-  {
-    0.0
-  };
-  double start_yaw
-  {
-    0.0
-  };
-  double goal_yaw
-  {
-    0.0
-  };
-  uint8_t motion_direction
-  {
-    0
-  };
-  float progress
-  {
-    0.0F
-  };
+  double total_path_length { 0.0 };
+  double requested_speed { 0.0 };
+  double start_yaw { 0.0 };
+  double goal_yaw { 0.0 };
+  uint8_t motion_direction { 0 };
+  float progress { 0.0F };
   std::string last_error;
 };
 

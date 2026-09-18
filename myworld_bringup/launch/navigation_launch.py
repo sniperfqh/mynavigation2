@@ -34,6 +34,28 @@ def generate_launch_description():
         'fixed_path_max_linear_velocity')
     fixed_path_approach_velocity_scaling_dist = LaunchConfiguration(
         'fixed_path_approach_velocity_scaling_dist')
+    fixed_path_xy_goal_tolerance = LaunchConfiguration(
+        'fixed_path_xy_goal_tolerance')
+    fixed_path_yaw_goal_tolerance = LaunchConfiguration(
+        'fixed_path_yaw_goal_tolerance')
+    fixed_path_goal_position_hysteresis = LaunchConfiguration(
+        'fixed_path_goal_position_hysteresis')
+    fixed_path_rotate_to_heading_angular_vel = LaunchConfiguration(
+        'fixed_path_rotate_to_heading_angular_vel')
+    fixed_path_max_angular_accel = LaunchConfiguration(
+        'fixed_path_max_angular_accel')
+    fixed_path_rotate_to_heading_kp = LaunchConfiguration(
+        'fixed_path_rotate_to_heading_kp')
+    fixed_path_goal_rotate_to_heading_angular_vel = LaunchConfiguration(
+        'fixed_path_goal_rotate_to_heading_angular_vel')
+    fixed_path_goal_max_angular_accel = LaunchConfiguration(
+        'fixed_path_goal_max_angular_accel')
+    fixed_path_goal_rotate_to_heading_kp = LaunchConfiguration(
+        'fixed_path_goal_rotate_to_heading_kp')
+    fixed_path_goal_position_entry_tolerance = LaunchConfiguration(
+        'fixed_path_goal_position_entry_tolerance')
+    fixed_path_goal_error_log_frequency = LaunchConfiguration(
+        'fixed_path_goal_error_log_frequency')
     keyboard_input_device = LaunchConfiguration('keyboard_input_device')
 
     fixed_path = PythonExpression([
@@ -44,6 +66,30 @@ def generate_launch_description():
         "'", fixed_path_max_linear_velocity, "'"])
     fixed_path_approach_distance = PythonExpression([
         "'", fixed_path_approach_velocity_scaling_dist, "'"])
+    effective_xy_goal_tolerance = PythonExpression([
+        "'", fixed_path_xy_goal_tolerance, "' if '", operation_mode,
+        "' == 'fixed_path' else '0.03'"])
+    effective_yaw_goal_tolerance = PythonExpression([
+        "'", fixed_path_yaw_goal_tolerance, "' if '", operation_mode,
+        "' == 'fixed_path' else '0.15726646259971647'"])
+    fixed_path_position_hysteresis = PythonExpression([
+        "'", fixed_path_goal_position_hysteresis, "'"])
+    fixed_path_heading_velocity = PythonExpression([
+        "'", fixed_path_rotate_to_heading_angular_vel, "'"])
+    fixed_path_heading_acceleration = PythonExpression([
+        "'", fixed_path_max_angular_accel, "'"])
+    fixed_path_heading_kp = PythonExpression([
+        "'", fixed_path_rotate_to_heading_kp, "'"])
+    fixed_path_goal_heading_velocity = PythonExpression([
+        "'", fixed_path_goal_rotate_to_heading_angular_vel, "'"])
+    fixed_path_goal_heading_acceleration = PythonExpression([
+        "'", fixed_path_goal_max_angular_accel, "'"])
+    fixed_path_goal_heading_kp = PythonExpression([
+        "'", fixed_path_goal_rotate_to_heading_kp, "'"])
+    fixed_path_goal_position_entry = PythonExpression([
+        "'", fixed_path_goal_position_entry_tolerance, "'"])
+    fixed_path_goal_error_log_rate = PythonExpression([
+        "'", fixed_path_goal_error_log_frequency, "'"])
     configured_params = RewrittenYaml(
         source_file=params_file,
         param_rewrites={
@@ -63,6 +109,32 @@ def generate_launch_description():
                 fixed_path_controller_velocity,
             'controller_server.ros__parameters.FixedPathController.approach_velocity_scaling_dist':
                 fixed_path_approach_distance,
+            'controller_server.ros__parameters.stopped_goal_checker.xy_goal_tolerance':
+                effective_xy_goal_tolerance,
+            'controller_server.ros__parameters.stopped_goal_checker.yaw_goal_tolerance':
+                effective_yaw_goal_tolerance,
+            'controller_server.ros__parameters.fixed_path_goal_checker.xy_goal_tolerance':
+                fixed_path_xy_goal_tolerance,
+            'controller_server.ros__parameters.fixed_path_goal_checker.yaw_goal_tolerance':
+                fixed_path_yaw_goal_tolerance,
+            'controller_server.ros__parameters.FixedPathController.goal_position_hysteresis':
+                fixed_path_position_hysteresis,
+            'controller_server.ros__parameters.FixedPathController.rotate_to_heading_angular_vel':
+                fixed_path_heading_velocity,
+            'controller_server.ros__parameters.FixedPathController.max_angular_accel':
+                fixed_path_heading_acceleration,
+            'controller_server.ros__parameters.FixedPathController.rotate_to_heading_kp':
+                fixed_path_heading_kp,
+            'controller_server.ros__parameters.FixedPathController.goal_rotate_to_heading_angular_vel':
+                fixed_path_goal_heading_velocity,
+            'controller_server.ros__parameters.FixedPathController.goal_max_angular_accel':
+                fixed_path_goal_heading_acceleration,
+            'controller_server.ros__parameters.FixedPathController.goal_rotate_to_heading_kp':
+                fixed_path_goal_heading_kp,
+            'controller_server.ros__parameters.FixedPathController.goal_position_entry_tolerance':
+                fixed_path_goal_position_entry,
+            'controller_server.ros__parameters.FixedPathController.goal_error_log_frequency':
+                fixed_path_goal_error_log_rate,
         },
         convert_types=True)
 
@@ -141,12 +213,56 @@ def generate_launch_description():
             description='Maximum stationary time in fixed-path mode'),
         DeclareLaunchArgument(
             'fixed_path_max_linear_velocity',
-            default_value='0.8',
-            description='Fixed-path RPP maximum linear velocity (m/s)'),
+            default_value='0.52',
+            description='Fixed-path controller maximum linear velocity (m/s)'),
         DeclareLaunchArgument(
             'fixed_path_approach_velocity_scaling_dist',
             default_value='0.8',
-            description='Fixed-path RPP approach scaling distance (m)'),
+            description='Fixed-path controller approach scaling distance (m)'),
+        DeclareLaunchArgument(
+            'fixed_path_xy_goal_tolerance',
+            default_value='0.01',
+            description='Fixed-path position goal tolerance (m)'),
+        DeclareLaunchArgument(
+            'fixed_path_yaw_goal_tolerance',
+            default_value='0.08726646259971647',
+            description='Fixed-path heading goal tolerance (rad)'),
+        DeclareLaunchArgument(
+            'fixed_path_goal_position_hysteresis',
+            default_value='1.0',
+            description='Fixed-path position reacquisition multiplier'),
+        DeclareLaunchArgument(
+            'fixed_path_rotate_to_heading_angular_vel',
+            default_value='0.4',
+            description='Fixed-path heading alignment velocity (rad/s)'),
+        DeclareLaunchArgument(
+            'fixed_path_max_angular_accel',
+            default_value='0.8',
+            description='Fixed-path heading alignment acceleration (rad/s^2)'),
+        DeclareLaunchArgument(
+            'fixed_path_rotate_to_heading_kp',
+            default_value='1.5',
+            description='Fixed-path heading alignment proportional gain'),
+        DeclareLaunchArgument(
+            'fixed_path_goal_rotate_to_heading_angular_vel',
+            default_value='0.8',
+            description='Fixed-path goal heading maximum velocity (rad/s)'),
+        DeclareLaunchArgument(
+            'fixed_path_goal_max_angular_accel',
+            default_value='1.6',
+            description='Fixed-path goal heading acceleration (rad/s^2)'),
+        DeclareLaunchArgument(
+            'fixed_path_goal_rotate_to_heading_kp',
+            default_value='3.0',
+            description='Fixed-path goal heading proportional gain'),
+        DeclareLaunchArgument(
+            'fixed_path_goal_position_entry_tolerance',
+            default_value='0.008',
+            description='Fixed-path goal alignment entry tolerance (m)'),
+        DeclareLaunchArgument(
+            'fixed_path_goal_error_log_frequency',
+            default_value='1.0',
+            description='Fixed-path goal error log frequency (Hz)'),
         DeclareLaunchArgument(
             'keyboard_input_device',
             default_value='/dev/tty',

@@ -20,18 +20,9 @@ class PlanningModule
 private:
   std::string planner_id_;
   std::string smoother_id_;
-  bool use_smoother_
-  {
-    true
-  };
-  double replan_frequency_
-  {
-    1.0
-  };
-  int max_failures_
-  {
-    3
-  };
+  bool use_smoother_ { true };
+  double replan_frequency_ { 1.0 };
+  int max_failures_ { 3 };
 };
 
 }

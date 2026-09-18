@@ -18,10 +18,7 @@ class ControlModule
 private:
   std::string controller_id_;
   std::string goal_checker_id_;
-  double progress_timeout_
-  {
-    10.0
-  };
+  double progress_timeout_ { 10.0 };
 };
 
 }

@@ -19,17 +19,18 @@ void RegulatedNavigator::sendFollowPath(const nav_msgs::msg::Path & path)
   const auto sequence = ++follow_sequence_;
   const bool replacing_path = active_follow_goal_ != nullptr;
   const std::string & controller_id = task_.type == TaskType::NAVIGATION_SERVICE ? fixed_path_controller_id_ : control_module_.controllerId();
+  const std::string & goal_checker_id = task_.type == TaskType::NAVIGATION_SERVICE ? fixed_path_goal_checker_id_ : control_module_.goalCheckerId();
   FollowPath::Goal goal;
   goal.path = path;
   goal.controller_id = controller_id;
-  goal.goal_checker_id = control_module_.goalCheckerId();
+  goal.goal_checker_id = goal_checker_id;
   if (replacing_path)
   {
     LOG_DEBUG("更新 FollowPath，generation={}，follow_sequence={}，路径点数={}，controller_id={}", generation, sequence, path.poses.size(), controller_id);
   }
   else
   {
-    LOG_INFO("下发 FollowPath，generation={}，follow_sequence={}，路径点数={}，controller_id={}，goal_checker_id={}", generation, sequence, path.poses.size(), controller_id, control_module_.goalCheckerId());
+    LOG_INFO("下发 FollowPath，generation={}，follow_sequence={}，路径点数={}，controller_id={}，goal_checker_id={}", generation, sequence, path.poses.size(), controller_id, goal_checker_id);
   }
   auto options = rclcpp_action::Client<FollowPath>::SendGoalOptions();
   options.goal_response_callback = [this, generation, sequence](auto handle)

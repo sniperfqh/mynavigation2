@@ -13,21 +13,10 @@ namespace nav2_regulated_modules
 
 struct MotionStateSnapshot
 {
-  double linear_velocity
-  {
-    0.0
-  };
-  double angular_velocity
-  {
-    0.0
-  };
-  std::chrono::steady_clock::time_point receive_time
-  {
-  };
-  bool valid
-  {
-    false
-  };
+  double linear_velocity { 0.0 };
+  double angular_velocity { 0.0 };
+  std::chrono::steady_clock::time_point receive_time {};
+  bool valid { false };
 };
 
 class MotionStateSubscriber
