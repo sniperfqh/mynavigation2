@@ -23,6 +23,9 @@ def generate_launch_description():
     params_file = LaunchConfiguration('params_file')
     rviz_config_file = LaunchConfiguration('rviz_config_file')
     autostart = LaunchConfiguration('autostart')
+    use_collision_monitor = LaunchConfiguration('use_collision_monitor')
+    use_collision_visualization = LaunchConfiguration(
+        'use_collision_visualization')
     use_composition = LaunchConfiguration('use_composition')
     container_name = LaunchConfiguration('container_name')
     use_respawn = LaunchConfiguration('use_respawn')
@@ -167,6 +170,8 @@ def generate_launch_description():
             'params_file': configured_params,
             'rviz_config_file': rviz_config_file,
             'use_rviz': 'false',
+            'use_collision_monitor': use_collision_monitor,
+            'use_collision_visualization': use_collision_visualization,
             'autostart': autostart,
             'use_composition': use_composition,
             'container_name': container_name,
@@ -207,6 +212,14 @@ def generate_launch_description():
             'autostart',
             default_value='true',
             description='Automatically activate lifecycle nodes'),
+        DeclareLaunchArgument(
+            'use_collision_monitor',
+            default_value='true',
+            description='Enable Collision Monitor for the simulation velocity chain'),
+        DeclareLaunchArgument(
+            'use_collision_visualization',
+            default_value='true',
+            description='Enable Collision Monitor boundary visualization'),
         DeclareLaunchArgument(
             'use_composition',
             default_value='False',

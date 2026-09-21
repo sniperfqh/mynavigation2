@@ -26,6 +26,9 @@ def generate_launch_description():
     params_file = LaunchConfiguration('params_file')
     rviz_config_file = LaunchConfiguration('rviz_config_file')
     use_rviz = LaunchConfiguration('use_rviz')
+    use_collision_monitor = LaunchConfiguration('use_collision_monitor')
+    use_collision_visualization = LaunchConfiguration(
+        'use_collision_visualization')
     use_composition = LaunchConfiguration('use_composition')
     container_name = LaunchConfiguration('container_name')
     container_name_full = (namespace, '/', container_name)
@@ -39,7 +42,9 @@ def generate_launch_description():
     keyboard_input_device = LaunchConfiguration('keyboard_input_device')
     is_remote = PythonExpression(["'", operation_mode, "' == 'remote'"])
     is_navigation = PythonExpression(["'", operation_mode, "' != 'remote'"])
-    smoothed_cmd_vel_topic = 'cmd_vel'
+    smoothed_cmd_vel_topic = PythonExpression([
+        "'cmd_vel_collision_in' if '", use_collision_monitor,
+        "'.lower() == 'true' else 'cmd_vel'"])
     effective_progress_timeout = ParameterValue(
         PythonExpression([
             fixed_path_progress_timeout, " if '", operation_mode,
@@ -51,7 +56,6 @@ def generate_launch_description():
         'controller_server',
         'smoother_server',
         'velocity_smoother',
-        # 'collision_monitor',
         'regulated_navigator',
     ]
 
@@ -122,6 +126,16 @@ def generate_launch_description():
         'use_rviz',
         default_value='True',
         description='Whether to start RViz')
+
+    declare_use_collision_monitor_cmd = DeclareLaunchArgument(
+        'use_collision_monitor',
+        default_value='false',
+        description='Whether to start Collision Monitor and insert it into the velocity chain')
+
+    declare_use_collision_visualization_cmd = DeclareLaunchArgument(
+        'use_collision_visualization',
+        default_value='false',
+        description='Whether to start the Collision Monitor boundary visualizer')
 
     declare_autostart_cmd = DeclareLaunchArgument(
         'autostart',
@@ -241,22 +255,23 @@ def generate_launch_description():
                 remappings=remappings +
                 [('cmd_vel', 'cmd_vel_nav'),
                  ('cmd_vel_smoothed', smoothed_cmd_vel_topic)]),
-            # Node(
-            #     package='nav2_collision_monitor',
-            #     executable='collision_monitor',
-            #     name='collision_monitor',
-            #     output='screen',
-            #     respawn=use_respawn,
-            #     respawn_delay=2.0,
-            #     parameters=[
-            #         configured_params,
-            #         {
-            #             'cmd_vel_in_topic': 'cmd_vel_collision_in',
-            #             'cmd_vel_out_topic': 'cmd_vel',
-            #         },
-            #     ],
-            #     arguments=['--ros-args', '--log-level', log_level],
-            #     remappings=remappings),
+            Node(
+                condition=IfCondition(use_collision_monitor),
+                package='nav2_collision_monitor',
+                executable='collision_monitor',
+                name='collision_monitor',
+                output='screen',
+                respawn=use_respawn,
+                respawn_delay=2.0,
+                parameters=[
+                    configured_params,
+                    {
+                        'cmd_vel_in_topic': 'cmd_vel_collision_in',
+                        'cmd_vel_out_topic': 'cmd_vel',
+                    },
+                ],
+                arguments=['--ros-args', '--log-level', log_level],
+                remappings=remappings),
             Node(
                 package='nav2_regulated_modules',
                 executable='regulated_navigator_node',
@@ -289,6 +304,16 @@ def generate_launch_description():
                 parameters=[{'use_sim_time': use_sim_time},
                             {'autostart': autostart},
                             {'node_names': lifecycle_nodes}]),
+            Node(
+                condition=IfCondition(use_collision_monitor),
+                package='nav2_lifecycle_manager',
+                executable='lifecycle_manager',
+                name='lifecycle_manager_collision_monitor',
+                output='screen',
+                arguments=['--ros-args', '--log-level', log_level],
+                parameters=[{'use_sim_time': use_sim_time},
+                            {'autostart': autostart},
+                            {'node_names': ['collision_monitor']}]),
         ])
 
     load_composable_nodes = LoadComposableNodes(
@@ -324,18 +349,19 @@ def generate_launch_description():
                 remappings=remappings +
                 [('cmd_vel', 'cmd_vel_nav'),
                  ('cmd_vel_smoothed', smoothed_cmd_vel_topic)]),
-            # ComposableNode(
-            #     package='nav2_collision_monitor',
-            #     plugin='nav2_collision_monitor::CollisionMonitor',
-            #     name='collision_monitor',
-            #     parameters=[
-            #         configured_params,
-            #         {
-            #             'cmd_vel_in_topic': 'cmd_vel_collision_in',
-            #             'cmd_vel_out_topic': 'cmd_vel',
-            #         },
-            #     ],
-            #     remappings=remappings),
+            ComposableNode(
+                condition=IfCondition(use_collision_monitor),
+                package='nav2_collision_monitor',
+                plugin='nav2_collision_monitor::CollisionMonitor',
+                name='collision_monitor',
+                parameters=[
+                    configured_params,
+                    {
+                        'cmd_vel_in_topic': 'cmd_vel_collision_in',
+                        'cmd_vel_out_topic': 'cmd_vel',
+                    },
+                ],
+                remappings=remappings),
             ComposableNode(
                 package='nav2_lifecycle_manager',
                 plugin='nav2_lifecycle_manager::LifecycleManager',
@@ -343,6 +369,14 @@ def generate_launch_description():
                 parameters=[{'use_sim_time': use_sim_time,
                              'autostart': autostart,
                              'node_names': lifecycle_nodes}]),
+            ComposableNode(
+                condition=IfCondition(use_collision_monitor),
+                package='nav2_lifecycle_manager',
+                plugin='nav2_lifecycle_manager::LifecycleManager',
+                name='lifecycle_manager_collision_monitor',
+                parameters=[{'use_sim_time': use_sim_time,
+                             'autostart': autostart,
+                             'node_names': ['collision_monitor']}]),
         ])
 
     start_regulated_navigator_cmd = Node(
@@ -370,11 +404,12 @@ def generate_launch_description():
         parameters=[{'input_topic': '/cmd_vel'},
                     {'output_topic': '/control_to_uart'}])
 
-    # collision_boundary_visualizer_cmd = Node(
-    #     package='nav2_regulated_modules',
-    #     executable='collision_boundary_visualizer_node',
-    #     name='collision_boundary_visualizer',
-    #     output='screen')
+    collision_boundary_visualizer_cmd = Node(
+        condition=IfCondition(use_collision_visualization),
+        package='nav2_regulated_modules',
+        executable='collision_boundary_visualizer_node',
+        name='collision_boundary_visualizer',
+        output='screen')
 
     remote_control_cmd = Node(
         condition=IfCondition(is_remote),
@@ -396,7 +431,7 @@ def generate_launch_description():
             load_composable_nodes,
             start_regulated_navigator_cmd,
             start_controlpub_cmd,
-            # collision_boundary_visualizer_cmd,
+            collision_boundary_visualizer_cmd,
         ])
 
     ld = LaunchDescription()
@@ -413,6 +448,8 @@ def generate_launch_description():
     ld.add_action(declare_params_file_cmd)
     ld.add_action(declare_rviz_config_file_cmd)
     ld.add_action(declare_use_rviz_cmd)
+    ld.add_action(declare_use_collision_monitor_cmd)
+    ld.add_action(declare_use_collision_visualization_cmd)
     ld.add_action(declare_autostart_cmd)
     ld.add_action(declare_use_composition_cmd)
     ld.add_action(declare_container_name_cmd)

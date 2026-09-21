@@ -17,6 +17,10 @@ def generate_launch_description():
     ign_partition_name = LaunchConfiguration(
         'ign_partition', default=default_ign_partition)
     use_rviz = LaunchConfiguration('use_rviz', default='true')
+    use_collision_monitor = LaunchConfiguration(
+        'use_collision_monitor', default='true')
+    use_collision_visualization = LaunchConfiguration(
+        'use_collision_visualization', default='true')
     headless = LaunchConfiguration('headless', default='false')
     operation_mode = LaunchConfiguration('operation_mode', default='autonomous')
     fixed_path_progress_timeout = LaunchConfiguration(
@@ -153,6 +157,8 @@ def generate_launch_description():
         'use_sim_time': use_sim_time,
         'params_file': params_file,
         'rviz_config_file': rviz_config_file,
+        'use_collision_monitor': use_collision_monitor,
+        'use_collision_visualization': use_collision_visualization,
         'autostart': 'true',
         'use_composition': 'False',
         'container_name': 'nav2_regulated_container',
@@ -246,6 +252,14 @@ def generate_launch_description():
             'use_rviz',
             default_value='true',
             description='Whether to start RViz'),
+        DeclareLaunchArgument(
+            'use_collision_monitor',
+            default_value='true',
+            description='Enable Collision Monitor in autonomous and fixed-path simulation'),
+        DeclareLaunchArgument(
+            'use_collision_visualization',
+            default_value='true',
+            description='Enable Collision Monitor boundary visualization in simulation'),
         DeclareLaunchArgument(
             'headless',
             default_value='false',
