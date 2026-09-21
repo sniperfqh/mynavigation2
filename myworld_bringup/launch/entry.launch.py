@@ -25,6 +25,24 @@ def generate_launch_description():
         'fixed_path_max_linear_velocity', default='0.52')
     fixed_path_approach_velocity_scaling_dist = LaunchConfiguration(
         'fixed_path_approach_velocity_scaling_dist', default='0.8')
+    fixed_path_goal_linear_deceleration = LaunchConfiguration(
+        'fixed_path_goal_linear_deceleration', default='0.25')
+    fixed_path_goal_final_approach_velocity = LaunchConfiguration(
+        'fixed_path_goal_final_approach_velocity', default='0.01')
+    fixed_path_goal_braking_reaction_time = LaunchConfiguration(
+        'fixed_path_goal_braking_reaction_time', default='0.1')
+    fixed_path_goal_braking_distance_margin = LaunchConfiguration(
+        'fixed_path_goal_braking_distance_margin', default='0.1')
+    fixed_path_goal_terminal_lookahead_dist = LaunchConfiguration(
+        'fixed_path_goal_terminal_lookahead_dist', default='0.2')
+    fixed_path_goal_terminal_lookahead_reference_speed = LaunchConfiguration(
+        'fixed_path_goal_terminal_lookahead_reference_speed', default='0.75')
+    fixed_path_goal_terminal_lookahead_speed_gain = LaunchConfiguration(
+        'fixed_path_goal_terminal_lookahead_speed_gain', default='0.1')
+    fixed_path_goal_terminal_lookahead_min_dist = LaunchConfiguration(
+        'fixed_path_goal_terminal_lookahead_min_dist', default='0.15')
+    fixed_path_goal_terminal_lookahead_max_dist = LaunchConfiguration(
+        'fixed_path_goal_terminal_lookahead_max_dist', default='0.25')
     fixed_path_xy_goal_tolerance = LaunchConfiguration(
         'fixed_path_xy_goal_tolerance', default='0.01')
     fixed_path_yaw_goal_tolerance = LaunchConfiguration(
@@ -145,6 +163,24 @@ def generate_launch_description():
         'fixed_path_max_linear_velocity': fixed_path_max_linear_velocity,
         'fixed_path_approach_velocity_scaling_dist':
             fixed_path_approach_velocity_scaling_dist,
+        'fixed_path_goal_linear_deceleration':
+            fixed_path_goal_linear_deceleration,
+        'fixed_path_goal_final_approach_velocity':
+            fixed_path_goal_final_approach_velocity,
+        'fixed_path_goal_braking_reaction_time':
+            fixed_path_goal_braking_reaction_time,
+        'fixed_path_goal_braking_distance_margin':
+            fixed_path_goal_braking_distance_margin,
+        'fixed_path_goal_terminal_lookahead_dist':
+            fixed_path_goal_terminal_lookahead_dist,
+        'fixed_path_goal_terminal_lookahead_reference_speed':
+            fixed_path_goal_terminal_lookahead_reference_speed,
+        'fixed_path_goal_terminal_lookahead_speed_gain':
+            fixed_path_goal_terminal_lookahead_speed_gain,
+        'fixed_path_goal_terminal_lookahead_min_dist':
+            fixed_path_goal_terminal_lookahead_min_dist,
+        'fixed_path_goal_terminal_lookahead_max_dist':
+            fixed_path_goal_terminal_lookahead_max_dist,
         'fixed_path_xy_goal_tolerance': fixed_path_xy_goal_tolerance,
         'fixed_path_yaw_goal_tolerance': fixed_path_yaw_goal_tolerance,
         'fixed_path_goal_position_hysteresis':
@@ -232,17 +268,53 @@ def generate_launch_description():
             default_value='0.8',
             description='Fixed-path controller approach scaling distance (m)'),
         DeclareLaunchArgument(
+            'fixed_path_goal_linear_deceleration',
+            default_value='0.25',
+            description='Fixed-path goal deceleration (m/s^2)'),
+        DeclareLaunchArgument(
+            'fixed_path_goal_final_approach_velocity',
+            default_value='0.01',
+            description='Fixed-path final approach velocity (m/s)'),
+        DeclareLaunchArgument(
+            'fixed_path_goal_braking_reaction_time',
+            default_value='0.1',
+            description='Fixed-path braking reaction time margin (s)'),
+        DeclareLaunchArgument(
+            'fixed_path_goal_braking_distance_margin',
+            default_value='0.1',
+            description='Fixed-path braking distance margin (m)'),
+        DeclareLaunchArgument(
+            'fixed_path_goal_terminal_lookahead_dist',
+            default_value='0.2',
+            description='Fixed-path minimum terminal lookahead distance (m)'),
+        DeclareLaunchArgument(
+            'fixed_path_goal_terminal_lookahead_reference_speed',
+            default_value='0.75',
+            description='Fixed-path terminal lookahead reference speed (m/s)'),
+        DeclareLaunchArgument(
+            'fixed_path_goal_terminal_lookahead_speed_gain',
+            default_value='0.1',
+            description='Fixed-path terminal lookahead speed gain (s)'),
+        DeclareLaunchArgument(
+            'fixed_path_goal_terminal_lookahead_min_dist',
+            default_value='0.15',
+            description='Fixed-path terminal lookahead minimum distance (m)'),
+        DeclareLaunchArgument(
+            'fixed_path_goal_terminal_lookahead_max_dist',
+            default_value='0.25',
+            description='Fixed-path terminal lookahead maximum distance (m)'),
+        DeclareLaunchArgument(
             'fixed_path_xy_goal_tolerance',
             default_value='0.01',
             description='Fixed-path position goal tolerance (m)'),
         DeclareLaunchArgument(
             'fixed_path_yaw_goal_tolerance',
             default_value='0.08726646259971647',
-            description='Fixed-path heading goal tolerance (rad)'),
+            description='Deprecated compatibility option; terminal heading is ignored'),
         DeclareLaunchArgument(
             'fixed_path_goal_position_hysteresis',
             default_value='1.0',
-            description='Fixed-path position reacquisition multiplier'),
+            description='Deprecated compatibility option; terminal stop is latched'),
         DeclareLaunchArgument(
             'fixed_path_rotate_to_heading_angular_vel',
             default_value='0.4',
@@ -258,19 +330,19 @@ def generate_launch_description():
         DeclareLaunchArgument(
             'fixed_path_goal_rotate_to_heading_angular_vel',
             default_value='0.8',
-            description='Fixed-path goal heading maximum velocity (rad/s)'),
+            description='Deprecated compatibility option; terminal heading is ignored'),
         DeclareLaunchArgument(
             'fixed_path_goal_max_angular_accel',
             default_value='1.6',
-            description='Fixed-path goal heading acceleration (rad/s^2)'),
+            description='Deprecated compatibility option; terminal heading is ignored'),
         DeclareLaunchArgument(
             'fixed_path_goal_rotate_to_heading_kp',
             default_value='3.0',
-            description='Fixed-path goal heading proportional gain'),
+            description='Deprecated compatibility option; terminal heading is ignored'),
         DeclareLaunchArgument(
             'fixed_path_goal_position_entry_tolerance',
             default_value='0.008',
-            description='Fixed-path goal alignment entry tolerance (m)'),
+            description='Deprecated compatibility option; xy goal tolerance is used'),
         DeclareLaunchArgument(
             'fixed_path_goal_error_log_frequency',
             default_value='1.0',

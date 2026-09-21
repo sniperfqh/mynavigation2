@@ -217,12 +217,11 @@ controller_server:
       rot_stopped_velocity: 0.05
 
     fixed_path_goal_checker:
-      stateful: False
-      plugin: "nav2_controller::StoppedGoalChecker"
+      plugin: "nav2_regulated_modules::FixedPathGoalChecker"
       xy_goal_tolerance: 0.01
-      yaw_goal_tolerance: 0.08726646259971647
       trans_stopped_velocity: 0.01
       rot_stopped_velocity: 0.05
+      position_stable_cycles: 5
     # DWB critic-based sampling controller. Stable default for TurtleBot3.
     DWB:
       plugin: "dwb_core::DWBLocalPlanner"
@@ -309,13 +308,17 @@ controller_server:
       rotate_to_heading_angular_vel: 0.4
       max_angular_accel: 0.8
       rotate_to_heading_kp: 1.5
-      goal_rotate_to_heading_angular_vel: 0.8
-      goal_max_angular_accel: 1.6
-      goal_rotate_to_heading_kp: 3.0
       min_approach_linear_velocity: 0.005
       approach_velocity_scaling_dist: 0.8
-      goal_position_hysteresis: 1.0
-      goal_position_entry_tolerance: 0.008
+      goal_linear_deceleration: 0.25
+      goal_final_approach_velocity: 0.01
+      goal_braking_reaction_time: 0.1
+      goal_braking_distance_margin: 0.1
+      goal_terminal_lookahead_dist: 0.2
+      goal_terminal_lookahead_reference_speed: 0.75
+      goal_terminal_lookahead_speed_gain: 0.1
+      goal_terminal_lookahead_min_dist: 0.15
+      goal_terminal_lookahead_max_dist: 0.25
       goal_error_log_frequency: 1.0
       alignment_stable_cycles: 5
       transform_tolerance: 0.2
@@ -759,6 +762,7 @@ velocity_smoother:
     use_sim_time: True
     smoothing_frequency: 50.0
     scale_velocities: False
+    immediate_stop_on_zero_command: False
     feedback: "CLOSED_LOOP"
     max_velocity: [1.5, 0.0, 1.0]
     min_velocity: [-1.5, 0.0, -1.0]

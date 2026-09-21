@@ -138,6 +138,8 @@ void RegulatedNavigator::succeedTask()
 {
   const auto generation = task_.generation;
   const auto elapsed = (now() - task_.start_time).seconds();
+  task_.distance_remaining = 0.0;
+  task_.progress = 1.0F;
   task_.state = NavigationState::SUCCEEDED;
   if (active_pose_goal_)
   {
@@ -154,7 +156,7 @@ void RegulatedNavigator::succeedTask()
     auto feedback = std::make_shared<NavigationService::Feedback>();
     feedback->cur_task_id = task_.task_id;
     feedback->cur_seg_id = "";
-    feedback->progress = 1.0F;
+    feedback->progress = task_.progress;
     active_navigation_service_goal_->publish_feedback(feedback);
     auto navigation_service_result = std::make_shared<NavigationService::Result>();
     navigation_service_result->finish = true;

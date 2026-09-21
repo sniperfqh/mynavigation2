@@ -143,6 +143,7 @@ protected:
   bool open_loop_;
   bool stopped_{true};
   bool scale_velocities_;
+  bool immediate_stop_on_zero_command_ { false };
   std::vector<double> max_velocities_;
   std::vector<double> min_velocities_;
   double target_maxvx_;

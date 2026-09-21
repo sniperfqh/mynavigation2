@@ -51,6 +51,7 @@ velocity_smoother:
   ros__parameters:
   	smoothing_frequency: 20.0  # Rate to run smoother
   	scale_velocities: false  # scale velocities proportionally if any axis is outside of acceleration range to follow same vector, if possible
+	  immediate_stop_on_zero_command: false  # publish an exact zero immediately when every input velocity component is zero
   	feedback: "OPEN_LOOP"  # Type of feedback for current speed. Open loop uses the last smoothed output. Closed loop uses robot odometry
   	max_velocity: [0.5, 0.0, 2.5]  # Maximum velocities, ordered [Vx, Vy, Vw]
    	min_velocity: [-0.5, 0.0, -2.5]  # Minimum velocities, ordered [Vx, Vy, Vw]

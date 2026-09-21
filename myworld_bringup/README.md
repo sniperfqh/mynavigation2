@@ -100,14 +100,26 @@ ros2 topic pub --once \
 
 固定路径的终点判定、速度平滑、MotionState 闭环、ChassisControl 监听和
 `/control_to_uart` 输出均由 `nav2_regulated_modules` 封装；本包只提供仿真环境及其
-输入适配。固定路径 `stopped_goal_checker` 的平面距离容差为 `10 mm`、航向容差为 `5°`，`FixedPathController` 固定路径速度默认由启动参数限制为 `0.8 m/s`；接近终点时允许速度降至
-零，进入位置容差后先停车，再按终点航向完成对齐。
+输入适配。固定路径 `FixedPathGoalChecker` 的平面距离容差为 `10 mm`，位置稳定周期为 `5`；航向误差只做诊断，
+不参与终点停车或成功判定。`FixedPathController` 固定路径速度默认由启动参数限制为 `0.8 m/s`；接近终点时按
+`0.25 m/s^2` 减速度、`0.1 s` 反应时间和 `0.1 m` 制动裕量平滑减速，终点前最低保持 `0.01 m/s` 微量接近，
+继续直接跟踪到位置容差，进入位置容差或越过终点平面后锁存线、角速度为零，并保留锁存瞬间的跟踪航向误差作为诊断。
+`fixed_path` 模式同时启用 Velocity Smoother 的全零命令立即停车，仅在到点锁存后绕过减速度平滑，避免残余角速度造成停车后旋转；其他模式仍按原加减速度限制平滑停车。
 
 可调启动参数如下：
 
 ```text
 fixed_path_max_linear_velocity            默认 0.80 m/s
 fixed_path_approach_velocity_scaling_dist 默认 0.80 m
+fixed_path_goal_linear_deceleration       默认 0.25 m/s^2
+fixed_path_goal_final_approach_velocity   默认 0.01 m/s
+fixed_path_goal_braking_reaction_time     默认 0.10 s
+fixed_path_goal_braking_distance_margin   默认 0.10 m
+fixed_path_goal_terminal_lookahead_dist   默认 0.20 m
+fixed_path_goal_terminal_lookahead_reference_speed 默认 0.75 m/s
+fixed_path_goal_terminal_lookahead_speed_gain 默认 0.10 s
+fixed_path_goal_terminal_lookahead_min_dist 默认 0.15 m
+fixed_path_goal_terminal_lookahead_max_dist 默认 0.25 m
 fixed_path_stack_start_delay              默认 3.00 s
 rviz_start_delay                          默认 5.00 s
 ign_partition                             默认按 ROS_DOMAIN_ID 和启动进程 PID 唯一生成
@@ -119,7 +131,8 @@ ign_partition                             默认按 ROS_DOMAIN_ID 和启动进�
 ros2 launch myworld_bringup entry.launch.py \
   operation_mode:=fixed_path \
   fixed_path_max_linear_velocity:=0.8 \
-  fixed_path_approach_velocity_scaling_dist:=0.8
+  fixed_path_approach_velocity_scaling_dist:=0.8 \
+  fixed_path_goal_linear_deceleration:=0.25
 ```
 
 `odom_to_motion_state` 把 Gazebo 的 `/odom` 转换为 `/motion_state`，供

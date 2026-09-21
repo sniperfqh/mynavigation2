@@ -13,6 +13,7 @@
 // limitations under the License.
 
 #include <chrono>
+#include <cmath>
 #include <vector>
 #include <memory>
 #include <string>
@@ -21,6 +22,8 @@
 
 #include "lifecycle_msgs/msg/state.hpp"
 #include "nav2_core/exceptions.hpp"
+#include "nav2_core/path_aware_goal_checker.hpp"
+#include "nav2_core/terminal_aware_controller.hpp"
 #include "nav_2d_utils/conversions.hpp"
 #include "nav_2d_utils/tf_help.hpp"
 #include "nav2_util/node_utils.hpp"
@@ -377,6 +380,11 @@ void ControllerServer::setPlannerPath(const nav_msgs::msg::Path & path) {
   end_pose_ = path.poses.back();
   end_pose_.header.frame_id = path.header.frame_id;
   goal_checkers_[current_goal_checker_]->reset();
+  auto * path_aware_goal_checker = dynamic_cast<nav2_core::PathAwareGoalChecker *>(goal_checkers_[current_goal_checker_].get());
+  if (path_aware_goal_checker)
+  {
+    path_aware_goal_checker->setPath(path);
+  }
 
   RCLCPP_DEBUG(get_logger(), "Path end point is (%.2f, %.2f)", end_pose_.pose.position.x, end_pose_.pose.position.y);
 
@@ -429,7 +437,12 @@ void ControllerServer::computeAndPublishVelocity() {
   nav_msgs::msg::Path & current_path = current_path_;
   auto find_closest_pose_idx = [&pose, &current_path]() {size_t closest_pose_idx = 0; double curr_min_dist = std::numeric_limits<double>::max(); for (size_t curr_idx = 0; curr_idx < current_path.poses.size(); ++curr_idx) {double curr_dist = nav2_util::geometry_utils::euclidean_distance(pose, current_path.poses[curr_idx]); if (curr_dist < curr_min_dist) {curr_min_dist = curr_dist; closest_pose_idx = curr_idx;}} return closest_pose_idx;};
 
-  feedback->distance_to_goal = nav2_util::geometry_utils::calculate_path_length(current_path_, find_closest_pose_idx());
+  auto * terminal_aware_controller = dynamic_cast<nav2_core::TerminalAwareController *>(controllers_[current_controller_].get());
+  const bool terminal_stop_latched = terminal_aware_controller && terminal_aware_controller->isTerminalStopLatched();
+  const bool terminal_position_accurate = terminal_aware_controller && terminal_aware_controller->isTerminalPositionAccurate();
+  auto * path_aware_goal_checker = dynamic_cast<nav2_core::PathAwareGoalChecker *>(goal_checkers_[current_goal_checker_].get());
+  const bool terminal_position_reached = terminal_aware_controller ? (terminal_stop_latched && terminal_position_accurate) : (path_aware_goal_checker && path_aware_goal_checker->isTerminalPositionReached(pose.pose));
+  feedback->distance_to_goal = terminal_position_reached ? 0.0 : nav2_util::geometry_utils::calculate_path_length(current_path_, find_closest_pose_idx());
   action_server_->publish_feedback(feedback);
 
   RCLCPP_DEBUG(get_logger(), "Publishing velocity at time %.2f", now().seconds());
@@ -489,6 +502,37 @@ bool ControllerServer::isGoalReached() {
 
   nav_2d_msgs::msg::Twist2D twist = getThresholdedTwist(odom_sub_->getTwist());
   geometry_msgs::msg::Twist velocity = nav_2d_utils::twist2Dto3D(twist);
+
+  auto * terminal_aware_controller = dynamic_cast<nav2_core::TerminalAwareController *>(controllers_[current_controller_].get());
+  if (terminal_aware_controller)
+  {
+    if (!terminal_aware_controller->isTerminalStopLatched())
+    {
+      RCLCPP_DEBUG_THROTTLE(get_logger(), *get_clock(), 1000, "终点感知控制器尚未锁存停车，拒绝报告成功");
+      return false;
+    }
+    if (!terminal_aware_controller->isTerminalPositionAccurate())
+    {
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000, "终点已停车但 XY 误差超过位置容差，拒绝报告成功");
+      return false;
+    }
+    geometry_msgs::msg::Pose pose_tolerance;
+    geometry_msgs::msg::Twist velocity_tolerance;
+    if (!goal_checkers_[current_goal_checker_]->getTolerances(pose_tolerance, velocity_tolerance) || !std::isfinite(velocity_tolerance.linear.x) || !std::isfinite(velocity_tolerance.angular.z) || velocity_tolerance.linear.x < 0.0 || velocity_tolerance.angular.z < 0.0)
+    {
+      throw nav2_core::PlannerException("Terminal-aware controller requires valid stopped-velocity tolerances");
+    }
+    const double linear_speed = std::hypot(velocity.linear.x, velocity.linear.y);
+    const double angular_speed = std::abs(velocity.angular.z);
+    const bool stopped = linear_speed <= velocity_tolerance.linear.x && angular_speed <= velocity_tolerance.angular.z;
+    if (stopped)
+    {
+      LOG_INFO("终点停车锁存且速度已停稳，线速度={:.4f}m/s，角速度={:.4f}rad/s", linear_speed, angular_speed);
+      return true;
+    }
+    RCLCPP_DEBUG_THROTTLE(get_logger(), *get_clock(), 1000, "Terminal stop latched; waiting for stopped velocity: linear=%.4f/%.4f m/s, angular=%.4f/%.4f rad/s", linear_speed, velocity_tolerance.linear.x, angular_speed, velocity_tolerance.angular.z);
+    return false;
+  }
 
   geometry_msgs::msg::PoseStamped transformed_end_pose;
   rclcpp::Duration tolerance(rclcpp::Duration::from_seconds(costmap_ros_->getTransformTolerance()));

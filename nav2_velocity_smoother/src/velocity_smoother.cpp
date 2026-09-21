@@ -54,10 +54,12 @@ nav2_util::CallbackReturn VelocitySmoother::on_configure(const rclcpp_lifecycle:
   declare_parameter_if_not_declared(node, "smoothing_frequency", rclcpp::ParameterValue(20.0));
   declare_parameter_if_not_declared(node, "feedback", rclcpp::ParameterValue(std::string("OPEN_LOOP")));
   declare_parameter_if_not_declared(node, "scale_velocities", rclcpp::ParameterValue(false));
+  declare_parameter_if_not_declared(node, "immediate_stop_on_zero_command", rclcpp::ParameterValue(false));
   node->get_parameter("smoothing_frequency", smoothing_frequency_);
   node->get_parameter("feedback", feedback_type);
   node->get_parameter("scale_velocities", scale_velocities_);
-  LOG_INFO("Velocity smoother metadata smoothing_frequency={}, feedback={}, scale_velocities={}", smoothing_frequency_, feedback_type.c_str(), scale_velocities_);
+  node->get_parameter("immediate_stop_on_zero_command", immediate_stop_on_zero_command_);
+  LOG_INFO("Velocity smoother metadata smoothing_frequency={}, feedback={}, scale_velocities={}, immediate_stop_on_zero_command={}", smoothing_frequency_, feedback_type.c_str(), scale_velocities_, immediate_stop_on_zero_command_);
 
   // Kinematics
   declare_parameter_if_not_declared(node, "max_velocity", rclcpp::ParameterValue(std::vector<double>{0.50, 0.0, 2.5}));
@@ -243,6 +245,14 @@ void VelocitySmoother::smootherTimer() {
 
   stopped_ = false;
 
+  if (immediate_stop_on_zero_command_ && *command_ == geometry_msgs::msg::Twist())
+  {
+    last_cmd_ = geometry_msgs::msg::Twist();
+    stopped_ = true;
+    smoothed_cmd_pub_->publish(std::move(cmd_vel));
+    return;
+  }
+
   // Get current velocity based on feedback type
   geometry_msgs::msg::Twist current_;
   if (open_loop_) {
@@ -399,6 +409,11 @@ rcl_interfaces::msg::SetParametersResult VelocitySmoother::dynamicParametersCall
       } else if (name == "deadband_velocity") {
         deadband_velocities_ = parameter.as_double_array();
         LOG_INFO("Updating deadband_velocity limits");
+      }
+    } else if (type == ParameterType::PARAMETER_BOOL) {
+      if (name == "immediate_stop_on_zero_command") {
+        immediate_stop_on_zero_command_ = parameter.as_bool();
+        LOG_INFO("Updating immediate_stop_on_zero_command to {}", immediate_stop_on_zero_command_);
       }
     } else if (type == ParameterType::PARAMETER_STRING) {
       if (name == "feedback") {

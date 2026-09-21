@@ -57,7 +57,9 @@ ament_target_dependencies(regulated_navigator_node
   visualization_msgs
 )
 
-add_library(nav2_regulated_modules_fixed_path_controller SHARED src/fixed_path_controller.cpp)
+add_library(nav2_regulated_modules_fixed_path_controller SHARED
+  src/fixed_path_controller.cpp
+  src/fixed_path_goal_checker.cpp)
 target_include_directories(nav2_regulated_modules_fixed_path_controller PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>)
 target_compile_features(nav2_regulated_modules_fixed_path_controller PUBLIC cxx_std_17)
 ament_target_dependencies(nav2_regulated_modules_fixed_path_controller rclcpp rclcpp_lifecycle geometry_msgs nav2_core nav2_costmap_2d nav2_util nav_msgs pluginlib tf2 tf2_ros tf2_geometry_msgs spdlog_wrapper)
