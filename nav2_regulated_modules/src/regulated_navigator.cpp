@@ -45,6 +45,7 @@ RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : na
   declare_parameter("costmap_update_wait_duration", 0.8);
   declare_parameter("passed_goal_radius", 0.7);
   declare_parameter("localization_timeout", 0.3);
+  declare_parameter("enable_localization_jump_detection", false);
   declare_parameter("max_localization_translation_jump", 0.3);
   declare_parameter("max_localization_rotation_jump", 0.35);
   declare_parameter("progress_timeout", 10.0);
@@ -117,6 +118,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   costmap_wait_duration_ = get_parameter("costmap_update_wait_duration").as_double();
   passed_goal_radius_ = get_parameter("passed_goal_radius").as_double();
   localization_timeout_ = get_parameter("localization_timeout").as_double();
+  enable_localization_jump_detection_ = get_parameter("enable_localization_jump_detection").as_bool();
   max_translation_jump_ = get_parameter("max_localization_translation_jump").as_double();
   max_rotation_jump_ = get_parameter("max_localization_rotation_jump").as_double();
   progress_min_translation_ = get_parameter("progress_min_translation").as_double();
@@ -228,7 +230,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   velocity_log_timer_ = create_wall_timer(std::chrono::duration_cast<std::chrono::milliseconds>(velocity_log_period), std::bind(&RegulatedNavigator::logVelocityChain, this));
 
   configured_ = true;
-  LOG_INFO("独立规控导航器配置完成，operation_mode={}，速度日志={}Hz，反馈={}，控制器输出={}，平滑器输出={}", operation_mode, velocity_log_frequency_, velocity_odom_topic_, controller_cmd_vel_topic_, smoothed_cmd_vel_topic_);
+  LOG_INFO("独立规控导航器配置完成，operation_mode={}，定位跳变保护={}，平移阈值={:.3f}m，旋转阈值={:.3f}rad，速度日志={}Hz，反馈={}，控制器输出={}，平滑器输出={}", operation_mode, enable_localization_jump_detection_ ? "启用" : "关闭", max_translation_jump_, max_rotation_jump_, velocity_log_frequency_, velocity_odom_topic_, controller_cmd_vel_topic_, smoothed_cmd_vel_topic_);
   return nav2_util::CallbackReturn::SUCCESS;
 }
 

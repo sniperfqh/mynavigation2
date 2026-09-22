@@ -97,7 +97,7 @@ void RegulatedNavigator::monitorTask()
     return;
   }
 
-  if (has_last_pose_)
+  if (enable_localization_jump_detection_ && has_last_pose_)
   {
     const double translation_jump = navigation_utils::poseDistance(current_pose, last_pose_);
     const double rotation_jump = std::abs(navigation_utils::normalizeAngle(navigation_utils::yawFromPose(current_pose) - navigation_utils::yawFromPose(last_pose_)));

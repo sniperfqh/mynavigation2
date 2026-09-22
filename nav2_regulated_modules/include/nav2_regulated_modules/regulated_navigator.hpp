@@ -149,6 +149,7 @@ private:
   double costmap_wait_duration_ { 0.8 };
   double passed_goal_radius_ { 0.7 };
   double localization_timeout_ { 0.3 };
+  bool enable_localization_jump_detection_ { false };
   double max_translation_jump_ { 0.3 };
   double max_rotation_jump_ { 0.35 };
   double progress_min_translation_ { 0.1 };

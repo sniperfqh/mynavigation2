@@ -35,6 +35,8 @@ def generate_launch_description():
     use_respawn = LaunchConfiguration('use_respawn')
     log_level = LaunchConfiguration('log_level')
     operation_mode = LaunchConfiguration('operation_mode')
+    enable_localization_jump_detection = LaunchConfiguration(
+        'enable_localization_jump_detection')
     fixed_path_progress_timeout = LaunchConfiguration(
         'fixed_path_progress_timeout')
     default_keyboard_input_device = (
@@ -168,6 +170,11 @@ def generate_launch_description():
         choices=['remote', 'autonomous', 'fixed_path'],
         description='Robot operation mode')
 
+    declare_enable_localization_jump_detection_cmd = DeclareLaunchArgument(
+        'enable_localization_jump_detection',
+        default_value='false',
+        description='Whether localization pose jumps cancel control and stop the robot')
+
     declare_fixed_path_progress_timeout_cmd = DeclareLaunchArgument(
         'fixed_path_progress_timeout',
         default_value='120.0',
@@ -283,6 +290,9 @@ def generate_launch_description():
                     configured_params,
                     {
                         'operation_mode': operation_mode,
+                        'enable_localization_jump_detection': ParameterValue(
+                            enable_localization_jump_detection,
+                            value_type=bool),
                         'progress_timeout': effective_progress_timeout,
                     },
                 ],
@@ -389,6 +399,9 @@ def generate_launch_description():
             configured_params,
             {
                 'operation_mode': operation_mode,
+                'enable_localization_jump_detection': ParameterValue(
+                    enable_localization_jump_detection,
+                    value_type=bool),
                 'progress_timeout': effective_progress_timeout,
             },
         ],
@@ -456,6 +469,7 @@ def generate_launch_description():
     ld.add_action(declare_use_respawn_cmd)
     ld.add_action(declare_log_level_cmd)
     ld.add_action(declare_operation_mode_cmd)
+    ld.add_action(declare_enable_localization_jump_detection_cmd)
     ld.add_action(declare_fixed_path_progress_timeout_cmd)
     ld.add_action(declare_keyboard_input_device_cmd)
     ld.add_action(remote_control_cmd)

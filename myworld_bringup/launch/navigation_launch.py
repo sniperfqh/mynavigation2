@@ -31,6 +31,8 @@ def generate_launch_description():
     use_respawn = LaunchConfiguration('use_respawn')
     log_level = LaunchConfiguration('log_level')
     operation_mode = LaunchConfiguration('operation_mode')
+    enable_localization_jump_detection = LaunchConfiguration(
+        'enable_localization_jump_detection')
     fixed_path_progress_timeout = LaunchConfiguration(
         'fixed_path_progress_timeout')
     fixed_path_max_linear_velocity = LaunchConfiguration(
@@ -178,6 +180,8 @@ def generate_launch_description():
             'use_respawn': use_respawn,
             'log_level': log_level,
             'operation_mode': operation_mode,
+            'enable_localization_jump_detection':
+                enable_localization_jump_detection,
             'fixed_path_progress_timeout': fixed_path_progress_timeout,
             'keyboard_input_device': keyboard_input_device,
         }.items())
@@ -239,6 +243,10 @@ def generate_launch_description():
             default_value='autonomous',
             choices=['autonomous', 'fixed_path'],
             description='Regulated modules operation mode'),
+        DeclareLaunchArgument(
+            'enable_localization_jump_detection',
+            default_value='false',
+            description='Whether localization pose jumps cancel control and stop the simulated robot'),
         DeclareLaunchArgument(
             'fixed_path_progress_timeout',
             default_value='120.0',

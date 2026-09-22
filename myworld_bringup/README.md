@@ -109,6 +109,7 @@ ros2 topic pub --once \
 可调启动参数如下：
 
 ```text
+enable_localization_jump_detection          默认 false
 fixed_path_max_linear_velocity            默认 1.5 m/s
 fixed_path_approach_velocity_scaling_dist 默认 0.80 m
 fixed_path_goal_linear_deceleration       默认 0.25 m/s^2
@@ -124,6 +125,10 @@ fixed_path_stack_start_delay              默认 3.00 s
 rviz_start_delay                          默认 5.00 s
 ign_partition                             默认按 ROS_DOMAIN_ID 和启动进程 PID 唯一生成
 ```
+
+定位跳变停车保护默认关闭，相邻 `map -> base_link` 位姿平移／旋转跳变不会取消控制或发布停车命令；
+TF 丢失超过 `localization_timeout` 的停车与恢复保护仍然保留。需要恢复定位跳变停车时传入
+`enable_localization_jump_detection:=true`。
 
 例如限制固定路径专用控制器的巡航速度和终点前减速距离：
 

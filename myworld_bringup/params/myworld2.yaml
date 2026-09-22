@@ -154,6 +154,7 @@ regulated_navigator:
     costmap_update_wait_duration: 0.8
     passed_goal_radius: 0.7
     localization_timeout: 0.3
+    enable_localization_jump_detection: false
     localization_recovery_timeout: 10.0
     localization_stable_duration: 0.5
     max_localization_translation_jump: 0.3

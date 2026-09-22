@@ -301,12 +301,14 @@ ros2 launch nav2_regulated_modules regulated_modules.launch.py \
 | `container_name` | `nav2_regulated_container` | 组合模式使用的外部组件容器名称 |
 | `use_respawn` | `False` | 非组合模式下节点异常退出后是否重启 |
 | `log_level` | `info` | ROS 日志等级 |
+| `enable_localization_jump_detection` | `false` | 是否在相邻 `map -> base_link` 位姿跳变超过阈值时取消控制并停车；不影响 TF 丢失超时停车 |
 | `namespace` | 空 | 顶层命名空间 |
 | `use_namespace` | `False` | 是否启用顶层命名空间 |
 | `keyboard_input_device` | 当前 Shell 的 `/dev/pts/*` 或 `/dev/tty` | 遥控模式读取的终端设备 |
 
-`operation_mode` 的命令行值会覆盖 YAML 中 `regulated_navigator.operation_mode`。默认保持
-`use_composition:=False`；启用组合模式前必须先准备与 `container_name` 一致的组件容器。
+`operation_mode` 的命令行值会覆盖 YAML 中 `regulated_navigator.operation_mode`。定位跳变停车保护默认关闭，
+需要恢复原行为时显式传入 `enable_localization_jump_detection:=true`；`map -> base_link` TF 丢失超时停车保护始终保留。
+默认保持 `use_composition:=False`；启用组合模式前必须先准备与 `container_name` 一致的组件容器。
 
 ### 4.4 遥控模式
 

@@ -23,6 +23,8 @@ def generate_launch_description():
         'use_collision_visualization', default='true')
     headless = LaunchConfiguration('headless', default='false')
     operation_mode = LaunchConfiguration('operation_mode', default='autonomous')
+    enable_localization_jump_detection = LaunchConfiguration(
+        'enable_localization_jump_detection', default='false')
     fixed_path_progress_timeout = LaunchConfiguration(
         'fixed_path_progress_timeout', default='120.0')
     fixed_path_max_linear_velocity = LaunchConfiguration(
@@ -165,6 +167,8 @@ def generate_launch_description():
         'use_respawn': 'False',
         'log_level': 'info',
         'operation_mode': operation_mode,
+        'enable_localization_jump_detection':
+            enable_localization_jump_detection,
         'fixed_path_progress_timeout': fixed_path_progress_timeout,
         'fixed_path_max_linear_velocity': fixed_path_max_linear_velocity,
         'fixed_path_approach_velocity_scaling_dist':
@@ -269,6 +273,10 @@ def generate_launch_description():
             default_value='autonomous',
             choices=['remote', 'autonomous', 'fixed_path'],
             description='Select the robot operation mode'),
+        DeclareLaunchArgument(
+            'enable_localization_jump_detection',
+            default_value='false',
+            description='Whether localization pose jumps cancel control and stop the simulated robot'),
         DeclareLaunchArgument(
             'fixed_path_progress_timeout',
             default_value='120.0',
