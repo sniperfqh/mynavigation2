@@ -161,6 +161,7 @@ regulated_navigator:
     progress_timeout: 120.0
     progress_min_translation: 0.1
     fixed_path_step: 0.1
+    fixed_path_max_speed: 1.5
     stop_cmd_vel_topic: "cmd_vel_nav"
     controller_cmd_vel_topic: "cmd_vel_nav"
     smoothed_cmd_vel_topic: "cmd_vel"
@@ -169,12 +170,20 @@ regulated_navigator:
     speed_limit_topic: "speed_limit"
     chassis_output_topic: "/control_to_uart"
     motion_state_timeout: 0.2
-    chassis_max_linear_velocity: 0.52
-    chassis_max_angular_velocity: 2.0
-    chassis_default_linear_acceleration: 0.5
-    chassis_default_angular_acceleration: 1.0
-    chassis_max_linear_acceleration: 2.5
-    chassis_max_angular_acceleration: 3.2
+    chassis_default_linear_speed_max: 1.5
+    chassis_linear_speed_max: 1.5
+    chassis_default_angular_speed_max: 0.5
+    chassis_angular_speed_max: 0.8
+    chassis_default_linear_accel_max: 2.0
+    chassis_linear_accel_max: 3.0
+    chassis_linear_decel_max: 4.0
+    chassis_default_angular_accel_max: 1.5
+    chassis_angular_accel_max: 2.0
+    chassis_angular_decel_max: 3.0
+    chassis_linear_accel_jerk_max: 6.0
+    chassis_linear_decel_jerk_max: 8.0
+    chassis_angular_accel_jerk_max: 4.0
+    chassis_angular_decel_jerk_max: 6.0
     chassis_linear_stop_threshold: 0.01
     chassis_angular_stop_threshold: 0.05
     chassis_linear_kp: 0.2
@@ -345,7 +354,7 @@ controller_server:
 
     FixedPathController:
       plugin: "nav2_regulated_modules::FixedPathController"
-      desired_linear_vel: 0.8
+      desired_linear_vel: 1.5
       lookahead_dist: 0.45
       min_lookahead_dist: 0.25
       max_lookahead_dist: 0.75
@@ -829,7 +838,7 @@ chassis_control_to_twist:
     output_topic: "/cmd_vel"
     publish_frequency: 50.0
     command_timeout: 0.5
-    max_linear_velocity: 0.52
+    max_linear_velocity: 1.5
     max_angular_velocity: 2.0
     default_linear_acceleration: 0.5
     default_angular_acceleration: 1.0

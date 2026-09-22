@@ -84,7 +84,7 @@ private:
   double findTfromArcLength(const std::vector<double> & arc_lengths, const std::vector<double> & ts, double target_length);
   void generateBezierUniformPoints(const nav_msgs::msg::Path & input_path, double interval, nav_msgs::msg::Path & output_path);
   void publishFeedback();
-  void publishSpeedLimit(const std::shared_ptr<NavigationServiceHandle> goal);
+  void publishSpeedLimit();
 
   bool dependenciesReady();
   void startPlanning(bool replanning);
@@ -158,6 +158,7 @@ private:
   bool check_smoother_collisions_ { true };
   double current_speed_ { 0.0 };
   double fixed_path_step_ { 0.1 };
+  double fixed_path_max_speed_ { 1.5 };
   double fixed_path_boundary_half_width_ { 0.4 };
   double velocity_log_frequency_ { 1.0 };
 

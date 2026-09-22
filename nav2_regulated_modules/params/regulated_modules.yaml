@@ -132,6 +132,7 @@ regulated_navigator:
     localization_stable_duration: 0.5
     max_localization_translation_jump: 0.3
     max_localization_rotation_jump: 0.35
+    fixed_path_max_speed: 1.5
     progress_timeout: 10.0
     progress_min_translation: 0.1
     stop_cmd_vel_topic: "cmd_vel_nav"
@@ -140,8 +141,8 @@ regulated_navigator:
     chassis_motion_state_timeout: 0.2
     chassis_command_timeout: 0.15
     chassis_publish_rate: 50.0
-    chassis_default_linear_speed_max: 0.5
-    chassis_linear_speed_max: 1.0
+    chassis_default_linear_speed_max: 1.5
+    chassis_linear_speed_max: 1.5
     chassis_default_angular_speed_max: 0.5
     chassis_angular_speed_max: 0.8
     chassis_default_linear_accel_max: 2.0
@@ -265,7 +266,7 @@ controller_server:
 
     FixedPathController:
       plugin: "nav2_regulated_modules::FixedPathController"
-      desired_linear_vel: 0.52
+      desired_linear_vel: 1.5
       lookahead_dist: 0.45
       min_lookahead_dist: 0.25
       max_lookahead_dist: 0.75
@@ -453,8 +454,8 @@ velocity_smoother:
     scale_velocities: false
     immediate_stop_on_zero_command: false
     feedback: "CLOSED_LOOP"
-    max_velocity: [0.52, 0.0, 2.0]
-    min_velocity: [-0.52, 0.0, -2.0]
+    max_velocity: [1.5, 0.0, 2.0]
+    min_velocity: [-1.5, 0.0, -2.0]
     max_accel: [2.5, 0.0, 3.2]
     max_decel: [-2.5, 0.0, -3.2]
     odom_topic: "/motion_state"

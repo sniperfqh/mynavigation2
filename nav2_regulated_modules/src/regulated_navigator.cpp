@@ -52,6 +52,7 @@ RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : na
   declare_parameter("localization_recovery_timeout", 10.0);
   declare_parameter("localization_stable_duration", 0.5);
   declare_parameter("fixed_path_step", 0.1);
+  declare_parameter("fixed_path_max_speed", 1.5);
   declare_parameter("stop_cmd_vel_topic", "cmd_vel_nav");
   declare_parameter("controller_cmd_vel_topic", "cmd_vel_nav");
   declare_parameter("smoothed_cmd_vel_topic", "cmd_vel");
@@ -63,8 +64,8 @@ RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : na
   declare_parameter("chassis_motion_state_timeout", 0.2);
   declare_parameter("chassis_command_timeout", 0.15);
   declare_parameter("chassis_publish_rate", 50.0);
-  declare_parameter("chassis_default_linear_speed_max", 0.5);
-  declare_parameter("chassis_linear_speed_max", 1.0);
+  declare_parameter("chassis_default_linear_speed_max", 1.5);
+  declare_parameter("chassis_linear_speed_max", 1.5);
   declare_parameter("chassis_default_angular_speed_max", 0.5);
   declare_parameter("chassis_angular_speed_max", 0.8);
   declare_parameter("chassis_default_linear_accel_max", 2.0);
@@ -122,6 +123,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   localization_recovery_timeout_ = get_parameter("localization_recovery_timeout").as_double();
   localization_stable_duration_ = get_parameter("localization_stable_duration").as_double();
   fixed_path_step_ = get_parameter("fixed_path_step").as_double();
+  fixed_path_max_speed_ = get_parameter("fixed_path_max_speed").as_double();
   fixed_path_boundary_half_width_ = get_parameter("fixed_path_boundary_half_width").as_double();
   controller_cmd_vel_topic_ = get_parameter("controller_cmd_vel_topic").as_string();
   smoothed_cmd_vel_topic_ = get_parameter("smoothed_cmd_vel_topic").as_string();
@@ -131,6 +133,11 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   if (!std::isfinite(fixed_path_step_) || fixed_path_step_ <= 0.0)
   {
     LOG_ERROR("fixed_path_step 必须为有限正数，当前值={}", fixed_path_step_);
+    return nav2_util::CallbackReturn::FAILURE;
+  }
+  if (!std::isfinite(fixed_path_max_speed_) || fixed_path_max_speed_ <= 0.0)
+  {
+    LOG_ERROR("fixed_path_max_speed 必须为有限正数，当前值={}", fixed_path_max_speed_);
     return nav2_util::CallbackReturn::FAILURE;
   }
   if (!std::isfinite(fixed_path_boundary_half_width_) || fixed_path_boundary_half_width_ <= 0.0)

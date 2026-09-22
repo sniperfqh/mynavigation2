@@ -16,7 +16,7 @@ class ChassisControlToTwist(Node):
         self.declare_parameter('output_topic', '/cmd_vel')
         self.declare_parameter('publish_frequency', 50.0)
         self.declare_parameter('command_timeout', 0.5)
-        self.declare_parameter('max_linear_velocity', 0.52)
+        self.declare_parameter('max_linear_velocity', 1.5)
         self.declare_parameter('max_angular_velocity', 2.0)
         self.declare_parameter('default_linear_acceleration', 0.5)
         self.declare_parameter('default_angular_acceleration', 1.0)

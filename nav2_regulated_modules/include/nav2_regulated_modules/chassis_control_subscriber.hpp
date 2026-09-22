@@ -177,8 +177,8 @@ struct ChassisControlConfig
   double motion_state_timeout{0.2};
   double command_timeout{0.15};
   double publish_rate{50.0};
-  double default_linear_speed_max{0.5};
-  double linear_speed_max{1.0};
+  double default_linear_speed_max{1.5};
+  double linear_speed_max{1.5};
   double default_angular_speed_max{0.5};
   double angular_speed_max{0.8};
   double default_linear_accel_max{2.0};

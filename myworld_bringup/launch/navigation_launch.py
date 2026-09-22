@@ -245,7 +245,7 @@ def generate_launch_description():
             description='Maximum stationary time in fixed-path mode'),
         DeclareLaunchArgument(
             'fixed_path_max_linear_velocity',
-            default_value='0.52',
+            default_value='1.5',
             description='Fixed-path controller maximum linear velocity (m/s)'),
         DeclareLaunchArgument(
             'fixed_path_approach_velocity_scaling_dist',

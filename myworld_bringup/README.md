@@ -86,7 +86,7 @@ ros2 topic pub --once \
 ```
 
 `ChassisControl` 当前一次只能表示直行或原地旋转，不能同时表达非零线速度和角速度。
-网关默认将线速度限制在 `0.52 m/s`、角速度限制在 `2.0 rad/s`；非法数值、未知
+网关默认将线速度限制在 `1.5 m/s`、角速度限制在 `2.0 rad/s`；非法数值、未知
 `op` 或多个 `/cmd_vel` Publisher 会触发停车并等待新的有效遥控命令。
 
 自主与固定路径模式的统一算法链为：
@@ -101,7 +101,7 @@ ros2 topic pub --once \
 固定路径的终点判定、速度平滑、MotionState 闭环、ChassisControl 监听和
 `/control_to_uart` 输出均由 `nav2_regulated_modules` 封装；本包只提供仿真环境及其
 输入适配。固定路径 `FixedPathGoalChecker` 的平面距离容差为 `10 mm`，位置稳定周期为 `5`；航向误差只做诊断，
-不参与终点停车或成功判定。`FixedPathController` 固定路径速度默认由启动参数限制为 `0.8 m/s`；接近终点时按
+不参与终点停车或成功判定。`FixedPathController` 固定路径速度默认由启动参数限制为 `1.5 m/s`；接近终点时按
 `0.25 m/s^2` 减速度、`0.1 s` 反应时间和 `0.1 m` 制动裕量平滑减速，终点前最低保持 `0.01 m/s` 微量接近，
 继续直接跟踪到位置容差，进入位置容差或越过终点平面后锁存线、角速度为零，并保留锁存瞬间的跟踪航向误差作为诊断。
 `fixed_path` 模式同时启用 Velocity Smoother 的全零命令立即停车，仅在到点锁存后绕过减速度平滑，避免残余角速度造成停车后旋转；其他模式仍按原加减速度限制平滑停车。
@@ -109,7 +109,7 @@ ros2 topic pub --once \
 可调启动参数如下：
 
 ```text
-fixed_path_max_linear_velocity            默认 0.80 m/s
+fixed_path_max_linear_velocity            默认 1.5 m/s
 fixed_path_approach_velocity_scaling_dist 默认 0.80 m
 fixed_path_goal_linear_deceleration       默认 0.25 m/s^2
 fixed_path_goal_final_approach_velocity   默认 0.01 m/s
@@ -130,7 +130,7 @@ ign_partition                             默认按 ROS_DOMAIN_ID 和启动进�
 ```bash
 ros2 launch myworld_bringup entry.launch.py \
   operation_mode:=fixed_path \
-  fixed_path_max_linear_velocity:=0.8 \
+  fixed_path_max_linear_velocity:=1.5 \
   fixed_path_approach_velocity_scaling_dist:=0.8 \
   fixed_path_goal_linear_deceleration:=0.25
 ```
@@ -176,7 +176,8 @@ Gazebo 出生位姿与 AMCL 参数中的初始位姿保持一致，并设置
 旋转上限为 `0.4 rad/s`、角加速度上限为 `0.8 rad/s²`。原仓库世界中的斜向视觉通道
 中心线左右边界各为 `0.40 m`。
 
-固定路径要求 Action `max_speed` 为有限正数，`SpeedLimit` 只传递正的绝对速度上限；
+固定路径要求 Action `max_speed` 为有限正数，`SpeedLimit` 只传递正的绝对速度上限；多段路径先取各段最小值，
+再由 `regulated_navigator.fixed_path_max_speed` 将最终速度钳位到 `1.5 m/s`，超限 Goal 不拒绝但按上限执行；
 `motion_direction=1`／`2` 由全部路径点姿态编码为前进／倒车车体朝向，控制器据此输出
 正／负线速度。终点车头航向同样按末段路径切线和运动方向计算后交给
 `stopped_goal_checker` 比较。固定路径分支由统一的 `regulated_navigator` 处理。启动
@@ -218,4 +219,4 @@ ros2 topic echo /odom
 `/downstream/chassis_control`、`/motion_state` 和 `/control_to_uart`。
 
 一个 Action 可以包含多段连续路径，但当前要求所有分段使用相同 `motion_direction`；
-整条路径限速取各段正 `max_speed` 的最小值。前进／倒退混合路径会被明确拒绝。
+整条路径限速取各段正 `max_speed` 的最小值，并受 `1.5 m/s` 全局上限约束。前进／倒退混合路径会被明确拒绝。

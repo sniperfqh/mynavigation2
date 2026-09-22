@@ -228,11 +228,13 @@ void RegulatedNavigator::handleNavigationServiceAccepted(const std::shared_ptr<N
   {
     task_.requested_speed = std::min(task_.requested_speed, static_cast<double>(segment.max_speed));
   }
+  const double requested_speed = task_.requested_speed;
+  task_.requested_speed = std::min(requested_speed, fixed_path_max_speed_);
   const bool is_backward = first_segment.motion_direction == byd_custom_msgs::msg::NaviSegment::MOTION_DIRECTION_BACKWARD;
   has_last_pose_ = false;
-  LOG_INFO("接受 NavigationService Action，generation={}，task_id={}，frame={}，路径点数={}，总长度={:.3f}m", task_.generation, task_.task_id, prepared_path->header.frame_id, prepared_path->poses.size(), task_.total_path_length);
+  LOG_INFO("接受 NavigationService Action，generation={}，task_id={}，frame={}，路径点数={}，总长度={:.3f}m，请求速度={:.3f}m/s，生效速度={:.3f}m/s，全局上限={:.3f}m/s", task_.generation, task_.task_id, prepared_path->header.frame_id, prepared_path->poses.size(), task_.total_path_length, requested_speed, task_.requested_speed, fixed_path_max_speed_);
   publishFixedPath(task_.active_path);
-  publishSpeedLimit(goal);
+  publishSpeedLimit();
   LOG_INFO("固定路径{}保持车辆当前位置不变，由专用控制器根据起点横向与运动方向航向误差选择直接跟踪或原地对齐，再以{}速度跟踪并在终点对齐停车，generation={}", is_backward ? "后退" : "前进", is_backward ? "负" : "正", task_.generation);
   sendFollowPath(*prepared_path);
 }
@@ -478,21 +480,16 @@ void RegulatedNavigator::generateBezierUniformPoints(const nav_msgs::msg::Path &
   }
 }
 
-void RegulatedNavigator::publishSpeedLimit(const std::shared_ptr<NavigationServiceHandle> goal)
+void RegulatedNavigator::publishSpeedLimit()
 {
   auto msg = nav2_msgs::msg::SpeedLimit();
   msg.header.stamp = this->now();
   msg.header.frame_id = "base_link";
   // 不使用百分比模式（与订阅端逻辑对应：percentage 为 true 会报错）
   msg.percentage = false;
-  double speed_magnitude = std::numeric_limits<double>::max();
-  for (const auto & segment : goal->get_goal()->navi_segment)
-  {
-    speed_magnitude = std::min(speed_magnitude, static_cast<double>(segment.max_speed));
-  }
-  msg.speed_limit = speed_magnitude;
+  msg.speed_limit = task_.requested_speed;
   speed_limit_pub_->publish(msg);
-  LOG_INFO("固定路径速度限制按绝对值发布，motion_direction={}，speed_limit={:.3f}m/s", goal->get_goal()->navi_segment.front().motion_direction, msg.speed_limit);
+  LOG_INFO("固定路径速度限制按绝对值发布，motion_direction={}，speed_limit={:.3f}m/s", task_.motion_direction, msg.speed_limit);
 }
 
 }

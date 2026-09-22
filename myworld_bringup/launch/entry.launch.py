@@ -18,7 +18,7 @@ def generate_launch_description():
         'ign_partition', default=default_ign_partition)
     use_rviz = LaunchConfiguration('use_rviz', default='true')
     use_collision_monitor = LaunchConfiguration(
-        'use_collision_monitor', default='true')
+        'use_collision_monitor', default='false')
     use_collision_visualization = LaunchConfiguration(
         'use_collision_visualization', default='true')
     headless = LaunchConfiguration('headless', default='false')
@@ -26,7 +26,7 @@ def generate_launch_description():
     fixed_path_progress_timeout = LaunchConfiguration(
         'fixed_path_progress_timeout', default='120.0')
     fixed_path_max_linear_velocity = LaunchConfiguration(
-        'fixed_path_max_linear_velocity', default='0.52')
+        'fixed_path_max_linear_velocity', default='1.5')
     fixed_path_approach_velocity_scaling_dist = LaunchConfiguration(
         'fixed_path_approach_velocity_scaling_dist', default='0.8')
     fixed_path_goal_linear_deceleration = LaunchConfiguration(
@@ -275,7 +275,7 @@ def generate_launch_description():
             description='Maximum stationary time in fixed-path mode'),
         DeclareLaunchArgument(
             'fixed_path_max_linear_velocity',
-            default_value='0.52',
+            default_value='1.5',
             description='Fixed-path controller maximum linear velocity (m/s)'),
         DeclareLaunchArgument(
             'fixed_path_approach_velocity_scaling_dist',

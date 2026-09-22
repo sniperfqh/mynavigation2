@@ -75,8 +75,8 @@ private:
   double goal_path_yaw_ { 0.0 };
   double terminal_tangent_x_ { 0.0 };
   double terminal_tangent_y_ { 0.0 };
-  double base_linear_velocity_ { 0.52 };
-  double speed_limit_ { 0.52 };
+  double base_linear_velocity_ { 1.5 };
+  double speed_limit_ { 1.5 };
   double lookahead_dist_ { 0.45 };
   double min_lookahead_dist_ { 0.25 };
   double max_lookahead_dist_ { 0.75 };
