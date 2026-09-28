@@ -199,6 +199,39 @@ ros2 action send_goal --feedback \
   "{task_id: 'myworld_fixed_path_001', navi_segment: [{segment_type: 1, segment_name: 'diagonal_corridor', segment_id: 'segment_001', node1: {x: -2.8, y: -1.7, z: 0.0}, node2: {x: 1.91, y: -4.83, z: 0.0}, control_pos1: {x: -0.933333, y: -2.933333, z: 0.0}, control_pos2: {x: 0.933333, y: -4.166667, z: 0.0}, max_load_speed: 0.0, max_speed: 0.20, motion_direction: 2, dwell_time: 0}]}"
 ```
 
+### 三段连续路径：直线—曲线—直线
+
+下面的独立 Action 沿用上例的仿真起点 `(-2.8, -1.7)`、终点 `(1.91, -4.83)`、
+`0.20 m/s` 限速与后退方向。第一段直线在 `(-1.4, -2.4)` 接入三次贝塞尔曲线，
+曲线在 `(0.5, -3.8)` 接入末段直线；相邻段端点相同，两个曲线控制点分别沿
+前后直线的切线方向布置，避免连接处出现几何折角。先启动上述 `fixed_path` 模式，
+确认机器人仍在首段 `node1` 附近且相关 Lifecycle 节点已进入 `active`，再在另一终端发送：
+
+```bash
+ros2 action send_goal --feedback \
+  /navigation_service \
+  byd_custom_msgs/action/NavigationService \
+  "{task_id: 'myworld_line_curve_line_001', navi_segment: [
+    {segment_type: 1, segment_name: 'line_start', segment_id: 'segment_001',
+     node1: {x: -2.8, y: -1.7, z: 0.0}, node2: {x: -1.4, y: -2.4, z: 0.0},
+     control_pos1: {x: 0.0, y: 0.0, z: 0.0}, control_pos2: {x: 0.0, y: 0.0, z: 0.0},
+     max_load_speed: 0.0, max_speed: 0.20, motion_direction: 2, dwell_time: 0},
+    {segment_type: 2, segment_name: 'bezier_middle', segment_id: 'segment_002',
+     node1: {x: -1.4, y: -2.4, z: 0.0}, node2: {x: 0.5, y: -3.8, z: 0.0},
+     control_pos1: {x: -0.7, y: -2.75, z: 0.0}, control_pos2: {x: -0.205, y: -3.285, z: 0.0},
+     max_load_speed: 0.0, max_speed: 0.20, motion_direction: 2, dwell_time: 0},
+    {segment_type: 1, segment_name: 'line_end', segment_id: 'segment_003',
+     node1: {x: 0.5, y: -3.8, z: 0.0}, node2: {x: 1.91, y: -4.83, z: 0.0},
+     control_pos1: {x: 0.0, y: 0.0, z: 0.0}, control_pos2: {x: 0.0, y: 0.0, z: 0.0},
+     max_load_speed: 0.0, max_speed: 0.20, motion_direction: 2, dwell_time: 0}
+  ]}"
+```
+
+`segment_type: 1` 的控制点由路径生成代码根据直线起终点重新计算，因此这里填零；
+`segment_type: 2` 按 `node1 → control_pos1 → control_pos2 → node2` 生成曲线。
+若刚执行过上面的单段任务，机器人已不在本示例起点附近，应重新启动仿真并确认起始位姿后再发送。
+此命令仅提供协议与几何连续的输入示例，未据此验证地图通行或最终到点精度。
+
 检查 Action、Lifecycle 和速度链：
 
 ```bash
