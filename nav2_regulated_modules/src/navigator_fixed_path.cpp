@@ -1,3 +1,5 @@
+// 固定路径准备与可视化。将任务路径转换为可跟踪轨迹，并计算弧长、前视及路径边界。
+
 #include "nav2_regulated_modules/regulated_navigator.hpp"
 
 #include <algorithm>
@@ -14,6 +16,7 @@
 namespace nav2_regulated_modules
 {
 
+// 把分段任务转换为带运动方向的固定路径；非法段返回空结果。
 std::optional<nav_msgs::msg::Path> RegulatedNavigator::prepareFixedPath(const std::vector<byd_custom_msgs::msg::NaviSegment> & segments)
 {
   if (segments.empty())
@@ -130,6 +133,7 @@ std::optional<nav_msgs::msg::Path> RegulatedNavigator::prepareFixedPath(const st
   return output;
 }
 
+// 校验固定路径请求的路径、方向与速度约束。
 rclcpp_action::GoalResponse RegulatedNavigator::handleNavigationServiceGoal(const rclcpp_action::GoalUUID &, const std::shared_ptr<const NavigationService::Goal> goal)
 {
   if (operation_mode_ != NavigationMode::FIXED_PATH)
@@ -165,6 +169,7 @@ rclcpp_action::GoalResponse RegulatedNavigator::handleNavigationServiceGoal(cons
   return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
 
+// 响应固定路径任务取消并使下游跟踪停车。
 rclcpp_action::CancelResponse RegulatedNavigator::handleNavigationServiceCancel(const std::shared_ptr<NavigationServiceHandle> goal)
 {
   if (goal == active_navigation_service_goal_)
@@ -175,6 +180,7 @@ rclcpp_action::CancelResponse RegulatedNavigator::handleNavigationServiceCancel(
   return rclcpp_action::CancelResponse::ACCEPT;
 }
 
+// 接管固定路径 Action 并准备跟踪路径。
 void RegulatedNavigator::handleNavigationServiceAccepted(const std::shared_ptr<NavigationServiceHandle> goal)
 {
   auto prepared_path = prepareFixedPath(goal->get_goal()->navi_segment);
@@ -223,6 +229,7 @@ void RegulatedNavigator::handleNavigationServiceAccepted(const std::shared_ptr<N
   task_.motion_direction = first_segment.motion_direction;
   task_.start_yaw = start_yaw;
   task_.goal_yaw = goal_yaw;
+  // 多段速度先取最小请求值，再由本节点统一上限钳位；不改变路径方向。
   task_.requested_speed = std::numeric_limits<double>::max();
   for (const auto & segment : goal->get_goal()->navi_segment)
   {
@@ -239,6 +246,7 @@ void RegulatedNavigator::handleNavigationServiceAccepted(const std::shared_ptr<N
   sendFollowPath(*prepared_path);
 }
 
+// 发布固定路径及左右可视化边界，不参与实际控制输出。
 void RegulatedNavigator::publishFixedPath(const nav_msgs::msg::Path & path)
 {
   if (!fixed_path_pub_ || !fixed_path_pub_->is_activated() || !fixed_path_boundaries_pub_ || !fixed_path_boundaries_pub_->is_activated())
@@ -329,6 +337,7 @@ void RegulatedNavigator::publishFixedPath(const nav_msgs::msg::Path & path)
   LOG_INFO("固定路径与科技风边界已发布到 RViz2，path_topic={}，boundaries_topic={}，frame={}，路径点数={}，左右半宽={:.2f}m", fixed_path_visualization_topic_, fixed_path_boundaries_topic_, visualization_path.header.frame_id, visualization_path.poses.size(), fixed_path_boundary_half_width_);
 }
 
+// 恢复后对当前任务重新规划或继续固定路径跟踪。
 void RegulatedNavigator::resumeCurrentTask()
 {
   if (task_.type == TaskType::NAVIGATION_SERVICE)
@@ -347,6 +356,7 @@ void RegulatedNavigator::resumeCurrentTask()
   startPlanning(false);
 }
 
+// 将输入路径段转换为贝塞尔曲线所需的控制点。
 void RegulatedNavigator::liner2to4point(const nav_msgs::msg::Path & input_path, nav_msgs::msg::Path & output_path)
 {
   const auto & start = input_path.poses[0].pose.position;
@@ -372,6 +382,7 @@ void RegulatedNavigator::liner2to4point(const nav_msgs::msg::Path & input_path, 
   output_path.poses.push_back(input_path.poses[1]);
 }
 
+// 计算三次贝塞尔曲线在给定参数处的位姿。
 geometry_msgs::msg::PoseStamped RegulatedNavigator::bezier3(const nav_msgs::msg::Path & input_path, const double t, const bool use_result)
 {
   const double inverse_t = 1.0 - t;
@@ -402,6 +413,7 @@ geometry_msgs::msg::PoseStamped RegulatedNavigator::bezier3(const nav_msgs::msg:
   return result;
 }
 
+// 累计路径各点间的弧长，供等距采样使用。
 void RegulatedNavigator::computeArcLengths(const std::vector<geometry_msgs::msg::PoseStamped> & poses, std::vector<double> & arc_lengths)
 {
   arc_lengths.assign(poses.size(), 0.0);
@@ -413,6 +425,7 @@ void RegulatedNavigator::computeArcLengths(const std::vector<geometry_msgs::msg:
   }
 }
 
+// 通过弧长表反查贝塞尔参数，实现近似等距离采样。
 double RegulatedNavigator::findTfromArcLength(const std::vector<double> & arc_lengths, const std::vector<double> & ts, const double target_length)
 {
   if (target_length <= arc_lengths.front())
@@ -435,6 +448,7 @@ double RegulatedNavigator::findTfromArcLength(const std::vector<double> & arc_le
   return ts[lower_index] + (target_length - lower_length) / (upper_length - lower_length) * (ts[upper_index] - ts[lower_index]);
 }
 
+// 按目标间隔沿贝塞尔曲线均匀生成路径点。
 void RegulatedNavigator::generateBezierUniformPoints(const nav_msgs::msg::Path & input_path, const double interval, nav_msgs::msg::Path & output_path)
 {
   output_path = nav_msgs::msg::Path();
@@ -480,6 +494,7 @@ void RegulatedNavigator::generateBezierUniformPoints(const nav_msgs::msg::Path &
   }
 }
 
+// 把任务有效速度上限发布给下游速度平滑器。
 void RegulatedNavigator::publishSpeedLimit()
 {
   auto msg = nav2_msgs::msg::SpeedLimit();

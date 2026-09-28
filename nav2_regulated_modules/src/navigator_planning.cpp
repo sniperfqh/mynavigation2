@@ -1,3 +1,5 @@
+// 导航规划回调。发送规划和平滑 Action，并以任务代次过滤过期异步结果。
+
 #include "nav2_regulated_modules/regulated_navigator.hpp"
 
 #include <chrono>
@@ -9,12 +11,14 @@
 namespace nav2_regulated_modules
 {
 
+// 检查规划、平滑和跟踪 Action 服务是否已就绪。
 bool RegulatedNavigator::dependenciesReady()
 {
   const auto timeout = std::chrono::duration<double>(server_timeout_);
   return compute_pose_client_->wait_for_action_server(timeout) && compute_poses_client_->wait_for_action_server(timeout) && (!planning_module_.useSmoother() || smooth_client_->wait_for_action_server(timeout)) && follow_client_->wait_for_action_server(timeout);
 }
 
+// 为当前任务发送新规划请求；重规划时保留任务代次用于回调过滤。
 void RegulatedNavigator::startPlanning(const bool replanning)
 {
   if (operation_mode_ != NavigationMode::AUTONOMOUS)
@@ -122,11 +126,13 @@ void RegulatedNavigator::startPlanning(const bool replanning)
   }
 }
 
+// 比较任务代次和规划序号，丢弃旧规划异步回调。
 bool RegulatedNavigator::isCurrentPlan(const uint64_t generation, const uint64_t sequence) const
 {
   return generation == task_.generation && sequence == plan_sequence_;
 }
 
+// 接收有效规划路径，按配置执行平滑或直接交给跟踪器。
 void RegulatedNavigator::onPathReady(const nav_msgs::msg::Path & path)
 {
   task_.consecutive_planning_failures = 0;
@@ -188,6 +194,7 @@ void RegulatedNavigator::onPathReady(const nav_msgs::msg::Path & path)
   smooth_client_->async_send_goal(goal, options);
 }
 
+// 记录规划失败并依据连续失败次数触发恢复或任务失败。
 void RegulatedNavigator::handlePlanningFailure(const std::string & reason)
 {
   task_.last_error = reason;

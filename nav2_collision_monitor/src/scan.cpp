@@ -17,6 +17,8 @@
 #include <cmath>
 #include <functional>
 
+#include "nav2_util/node_utils.hpp"
+
 namespace nav2_collision_monitor
 {
 
@@ -40,6 +42,10 @@ void Scan::configure() {
 
   // Laser scanner has no own parameters
   getCommonParameters(source_topic);
+  nav2_util::declare_parameter_if_not_declared(node, source_name_ + ".noise_radius", rclcpp::ParameterValue(0.1));
+  noise_radius_ = node->get_parameter(source_name_ + ".noise_radius").as_double();
+  nav2_util::declare_parameter_if_not_declared(node, source_name_ + ".noise_min_neighbors", rclcpp::ParameterValue(2));
+  noise_min_neighbors_ = node->get_parameter(source_name_ + ".noise_min_neighbors").as_int();
 
   rclcpp::QoS scan_qos = rclcpp::SensorDataQoS();  // set to default
   data_sub_ = node->create_subscription<sensor_msgs::msg::LaserScan>(source_topic, scan_qos, std::bind(&Scan::dataCallback, this, std::placeholders::_1));
@@ -74,6 +80,7 @@ void Scan::getData(const rclcpp::Time & curr_time, std::vector<Point> & data) co
   }
 
   // Calculate poses and refill data array
+  std::vector<Point> source_data;
   float angle = data_->angle_min;
   for (size_t i = 0; i < data_->ranges.size(); i++) {
     if (data_->ranges[i] >= data_->range_min && data_->ranges[i] <= data_->range_max) {
@@ -82,10 +89,46 @@ void Scan::getData(const rclcpp::Time & curr_time, std::vector<Point> & data) co
       tf2::Vector3 p_v3_b = tf_transform * p_v3_s;
 
       // Refill data array
-      data.push_back({p_v3_b.x(), p_v3_b.y()});
+      source_data.push_back({p_v3_b.x(), p_v3_b.y()});
     }
     angle += data_->angle_increment;
   }
+  denoise(source_data);
+  data.insert(data.end(), source_data.begin(), source_data.end());
+}
+
+void Scan::denoise(std::vector<Point> & data) const
+{
+  if (data.empty() || noise_min_neighbors_ <= 0)
+  {
+    return;
+  }
+
+  const double radius_squared = noise_radius_ * noise_radius_;
+  std::vector<Point> kept;
+  kept.reserve(data.size());
+  for (size_t i = 0; i < data.size(); ++i)
+  {
+    int neighbors = 0;
+    for (size_t j = 0; j < data.size(); ++j)
+    {
+      if (i == j)
+      {
+        continue;
+      }
+      const double dx = data[i].x - data[j].x;
+      const double dy = data[i].y - data[j].y;
+      if (dx * dx + dy * dy <= radius_squared && ++neighbors >= noise_min_neighbors_)
+      {
+        break;
+      }
+    }
+    if (neighbors >= noise_min_neighbors_)
+    {
+      kept.push_back(data[i]);
+    }
+  }
+  data.swap(kept);
 }
 
 void Scan::dataCallback(sensor_msgs::msg::LaserScan::ConstSharedPtr msg) {

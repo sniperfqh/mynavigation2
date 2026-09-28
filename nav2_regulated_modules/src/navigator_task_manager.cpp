@@ -1,3 +1,5 @@
+// 任务管理与恢复。处理任务切换、状态清理、恢复尝试和最终结果。
+
 #include "nav2_regulated_modules/regulated_navigator.hpp"
 
 #include <memory>
@@ -6,6 +8,7 @@
 namespace nav2_regulated_modules
 {
 
+// 取消仍在执行的下游规划、平滑或跟踪 Action 目标。
 void RegulatedNavigator::cancelSubGoals(const bool invalidate_callbacks)
 {
   const bool had_compute_pose = active_compute_pose_goal_ != nullptr;
@@ -44,6 +47,7 @@ void RegulatedNavigator::cancelSubGoals(const bool invalidate_callbacks)
   }
 }
 
+// 取消当前任务，通知客户端并输出停车指令。
 void RegulatedNavigator::cancelTask(const std::string & reason)
 {
   if (task_.type == TaskType::NONE)
@@ -100,6 +104,7 @@ void RegulatedNavigator::cancelTask(const std::string & reason)
   resetTask();
 }
 
+// 在新目标接管前终止旧任务并隔离旧回调。
 void RegulatedNavigator::preemptCurrentTask()
 {
   if (task_.type == TaskType::NONE)
@@ -134,6 +139,7 @@ void RegulatedNavigator::preemptCurrentTask()
   resetTask();
 }
 
+// 向客户端报告任务成功并清理在途资源。
 void RegulatedNavigator::succeedTask()
 {
   const auto generation = task_.generation;
@@ -167,6 +173,7 @@ void RegulatedNavigator::succeedTask()
   resetTask();
 }
 
+// 向客户端报告失败原因并清理在途资源。
 void RegulatedNavigator::failTask(const std::string & reason)
 {
   const auto generation = task_.generation;
@@ -193,6 +200,7 @@ void RegulatedNavigator::failTask(const std::string & reason)
   resetTask();
 }
 
+// 清理任务状态、序号及活动 Action 句柄。
 void RegulatedNavigator::resetTask()
 {
   if (task_.type == TaskType::NAVIGATION_SERVICE && speed_limit_pub_)

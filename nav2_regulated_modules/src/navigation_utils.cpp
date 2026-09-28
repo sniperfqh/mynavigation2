@@ -1,3 +1,5 @@
+// 导航通用计算实现。封装姿态、距离及其他任务流程共用的计算。
+
 #include "nav2_regulated_modules/navigation_utils.hpp"
 
 #include <algorithm>
@@ -9,6 +11,7 @@ namespace nav2_regulated_modules
   namespace navigation_utils
 {
 
+// 将非负秒数拆成秒和纳秒；负输入按零处理。
 builtin_interfaces::msg::Duration durationFromSeconds(const double seconds)
 {
   const auto safe_seconds = std::max(0.0, seconds);
@@ -18,17 +21,20 @@ builtin_interfaces::msg::Duration durationFromSeconds(const double seconds)
   return duration;
 }
 
+// 仅计算平面位置距离，不将航向和高度计入结果。
 double poseDistance(const geometry_msgs::msg::PoseStamped & first, const geometry_msgs::msg::PoseStamped & second)
 {
   return std::hypot(first.pose.position.x - second.pose.position.x, first.pose.position.y - second.pose.position.y);
 }
 
+// 从姿态四元数求平面航向角，返回弧度。
 double yawFromPose(const geometry_msgs::msg::PoseStamped & pose)
 {
   const auto & q = pose.pose.orientation;
   return std::atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z));
 }
 
+// 将角度规约到 [-π, π]，避免跨越边界时产生虚假的大角度差。
 double normalizeAngle(double angle)
 {
   while (angle > M_PI)
@@ -42,6 +48,7 @@ double normalizeAngle(double angle)
   return angle;
 }
 
+// 拒绝缺少坐标系、含非有限位置或零长度四元数的位姿。
 bool validPose(const geometry_msgs::msg::PoseStamped & pose)
 {
   const auto & p = pose.pose.position;

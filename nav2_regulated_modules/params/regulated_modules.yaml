@@ -1,229 +1,445 @@
+# 规控包运行参数。各节点参数在下方逐项说明；标注的是本配置文件的当前设置，不等同于插件内置默认值。
+
+# 路径规划服务器：提供多种规划插件并按请求选择。
 planner_server:
+  # 该 ROS 节点的参数集合。
   ros__parameters:
+    # 规划器预期运行频率，单位 Hz。
     expected_planner_frequency: 20.0
+    # 是否使用仿真时钟；启动入口可覆盖此值。
     use_sim_time: false
+    # 规控节点调用的规划器标识。
     selected_planner: "GridBasedAstar"
+    # 注册到规划服务器的规划器标识列表。
     planner_plugins: ["GridBased", "GridBasedAstar", "Smac2D", "SmacHybrid", "SmacLattice", "ThetaStar"]
 
+    # Navfn 的 Dijkstra 配置。
     GridBased:
+      # 该实例加载的插件类名。
       plugin: "nav2_navfn_planner/NavfnPlanner"
+      # 规划或平滑允许的误差阈值；具体单位依所属插件。
       tolerance: 0.5
+      # 是否启用 A* 搜索。
       use_astar: false
+      # 是否允许路径经过未知栅格。
       allow_unknown: true
 
+    # Navfn 的 A* 配置。
     GridBasedAstar:
+      # 该实例加载的插件类名。
       plugin: "nav2_navfn_planner/NavfnPlanner"
+      # 规划或平滑允许的误差阈值；具体单位依所属插件。
       tolerance: 0.0
+      # 是否启用 A* 搜索。
       use_astar: true
+      # 是否允许路径经过未知栅格。
       allow_unknown: true
 
+    # 二维栅格 Smac 规划器。
     Smac2D:
+      # 该实例加载的插件类名。
       plugin: "nav2_smac_planner/SmacPlanner2D"
+      # 规划或平滑允许的误差阈值；具体单位依所属插件。
       tolerance: 0.5
+      # 是否降低代价地图分辨率参与搜索。
       downsample_costmap: false
+      # 降采样倍率。
       downsampling_factor: 1
+      # 是否允许路径经过未知栅格。
       allow_unknown: true
+      # 搜索或优化的最大迭代次数。
       max_iterations: 1000000
+      # 接近目标时额外允许的迭代次数。
       max_on_approach_iterations: 1000
+      # 规划最长耗时，单位秒。
       max_planning_time: 2.0
+      # 路径行驶代价权重。
       cost_travel_multiplier: 2.0
+      # 是否采用末段行进方向作为终点朝向。
       use_final_approach_orientation: false
+      # 规划器内部平滑配置。
       smoother:
+        # 搜索或优化的最大迭代次数。
         max_iterations: 1000
+        # 平滑项权重。
         w_smooth: 0.3
+        # 原始路径保真项权重。
         w_data: 0.2
+        # 规划或平滑允许的误差阈值；具体单位依所属插件。
         tolerance: 1.0e-10
+        # 是否对平滑结果继续细化。
         do_refinement: true
 
+    # 混合状态空间 Smac 规划器。
     SmacHybrid:
+      # 该实例加载的插件类名。
       plugin: "nav2_smac_planner/SmacPlannerHybrid"
+      # 规划或平滑允许的误差阈值；具体单位依所属插件。
       tolerance: 0.5
+      # 是否降低代价地图分辨率参与搜索。
       downsample_costmap: false
+      # 降采样倍率。
       downsampling_factor: 1
+      # 是否允许路径经过未知栅格。
       allow_unknown: true
+      # 搜索或优化的最大迭代次数。
       max_iterations: 1000000
+      # 接近目标时额外允许的迭代次数。
       max_on_approach_iterations: 1000
+      # 规划最长耗时，单位秒。
       max_planning_time: 3.5
+      # 搜索使用的车辆运动模型。
       motion_model_for_search: "DUBIN"
+      # 朝向离散格数。
       angle_quantization_bins: 72
+      # 解析扩展尝试间隔系数。
       analytic_expansion_ratio: 3.5
+      # 解析扩展最大长度，单位米。
       analytic_expansion_max_length: 3.0
+      # 最小转弯半径，单位米。
       minimum_turning_radius: 0.40
+      # 倒车轨迹代价系数。
       reverse_penalty: 2.1
+      # 切换行进方向的代价。
       change_penalty: 0.0
+      # 非直线运动代价系数。
       non_straight_penalty: 1.20
+      # 障碍代价权重。
       cost_penalty: 2.0
+      # 远期路径代价折扣。
       retrospective_penalty: 0.025
+      # 启发式查找表覆盖范围，单位米。
       lookup_table_size: 20.0
+      # 是否缓存障碍启发式搜索结果。
       cache_obstacle_heuristic: true
+      # 是否对规划路径执行平滑。
       smooth_path: true
+      # 规划器内部平滑配置。
       smoother:
+        # 搜索或优化的最大迭代次数。
         max_iterations: 1000
+        # 平滑项权重。
         w_smooth: 0.3
+        # 原始路径保真项权重。
         w_data: 0.2
+        # 规划或平滑允许的误差阈值；具体单位依所属插件。
         tolerance: 1.0e-10
+        # 是否对平滑结果继续细化。
         do_refinement: true
 
+    # 运动基元格规划器。
     SmacLattice:
+      # 该实例加载的插件类名。
       plugin: "nav2_smac_planner/SmacPlannerLattice"
+      # 规划或平滑允许的误差阈值；具体单位依所属插件。
       tolerance: 0.5
+      # 是否允许路径经过未知栅格。
       allow_unknown: true
+      # 搜索或优化的最大迭代次数。
       max_iterations: 1000000
+      # 接近目标时额外允许的迭代次数。
       max_on_approach_iterations: 1000
+      # 规划最长耗时，单位秒。
       max_planning_time: 3.5
+      # 解析扩展尝试间隔系数。
       analytic_expansion_ratio: 3.5
+      # 解析扩展最大长度，单位米。
       analytic_expansion_max_length: 3.0
+      # 倒车轨迹代价系数。
       reverse_penalty: 2.0
+      # 切换行进方向的代价。
       change_penalty: 0.05
+      # 非直线运动代价系数。
       non_straight_penalty: 1.05
+      # 障碍代价权重。
       cost_penalty: 2.0
+      # 原地旋转代价。
       rotation_penalty: 5.0
+      # 远期路径代价折扣。
       retrospective_penalty: 0.015
+      # 状态格运动基元文件路径。
       lattice_filepath: "$(find-pkg-share nav2_smac_planner)/sample_primitives/5cm_resolution/0.5m_turning_radius/diff/output.json"
+      # 启发式查找表覆盖范围，单位米。
       lookup_table_size: 20.0
+      # 是否缓存障碍启发式搜索结果。
       cache_obstacle_heuristic: false
+      # 是否允许倒车扩展。
       allow_reverse_expansion: false
+      # 是否对规划路径执行平滑。
       smooth_path: true
 
+    # 任意角度 Theta* 规划器。
     ThetaStar:
+      # 该实例加载的插件类名。
       plugin: "nav2_theta_star_planner/ThetaStarPlanner"
+      # Theta* 路径搜索的邻接方向数。
       how_many_corners: 8
+      # 是否允许路径经过未知栅格。
       allow_unknown: true
+      # 欧氏距离代价权重。
       w_euc_cost: 1.0
+      # 栅格通行代价权重。
       w_traversal_cost: 2.0
+      # 是否采用末段行进方向作为终点朝向。
       use_final_approach_orientation: false
 
+# 规控协调节点：管理导航任务、固定路径、底盘指令和恢复。
 regulated_navigator:
+  # 该 ROS 节点的参数集合。
   ros__parameters:
+    # 是否使用仿真时钟；启动入口可覆盖此值。
     use_sim_time: false
+    # 全局规划参考坐标系。
     global_frame: "map"
+    # 机器人车体参考坐标系。
     robot_base_frame: "base_link"
+    # 规控运行模式；启动入口可按任务覆盖。
     operation_mode: "autonomous"
+    # 普通位姿目标订阅话题。
     goal_topic: "goal_pose"
+    # 多段导航服务 Action 名称。
     navigation_service_action: "navigation_service"
+    # 固定路径可视化话题。
     fixed_path_visualization_topic: "fixed_path_plan"
+    # 固定路径边界 Marker 话题。
     fixed_path_boundaries_topic: "fixed_path_boundaries"
+    # 路径中心线到单侧显示边界的距离，单位米。
     fixed_path_boundary_half_width: 0.40
+    # 单目标导航 Action 名称。
     navigate_to_pose_action: "navigate_to_pose"
+    # 多目标导航 Action 名称。
     navigate_through_poses_action: "navigate_through_poses"
+    # 单目标规划 Action 名称。
     compute_path_to_pose_action: "compute_path_to_pose"
+    # 多目标规划 Action 名称。
     compute_path_through_poses_action: "compute_path_through_poses"
+    # 路径平滑 Action 名称。
     smooth_path_action: "smooth_path"
+    # 路径跟踪 Action 名称。
     follow_path_action: "follow_path"
+    # 实际选择的规划器插件标识。
     planner_id: "GridBasedAstar"
+    # 普通导航使用的控制器标识。
     controller_id: "RPP"
+    # 固定路径使用的控制器标识。
     fixed_path_controller_id: "FixedPathController"
+    # 固定路径使用的目标检查器标识。
     fixed_path_goal_checker_id: "fixed_path_goal_checker"
+    # 普通导航使用的目标检查器标识。
     goal_checker_id: "stopped_goal_checker"
+    # 是否调用路径平滑服务。
     use_smoother: true
+    # 选用的路径平滑插件标识。
     smoother_id: "simple_smoother"
+    # 平滑后是否检查路径碰撞。
     check_smoother_collisions: true
+    # 等待 Action 服务的最长时间，单位秒。
     server_timeout: 5.0
+    # 等待取消响应的最长时间，单位秒。
     cancel_timeout: 2.0
+    # 单次平滑允许耗时，单位秒。
     max_smoothing_duration: 2.0
+    # 导航反馈发布频率，单位 Hz。
     feedback_frequency: 5.0
+    # 普通导航重规划频率，单位 Hz。
     replan_frequency: 1.0
+    # 连续规划失败上限。
     max_consecutive_planning_failures: 3
+    # 允许执行的恢复轮数。
     max_recovery_rounds: 2
+    # 恢复后等待代价地图更新的时间，单位秒。
     costmap_update_wait_duration: 0.8
+    # 判断途经点已通过的距离阈值，单位米。
     passed_goal_radius: 0.7
+    # 定位 TF 数据过期阈值，单位秒。
     localization_timeout: 0.3
+    # 是否启用定位突跳停车检测。
     enable_localization_jump_detection: false
+    # 定位异常后的恢复等待上限，单位秒。
     localization_recovery_timeout: 10.0
+    # 恢复前要求定位连续稳定的时间，单位秒。
     localization_stable_duration: 0.5
+    # 相邻定位允许的最大平移跳变，单位米。
     max_localization_translation_jump: 0.3
+    # 相邻定位允许的最大角度跳变，单位弧度。
     max_localization_rotation_jump: 0.35
+    # 固定路径请求速度上限，单位米每秒。
     fixed_path_max_speed: 1.5
+    # 无有效运动进展的超时阈值，单位秒。
     progress_timeout: 10.0
+    # 判定有效进展所需最小位移，单位米。
     progress_min_translation: 0.1
+    # 上游紧急零速指令发布话题。
     stop_cmd_vel_topic: "cmd_vel_nav"
+    # 底盘控制指令订阅话题。
     chassis_input_topic: "/downstream/chassis_control"
+    # 底盘串口控制指令发布话题。
     chassis_output_topic: "/control_to_uart"
+    # 底盘运动状态过期阈值，单位秒。
     chassis_motion_state_timeout: 0.2
+    # 底盘控制指令过期阈值，单位秒。
     chassis_command_timeout: 0.15
+    # 底盘控制输出频率，单位 Hz。
     chassis_publish_rate: 50.0
+    # 底盘未指定线速度时采用的速度上限，单位米每秒。
     chassis_default_linear_speed_max: 1.5
+    # 底盘线速度硬上限，单位米每秒。
     chassis_linear_speed_max: 1.5
+    # 底盘未指定角速度时采用的上限，单位弧度每秒。
     chassis_default_angular_speed_max: 0.5
+    # 底盘角速度硬上限，单位弧度每秒。
     chassis_angular_speed_max: 0.8
+    # 底盘默认线加速度上限，单位米每二次方秒。
     chassis_default_linear_accel_max: 2.0
+    # 底盘线加速度硬上限，单位米每二次方秒。
     chassis_linear_accel_max: 3.0
+    # 底盘线减速度硬上限，单位米每二次方秒。
     chassis_linear_decel_max: 4.0
+    # 底盘默认角加速度上限，单位弧度每二次方秒。
     chassis_default_angular_accel_max: 1.5
+    # 底盘角加速度硬上限，单位弧度每二次方秒。
     chassis_angular_accel_max: 2.0
+    # 底盘角减速度硬上限，单位弧度每二次方秒。
     chassis_angular_decel_max: 3.0
+    # 底盘线加速加加速度上限，单位米每三次方秒。
     chassis_linear_accel_jerk_max: 6.0
+    # 底盘线减速加加速度上限，单位米每三次方秒。
     chassis_linear_decel_jerk_max: 8.0
+    # 底盘角加速加加速度上限，单位弧度每三次方秒。
     chassis_angular_accel_jerk_max: 4.0
+    # 底盘角减速加加速度上限，单位弧度每三次方秒。
     chassis_angular_decel_jerk_max: 6.0
 
+# 路径跟踪服务器：加载控制器及进度／目标检查器。
 controller_server:
+  # 该 ROS 节点的参数集合。
   ros__parameters:
+    # 是否使用仿真时钟；启动入口可覆盖此值。
     use_sim_time: false
+    # 控制器循环频率，单位 Hz。
     controller_frequency: 50.0
+    # 控制器读取里程计的话题。
     odom_topic: "/odometry"
+    # 小于此值的 x 向里程计速度视为零，单位米每秒。
     min_x_velocity_threshold: 0.001
+    # 小于此值的 y 向里程计速度视为零，单位米每秒。
     min_y_velocity_threshold: 0.5
+    # 小于此值的角速度视为零，单位弧度每秒。
     min_theta_velocity_threshold: 0.001
+    # 控制器可容忍的短时失败窗口，单位秒。
     failure_tolerance: 0.3
+    # 选用的进度检查器标识。
     progress_checker_plugin: "progress_checker"
+    # 注册到控制服务器的目标检查器列表。
     goal_checker_plugins: ["general_goal_checker", "stopped_goal_checker", "fixed_path_goal_checker"]
+    # 注册到控制服务器的控制器列表。
     controller_plugins: ["DWB", "RPP", "FixedPathController", "MPPI", "GracefulController", "RotationShimController"]
 
+    # 进度检查器实例，负责检测机器人是否持续移动。
     progress_checker:
+      # 该实例加载的插件类名。
       plugin: "nav2_controller::SimpleProgressChecker"
+      # 进度检查所需最小移动距离，单位米。
       required_movement_radius: 0.5
+      # 完成上述位移的最长时间，单位秒。
       movement_time_allowance: 10.0
 
+    # 普通导航目标检查器实例，检查位置与航向容差。
     general_goal_checker:
+      # 是否在目标检查中保留上轮状态。
       stateful: false
+      # 该实例加载的插件类名。
       plugin: "nav2_controller::SimpleGoalChecker"
+      # 终点平面位置容差，单位米。
       xy_goal_tolerance: 0.01
+      # 终点航向容差，单位弧度。
       yaw_goal_tolerance: 0.1
 
+    # 要求速度已停止的目标检查器实例。
     stopped_goal_checker:
+      # 是否在目标检查中保留上轮状态。
       stateful: false
+      # 该实例加载的插件类名。
       plugin: "nav2_controller::StoppedGoalChecker"
+      # 终点平面位置容差，单位米。
       xy_goal_tolerance: 0.01
+      # 终点航向容差，单位弧度。
       yaw_goal_tolerance: 0.1
+      # 认定平移停止的速度阈值，单位米每秒。
       trans_stopped_velocity: 0.01
+      # 认定旋转停止的速度阈值，单位弧度每秒。
       rot_stopped_velocity: 0.05
 
+    # 固定路径专用目标检查器实例，仅按位置和停车状态判定。
     fixed_path_goal_checker:
+      # 该实例加载的插件类名。
       plugin: "nav2_regulated_modules::FixedPathGoalChecker"
+      # 终点平面位置容差，单位米。
       xy_goal_tolerance: 0.01
+      # 认定平移停止的速度阈值，单位米每秒。
       trans_stopped_velocity: 0.01
+      # 认定旋转停止的速度阈值，单位弧度每秒。
       rot_stopped_velocity: 0.05
+      # 位置达标需连续保持的控制周期数。
       position_stable_cycles: 5
 
+    # 动态窗口轨迹控制器。
     DWB:
+      # 该实例加载的插件类名。
       plugin: "dwb_core::DWBLocalPlanner"
+      # 是否输出轨迹评分调试细节。
       debug_trajectory_details: true
+      # x 向速度采样下界，单位米每秒。
       min_vel_x: 0.0
+      # y 向速度采样下界，单位米每秒。
       min_vel_y: 0.0
+      # x 向速度采样上界，单位米每秒。
       max_vel_x: 0.26
+      # y 向速度采样上界，单位米每秒。
       max_vel_y: 0.0
+      # 角速度采样上界，单位弧度每秒。
       max_vel_theta: 1.0
+      # 平面线速度模长下界，单位米每秒。
       min_speed_xy: 0.0
+      # 平面线速度模长上界，单位米每秒。
       max_speed_xy: 0.26
+      # 角速度模长下界，单位弧度每秒。
       min_speed_theta: 0.0
+      # x 向加速度上限，单位米每二次方秒。
       acc_lim_x: 2.5
+      # y 向加速度上限，单位米每二次方秒。
       acc_lim_y: 0.0
+      # 角加速度上限，单位弧度每二次方秒。
       acc_lim_theta: 3.2
+      # x 向减速度下限，通常用负值，单位米每二次方秒。
       decel_lim_x: -2.5
+      # y 向减速度下限，通常用负值，单位米每二次方秒。
       decel_lim_y: 0.0
+      # 角减速度下限，通常用负值，单位弧度每二次方秒。
       decel_lim_theta: -3.2
+      # x 向速度候选采样数。
       vx_samples: 20
+      # y 向速度候选采样数。
       vy_samples: 5
+      # 角速度候选采样数。
       vtheta_samples: 20
+      # 候选轨迹向前模拟的时长，单位秒。
       sim_time: 1.7
+      # 轨迹线性采样步长，单位米。
       linear_granularity: 0.05
+      # 轨迹角度采样步长，单位弧度。
       angular_granularity: 0.025
+      # 允许的 TF 时间误差，单位秒。
       transform_tolerance: 0.2
+      # 终点平面位置容差，单位米。
       xy_goal_tolerance: 0.25
+      # 认定平移停止的速度阈值，单位米每秒。
       trans_stopped_velocity: 0.25
+      # 是否提前停止低收益轨迹评分。
       short_circuit_trajectory_evaluation: true
+      # 是否在目标检查中保留上轮状态。
       stateful: true
+      # 轨迹评分器列表；顺序影响评估流程。
       critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
       BaseObstacle.scale: 0.02
       PathAlign.scale: 32.0
@@ -236,196 +452,395 @@ controller_server:
       RotateToGoal.slowing_factor: 5.0
       RotateToGoal.lookahead_time: -1.0
 
+    # 受约束纯跟踪控制器。
     RPP:
+      # 该实例加载的插件类名。
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
+      # 期望前进线速度，单位米每秒。
       desired_linear_vel: 0.44
+      # 基础路径前视距离，单位米。
       lookahead_dist: 0.45
+      # 速度缩放前视的最小距离，单位米。
       min_lookahead_dist: 0.25
+      # 速度缩放前视的最大距离，单位米。
       max_lookahead_dist: 0.75
+      # 速度缩放前视的时间系数，单位秒。
       lookahead_time: 1.5
+      # 原地对齐角速度，单位弧度每秒。
       rotate_to_heading_angular_vel: 1.6
+      # 允许的 TF 时间误差，单位秒。
       transform_tolerance: 0.2
+      # 是否按当前速度缩放前视距离。
       use_velocity_scaled_lookahead_dist: true
+      # 接近目标时允许的最小线速度，单位米每秒。
       min_approach_linear_velocity: 0.01
+      # 进入目标减速区的距离，单位米。
       approach_velocity_scaling_dist: 0.6
+      # 是否启用控制器前向碰撞预测。
       use_collision_detection: true
+      # 前向碰撞预测时间上限，单位秒。
       max_allowed_time_to_collision_up_to_carrot: 1.0
+      # 是否按曲率限制线速度。
       use_regulated_linear_velocity_scaling: true
+      # 是否按障碍代价限制线速度。
       use_cost_regulated_linear_velocity_scaling: true
+      # 障碍代价调速影响距离，单位米。
       cost_scaling_dist: 0.35
+      # 障碍代价调速增益。
       cost_scaling_gain: 0.8
+      # 代价地图膨胀衰减系数。
       inflation_cost_scaling_factor: 5.0
+      # 触发曲率限速的最小转弯半径，单位米。
       regulated_linear_scaling_min_radius: 0.7
+      # 曲率限速后的速度下界，单位米每秒。
       regulated_linear_scaling_min_speed: 0.05
+      # 是否在大角度误差时原地对齐。
       use_rotate_to_heading: true
+      # 触发原地对齐的最小角度，单位弧度。
       rotate_to_heading_min_angle: 0.785
+      # 角加速度上限，单位弧度每二次方秒。
       max_angular_accel: 3.2
+      # 路径上查找机器人最近点的最大范围，单位米。
       max_robot_pose_search_dist: 3.0
+      # 是否对轨迹前视点插值。
       use_interpolation: true
+      # 固定路径起点允许的最大距离，单位米。
       max_start_distance: 1.0
+      # 固定路径允许的横向误差，单位米。
       max_horizontal_error: 0.5
 
+    # 固定路径专用控制器。
     FixedPathController:
+      # 该实例加载的插件类名。
       plugin: "nav2_regulated_modules::FixedPathController"
+      # 期望前进线速度，单位米每秒。
       desired_linear_vel: 1.5
+      # 基础路径前视距离，单位米。
       lookahead_dist: 0.45
+      # 速度缩放前视的最小距离，单位米。
       min_lookahead_dist: 0.25
+      # 速度缩放前视的最大距离，单位米。
       max_lookahead_dist: 0.75
+      # 速度缩放前视的时间系数，单位秒。
       lookahead_time: 1.5
+      # 固定路径起点位置容差，单位米。
       start_position_tolerance: 0.70
+      # 允许直接跟踪的起点横向误差，单位米。
       direct_tracking_lateral_tolerance: 0.20
+      # 允许直接跟踪的起点航向误差，单位弧度。
       direct_tracking_max_yaw_error: 0.2617993877991494
+      # 严格起点对齐的航向容差，单位弧度。
       initial_yaw_tolerance: 0.12217304763960307
+      # 原地对齐角速度，单位弧度每秒。
       rotate_to_heading_angular_vel: 0.4
+      # 角加速度上限，单位弧度每二次方秒。
       max_angular_accel: 0.8
+      # 起点原地对齐角速度比例增益。
       rotate_to_heading_kp: 1.5
+      # 接近目标时允许的最小线速度，单位米每秒。
       min_approach_linear_velocity: 0.005
+      # 进入目标减速区的距离，单位米。
       approach_velocity_scaling_dist: 0.8
+      # 终点减速计算使用的线性减速度，单位米每二次方秒。
       goal_linear_deceleration: 0.25
+      # 终点微量接近速度，单位米每秒。
       goal_final_approach_velocity: 0.01
+      # 终点制动反应预留时间，单位秒。
       goal_braking_reaction_time: 0.1
+      # 终点制动安全裕量，单位米。
       goal_braking_distance_margin: 0.1
+      # 自适应到点制动默认关闭；仅在单独确认后显式启用。
+      adaptive_goal_braking_enabled: false
+      # 自适应正常到点减速度上限，不能超过 1 m/s²。
+      adaptive_goal_max_deceleration: 1.0
+      # 自适应制动的减速度变化率上限，单位 m/s³。
+      adaptive_goal_jerk_limit: 2.0
+      # 自适应模式的末段低速目标，单位 m/s。
+      adaptive_goal_approach_speed: 0.03
+      # 自适应停车距离预留的驱动响应时间，单位秒。
+      adaptive_goal_response_time: 0.5
+      # 自适应停车距离的固定裕量，单位米。
+      adaptive_goal_distance_margin: 0.01
+      # 终点前视的基准距离，单位米。
       goal_terminal_lookahead_dist: 0.2
+      # 终点前视基准速度，单位米每秒。
       goal_terminal_lookahead_reference_speed: 0.75
+      # 终点前视随速度变化的增益。
       goal_terminal_lookahead_speed_gain: 0.1
+      # 终点前视距离下界，单位米。
       goal_terminal_lookahead_min_dist: 0.15
+      # 终点前视距离上界，单位米。
       goal_terminal_lookahead_max_dist: 0.25
+      # 终点误差诊断输出频率，单位 Hz。
       goal_error_log_frequency: 1.0
+      # 起点对齐需连续达标的周期数。
       alignment_stable_cycles: 5
+      # 允许的 TF 时间误差，单位秒。
       transform_tolerance: 0.2
 
+    # 模型预测路径积分控制器。
     MPPI:
+      # 该实例加载的插件类名。
       plugin: "nav2_mppi_controller::MPPIController"
+      # MPPI 预测离散步数。
       time_steps: 56
+      # MPPI 运动模型时间步长，单位秒。
       model_dt: 0.05
+      # MPPI 每轮采样轨迹数量。
       batch_size: 1000
+      # 线速度 x 方向采样噪声标准差。
       vx_std: 0.2
+      # 线速度 y 方向采样噪声标准差。
       vy_std: 0.0
+      # 角速度采样噪声标准差。
       wz_std: 0.4
+      # x 方向线速度上限，单位米每秒。
       vx_max: 0.26
+      # x 方向线速度下限，单位米每秒。
       vx_min: 0.0
+      # y 方向线速度上限，单位米每秒。
       vy_max: 0.0
+      # 角速度上限，单位弧度每秒。
       wz_max: 1.0
+      # MPPI 每周期优化轮数。
       iteration_count: 1
+      # 删除已通过路径点的距离阈值，单位米。
       prune_distance: 1.5
+      # 允许的 TF 时间误差，单位秒。
       transform_tolerance: 0.2
+      # MPPI 采样代价温度系数。
       temperature: 0.3
+      # MPPI 控制输入代价系数。
       gamma: 0.015
+      # 预测使用的运动学模型。
       motion_model: "DiffDrive"
+      # 是否发布控制器轨迹可视化。
       visualize: false
+      # 采样噪声重置周期，单位秒。
       reset_period: 1.0
+      # 是否重新生成采样噪声。
       regenerate_noises: false
+      # MPPI 轨迹可视化采样配置。
       TrajectoryVisualizer:
+        # 可视化轨迹的取样间隔。
         trajectory_step: 5
+        # 可视化时序取样间隔。
         time_step: 3
+      # 轨迹评分器列表；顺序影响评估流程。
       critics: ["ConstraintCritic", "CostCritic", "GoalCritic", "GoalAngleCritic", "PathAlignCritic", "PathFollowCritic", "PathAngleCritic", "PreferForwardCritic"]
+      # MPPI 运动学约束评分器。
       ConstraintCritic:
+        # 是否启用当前评分器。
         enabled: true
+        # 当前评分器代价指数。
         cost_power: 1
+        # 当前评分器代价权重。
         cost_weight: 4.0
+      # MPPI 代价地图障碍评分器。
       CostCritic:
+        # 是否启用当前评分器。
         enabled: true
+        # 当前评分器代价指数。
         cost_power: 1
+        # 当前评分器代价权重。
         cost_weight: 3.81
+        # 高代价障碍阈值。
         critical_cost: 300.0
+        # 障碍检查是否使用完整机器人轮廓。
         consider_footprint: false
+        # 碰撞轨迹代价。
         collision_cost: 1000000.0
+        # 接近目标判定距离，单位米。
         near_goal_distance: 0.5
+      # MPPI 终点距离评分器。
       GoalCritic:
+        # 是否启用当前评分器。
         enabled: true
+        # 当前评分器代价指数。
         cost_power: 1
+        # 当前评分器代价权重。
         cost_weight: 5.0
+        # 评分器参与计算的阈值。
         threshold_to_consider: 1.4
+      # MPPI 终点航向评分器。
       GoalAngleCritic:
+        # 是否启用当前评分器。
         enabled: true
+        # 当前评分器代价指数。
         cost_power: 1
+        # 当前评分器代价权重。
         cost_weight: 3.0
+        # 评分器参与计算的阈值。
         threshold_to_consider: 0.5
+      # MPPI 路径对齐评分器。
       PathAlignCritic:
+        # 是否启用当前评分器。
         enabled: true
+        # 当前评分器代价指数。
         cost_power: 1
+        # 当前评分器代价权重。
         cost_weight: 10.0
+        # 路径占用率允许上限。
         max_path_occupancy_ratio: 0.07
+        # 相对于路径最远匹配点的偏移量。
         offset_from_furthest: 20
+        # 轨迹评分点采样间隔。
         trajectory_point_step: 4
+        # 评分器参与计算的阈值。
         threshold_to_consider: 0.5
+        # 是否参考路径点朝向评分。
         use_path_orientations: false
+      # MPPI 沿路径前进评分器。
       PathFollowCritic:
+        # 是否启用当前评分器。
         enabled: true
+        # 当前评分器代价指数。
         cost_power: 1
+        # 当前评分器代价权重。
         cost_weight: 5.0
+        # 相对于路径最远匹配点的偏移量。
         offset_from_furthest: 6
+        # 评分器参与计算的阈值。
         threshold_to_consider: 1.4
+      # MPPI 路径航向评分器。
       PathAngleCritic:
+        # 是否启用当前评分器。
         enabled: true
+        # 当前评分器代价指数。
         cost_power: 1
+        # 当前评分器代价权重。
         cost_weight: 2.0
+        # 相对于路径最远匹配点的偏移量。
         offset_from_furthest: 4
+        # 评分器参与计算的阈值。
         threshold_to_consider: 0.5
+        # 至最远匹配点允许的角度差。
         max_angle_to_furthest: 1.0
+        # 前进方向偏好权重。
         forward_preference: true
+      # MPPI 前进偏好评分器。
       PreferForwardCritic:
+        # 是否启用当前评分器。
         enabled: true
+        # 当前评分器代价指数。
         cost_power: 1
+        # 当前评分器代价权重。
         cost_weight: 5.0
+        # 评分器参与计算的阈值。
         threshold_to_consider: 0.5
 
+    # 平滑轨迹控制器。
     GracefulController:
+      # 该实例加载的插件类名。
       plugin: "nav2_graceful_controller::GracefulController"
+      # 允许的 TF 时间误差，单位秒。
       transform_tolerance: 0.2
+      # Graceful 控制器的运动目标前视距离，单位米。
       motion_target_dist: 0.6
+      # 路径上查找机器人最近点的最大范围，单位米。
       max_robot_pose_search_dist: 3.0
+      # Graceful 控制器的航向反馈增益。
       k_phi: 3.0
+      # Graceful 控制器的路径曲率反馈增益。
       k_delta: 2.0
+      # Graceful 控制器的非线性反馈形状系数。
       beta: 0.2
+      # Graceful 控制器的轨迹收敛参数。
       lambda: 2.0
+      # Graceful 控制器线速度下界，单位米每秒。
       v_linear_min: 0.03
+      # Graceful 控制器线速度上界，单位米每秒。
       v_linear_max: 0.22
+      # Graceful 控制器角速度上界，单位弧度每秒。
       v_angular_max: 1.0
+      # Graceful 控制器进入减速区的半径，单位米。
       slowdown_radius: 1.5
+      # 是否允许初始原地转向。
       initial_rotation: true
+      # 触发初始原地转向的角度，单位弧度。
       initial_rotation_min_angle: 0.75
+      # 是否执行终点原地转向。
       final_rotation: true
+      # 角速度缩放系数。
       rotation_scaling_factor: 0.5
+      # 是否允许倒车控制。
       allow_backward: false
 
+    # 大航向误差旋转包装控制器。
     RotationShimController:
+      # 该实例加载的插件类名。
       plugin: "nav2_rotation_shim_controller::RotationShimController"
+      # 旋转垫片控制器包装的主控制器标识。
       primary_controller: "dwb_core::DWBLocalPlanner"
+      # 进入旋转模式的航向误差阈值，单位弧度。
       angular_dist_threshold: 0.785
+      # 退出旋转模式的航向误差阈值，单位弧度。
       angular_disengage_threshold: 0.3925
+      # 前方路径朝向采样距离，单位米。
       forward_sampling_distance: 0.5
+      # 原地对齐角速度，单位弧度每秒。
       rotate_to_heading_angular_vel: 0.8
+      # 角加速度上限，单位弧度每二次方秒。
       max_angular_accel: 3.2
+      # 旋转时前向碰撞预测时长，单位秒。
       simulate_ahead_time: 1.0
+      # 是否在终点执行航向对齐。
       rotate_to_goal_heading: false
+      # 旋转控制是否使用闭环反馈。
       closed_loop: true
+      # 是否输出轨迹评分调试细节。
       debug_trajectory_details: true
+      # x 向速度采样下界，单位米每秒。
       min_vel_x: 0.0
+      # y 向速度采样下界，单位米每秒。
       min_vel_y: 0.0
+      # x 向速度采样上界，单位米每秒。
       max_vel_x: 0.26
+      # y 向速度采样上界，单位米每秒。
       max_vel_y: 0.0
+      # 角速度采样上界，单位弧度每秒。
       max_vel_theta: 1.0
+      # 平面线速度模长下界，单位米每秒。
       min_speed_xy: 0.0
+      # 平面线速度模长上界，单位米每秒。
       max_speed_xy: 0.26
+      # 角速度模长下界，单位弧度每秒。
       min_speed_theta: 0.0
+      # x 向加速度上限，单位米每二次方秒。
       acc_lim_x: 2.5
+      # y 向加速度上限，单位米每二次方秒。
       acc_lim_y: 0.0
+      # 角加速度上限，单位弧度每二次方秒。
       acc_lim_theta: 3.2
+      # x 向减速度下限，通常用负值，单位米每二次方秒。
       decel_lim_x: -2.5
+      # y 向减速度下限，通常用负值，单位米每二次方秒。
       decel_lim_y: 0.0
+      # 角减速度下限，通常用负值，单位弧度每二次方秒。
       decel_lim_theta: -3.2
+      # x 向速度候选采样数。
       vx_samples: 20
+      # y 向速度候选采样数。
       vy_samples: 5
+      # 角速度候选采样数。
       vtheta_samples: 20
+      # 候选轨迹向前模拟的时长，单位秒。
       sim_time: 1.7
+      # 轨迹线性采样步长，单位米。
       linear_granularity: 0.05
+      # 轨迹角度采样步长，单位弧度。
       angular_granularity: 0.025
+      # 允许的 TF 时间误差，单位秒。
       transform_tolerance: 0.2
+      # 终点平面位置容差，单位米。
       xy_goal_tolerance: 0.25
+      # 认定平移停止的速度阈值，单位米每秒。
       trans_stopped_velocity: 0.25
+      # 是否提前停止低收益轨迹评分。
       short_circuit_trajectory_evaluation: true
+      # 是否在目标检查中保留上轮状态。
       stateful: true
+      # 轨迹评分器列表；顺序影响评估流程。
       critics: ["RotateToGoal", "Oscillation", "BaseObstacle", "GoalAlign", "PathAlign", "PathDist", "GoalDist"]
       BaseObstacle.scale: 0.02
       PathAlign.scale: 32.0
@@ -438,177 +853,317 @@ controller_server:
       RotateToGoal.slowing_factor: 5.0
       RotateToGoal.lookahead_time: -1.0
 
+# 路径平滑服务器：处理规划路径的几何平滑。
 smoother_server:
+  # 该 ROS 节点的参数集合。
   ros__parameters:
+    # 是否使用仿真时钟；启动入口可覆盖此值。
     use_sim_time: false
+    # 注册到平滑服务器的路径平滑器列表。
     smoother_plugins: ["simple_smoother"]
+    # 简单路径平滑器实例及迭代参数。
     simple_smoother:
+      # 该实例加载的插件类名。
       plugin: "nav2_smoother::SimpleSmoother"
+      # 规划或平滑允许的误差阈值；具体单位依所属插件。
       tolerance: 1.0e-10
+      # 路径平滑最大迭代次数。
       max_its: 1000
+      # 是否对平滑结果继续细化。
       do_refinement: true
 
+# 速度平滑节点：限制速度、加速度并处理输入超时。
 velocity_smoother:
+  # 该 ROS 节点的参数集合。
   ros__parameters:
+    # 是否使用仿真时钟；启动入口可覆盖此值。
     use_sim_time: false
+    # 速度平滑器输出频率，单位 Hz。
     smoothing_frequency: 50.0
+    # 超限时是否按比例缩放速度各分量。
     scale_velocities: false
+    # 收到全零速度命令时是否立即输出停车。
     immediate_stop_on_zero_command: false
+    # 速度平滑反馈来源。
     feedback: "CLOSED_LOOP"
+    # 速度各轴上限数组，依次为 x、y、角速度。
     max_velocity: [1.5, 0.0, 2.0]
+    # 速度各轴下限数组，依次为 x、y、角速度。
     min_velocity: [-1.5, 0.0, -2.0]
+    # 速度各轴加速度上限数组。
     max_accel: [2.5, 0.0, 3.2]
+    # 速度各轴减速度下限数组。
     max_decel: [-2.5, 0.0, -3.2]
+    # 控制器读取里程计的话题。
     odom_topic: "/motion_state"
+    # 计算速度反馈的里程计时间窗口，单位秒。
     odom_duration: 0.1
+    # 速度死区数组；小于阈值的分量归零。
     deadband_velocity: [0.0, 0.0, 0.0]
+    # 输入速度指令超时阈值，单位秒。
     velocity_timeout: 1.0
 
+# 碰撞监控节点：依据传感器点与区域关系停止或缩放速度。
 collision_monitor:
+  # 该 ROS 节点的参数集合。
   ros__parameters:
+    # 是否使用仿真时钟；启动入口可覆盖此值。
     use_sim_time: false
+    # 机器人车体 TF 坐标系。
     base_frame_id: "base_link"
+    # 里程计 TF 坐标系。
     odom_frame_id: "map"
+    # 碰撞监控输入速度话题。
     cmd_vel_in_topic: "cmd_vel_collision_in"
     cmd_vel_out_topic: "cmd_vel"
     transform_tolerance: 0.2
     source_timeout: 0.5
     base_shift_correction: true
     stop_pub_timeout: 2.0
-    polygons: ["StopZone", "SlowdownZone", "ApproachFootprint"]
+    polygons: ["PolygonSlowL1", "PolygonSlowL2", "PolygonStopL3"]
+    robot_half_length: 0.265
+    robot_half_width: 0.18
 
-    StopZone:
+    PolygonStopL3:
       type: "polygon"
-      points: [0.85, 0.50, 0.85, -0.50, -0.70, -0.50, -0.70, 0.50]
+      shape: "box"
+      front_margin: 1.2
+      back_margin: 0.8
+      side_margin: 0.4
       action_type: "stop"
-      max_points: 2
+      max_points: 3
       visualize: true
       polygon_pub_topic: "collision_stop_zone"
       enabled: true
 
-    SlowdownZone:
+    PolygonSlowL2:
       type: "polygon"
-      points: [1.50, 0.75, 1.50, -0.75, -0.85, -0.75, -0.85, 0.75]
+      shape: "box"
+      front_margin: 2.5
+      back_margin: 1.5
+      side_margin: 0.6
       action_type: "slowdown"
-      max_points: 2
-      slowdown_ratio: 0.35
+      max_points: 3
+      slowdown_ratio: 0.6
       visualize: true
       polygon_pub_topic: "collision_slowdown_zone"
       enabled: true
 
-    ApproachFootprint:
+    PolygonSlowL1:
       type: "polygon"
-      action_type: "approach"
-      footprint_topic: "/local_costmap/published_footprint"
-      time_before_collision: 2.0
-      simulation_time_step: 0.05
-      max_points: 2
+      shape: "box"
+      front_margin: 4.0
+      back_margin: 2.5
+      side_margin: 0.8
+      action_type: "slowdown"
+      max_points: 3
+      slowdown_ratio: 0.8
       visualize: true
-      polygon_pub_topic: "collision_approach_footprint"
+      polygon_pub_topic: "collision_slowdown_l1"
       enabled: true
 
+    # 碰撞监控或代价地图使用的传感器名称。
     observation_sources: ["scan"]
+    # 激光扫描数据源实例。
     scan:
+      # 当前碰撞区域或传感器的配置类型。
       type: "scan"
+      # 该数据源订阅的话题。
       topic: "/c200_lidar_node/scan"
+      # 是否启用当前评分器。
       enabled: true
 
+# 静态地图服务节点；读取 yaml_filename 指定的地图。
 map_server:
+  # 该 ROS 节点的参数集合。
   ros__parameters:
+    # 是否使用仿真时钟；启动入口可覆盖此值。
     use_sim_time: false
+    # 静态地图 YAML 文件路径。
     yaml_filename: ""
 
 
+# 局部代价地图：供近场避障和控制使用。
 local_costmap:
+  # 局部代价地图：供近场避障和控制使用。
   local_costmap:
+    # 该 ROS 节点的参数集合。
     ros__parameters:
+      # 代价地图计算频率，单位 Hz。
       update_frequency: 5.0
+      # 代价地图发布频率，单位 Hz。
       publish_frequency: 2.0
+      # 全局规划参考坐标系。
       global_frame: "map"
+      # 机器人车体参考坐标系。
       robot_base_frame: base_link
+      # 是否使用仿真时钟；启动入口可覆盖此值。
       use_sim_time: false
+      # 局部代价地图是否随车体滚动。
       rolling_window: true
+      # 代价地图宽度，单位米。
       width: 7
+      # 代价地图高度，单位米。
       height: 5
+      # 栅格边长，单位米。
       resolution: 0.05
+      # 机器人几何轮廓顶点，坐标单位米。
       footprint: "[[0.6, 0.4], [0.6, -0.4], [-0.6, -0.4], [-0.6, 0.4]]"
+      # 代价地图图层插件列表。
       plugins: ["voxel_layer", "inflation_layer"]
+      # 三维体素障碍层；将传感器观测投影到局部代价地图。
       voxel_layer:
+        # 该实例加载的插件类名。
         plugin: "nav2_costmap_2d::VoxelLayer"
+        # 是否启用当前评分器。
         enabled: true
+        # 是否使用机器人轮廓清除障碍。
         footprint_clearing_enabled: true
+        # 是否发布体素地图供调试。
         publish_voxel_map: true
+        # 体素地图 z 轴起点，单位米。
         origin_z: 0.0
+        # 体素 z 方向分辨率，单位米。
         z_resolution: 0.05
+        # 体素 z 方向格数。
         z_voxels: 16
+        # 可标记障碍的最高高度，单位米。
         max_obstacle_height: 2.0
+        # 体素列标记为障碍的阈值。
         mark_threshold: 0
+        # 碰撞监控或代价地图使用的传感器名称。
         observation_sources: scan
+        # 激光扫描数据源实例。
         scan:
+          # 该数据源订阅的话题。
           topic: /c200_lidar_node/scan
+          # 可标记障碍的最高高度，单位米。
           max_obstacle_height: 2.0
+          # 是否用传感器射线清除障碍。
           clearing: true
+          # 是否用传感器观测标记障碍。
           marking: true
+          # 传感器消息类型。
           data_type: "LaserScan"
+          # 自由空间射线清除最大距离，单位米。
           raytrace_max_range: 3.0
+          # 自由空间射线清除最小距离，单位米。
           raytrace_min_range: 0.0
+          # 障碍标记最大距离，单位米。
           obstacle_max_range: 2.5
+          # 障碍标记最小距离，单位米。
           obstacle_min_range: 0.0
+      # 障碍膨胀层；依据膨胀半径生成周边代价。
       inflation_layer:
+        # 该实例加载的插件类名。
         plugin: "nav2_costmap_2d::InflationLayer"
+        # 障碍膨胀代价随距离衰减的系数。
         cost_scaling_factor: 5.0
+        # 障碍膨胀半径，单位米。
         inflation_radius: 0.45
+      # 发布更新时是否总发送整幅代价地图。
       always_send_full_costmap: true
 
+# 全局代价地图：供全局规划使用。
 global_costmap:
+  # 全局代价地图：供全局规划使用。
   global_costmap:
+    # 该 ROS 节点的参数集合。
     ros__parameters:
+      # 代价地图计算频率，单位 Hz。
       update_frequency: 1.0
+      # 代价地图发布频率，单位 Hz。
       publish_frequency: 1.0
+      # 全局规划参考坐标系。
       global_frame: map
+      # 机器人车体参考坐标系。
       robot_base_frame: base_link
+      # 是否使用仿真时钟；启动入口可覆盖此值。
       use_sim_time: false
+      # 机器人几何轮廓顶点，坐标单位米。
       footprint: "[[0.6, 0.4], [0.6, -0.4], [-0.6, -0.4], [-0.6, 0.4]]"
+      # 栅格边长，单位米。
       resolution: 0.05
+      # 是否保留未知栅格状态。
       track_unknown_space: true
+      # 代价地图图层插件列表。
       plugins: ["static_layer", "obstacle_layer", "inflation_layer"]
+      # 静态地图图层；接收地图服务发布的数据。
       static_layer:
+        # 该实例加载的插件类名。
         plugin: "nav2_costmap_2d::StaticLayer"
+        # 静态地图订阅是否采用瞬态本地持久化 QoS。
         map_subscribe_transient_local: true
+      # 二维障碍图层；用观测数据标记和清除障碍。
       obstacle_layer:
+        # 该实例加载的插件类名。
         plugin: "nav2_costmap_2d::ObstacleLayer"
+        # 是否启用当前评分器。
         enabled: true
+        # 是否使用机器人轮廓清除障碍。
         footprint_clearing_enabled: true
+        # 碰撞监控或代价地图使用的传感器名称。
         observation_sources: scan
+        # 激光扫描数据源实例。
         scan:
+          # 该数据源订阅的话题。
           topic: /c200_lidar_node/scan
+          # 可标记障碍的最高高度，单位米。
           max_obstacle_height: 2.0
+          # 是否用传感器射线清除障碍。
           clearing: true
+          # 是否用传感器观测标记障碍。
           marking: true
+          # 传感器消息类型。
           data_type: "LaserScan"
+          # 自由空间射线清除最大距离，单位米。
           raytrace_max_range: 3.0
+          # 自由空间射线清除最小距离，单位米。
           raytrace_min_range: 0.0
+          # 障碍标记最大距离，单位米。
           obstacle_max_range: 2.5
+          # 障碍标记最小距离，单位米。
           obstacle_min_range: 0.0
+      # 障碍膨胀层；依据膨胀半径生成周边代价。
       inflation_layer:
+        # 该实例加载的插件类名。
         plugin: "nav2_costmap_2d::InflationLayer"
+        # 障碍膨胀代价随距离衰减的系数。
         cost_scaling_factor: 5.0
+        # 障碍膨胀半径，单位米。
         inflation_radius: 0.45
+      # 发布更新时是否总发送整幅代价地图。
       always_send_full_costmap: true
 
+# 键盘遥控节点：将按键转换为控制命令。
 myagv_keyboard_control:
+  # 该 ROS 节点的参数集合。
   ros__parameters:
+    # 遥控键盘输入设备路径。
     input_device: /dev/tty
+    # 遥控控制命令输出话题。
     output_topic: /control_to_uart
+    # 遥控命令发布频率，单位 Hz。
     publish_rate: 50.0
+    # 遥控线速度，单位米每秒。
     linear_speed: 1.0
+    # 遥控角速度，单位弧度每秒。
     angular_speed: 0.5
+    # 遥控线加速度上限，单位米每二次方秒。
     linear_accel_limit: 2.0
+    # 遥控线加加速度上限，单位米每三次方秒。
     linear_accel_jerk_limit: 4.0
+    # 遥控线减速度上限，单位米每二次方秒。
     linear_decel_limit: 4.0
+    # 遥控线减速加加速度上限，单位米每三次方秒。
     linear_decel_jerk_limit: 8.0
+    # 遥控角加速度上限，单位弧度每二次方秒。
     angular_accel_limit: 1.0
+    # 遥控角加加速度上限，单位弧度每三次方秒。
     angular_accel_jerk_limit: 2.0
+    # 遥控角减速度上限，单位弧度每二次方秒。
     angular_decel_limit: 1.5
+    # 遥控角减速加加速度上限，单位弧度每三次方秒。
     angular_decel_jerk_limit: 3.0
+    # 遥控命令过期阈值，单位秒。
     command_timeout: 0.10

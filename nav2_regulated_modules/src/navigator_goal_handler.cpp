@@ -1,3 +1,5 @@
+// 导航目标入口。接收标准 Action、固定路径 Action 与话题目标，处理接受、取消和反馈。
+
 #include "nav2_regulated_modules/regulated_navigator.hpp"
 
 #include <algorithm>
@@ -8,6 +10,7 @@
 namespace nav2_regulated_modules
 {
 
+// 校验单目标导航请求，拒绝与当前模式或状态不兼容的目标。
 rclcpp_action::GoalResponse RegulatedNavigator::handlePoseGoal(const rclcpp_action::GoalUUID &, const std::shared_ptr<const NavigateToPose::Goal> goal)
 {
   if (operation_mode_ != NavigationMode::AUTONOMOUS)
@@ -23,6 +26,7 @@ rclcpp_action::GoalResponse RegulatedNavigator::handlePoseGoal(const rclcpp_acti
   return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
 
+// 校验多目标导航请求，避免空路径或冲突任务进入执行。
 rclcpp_action::GoalResponse RegulatedNavigator::handlePosesGoal(const rclcpp_action::GoalUUID &, const std::shared_ptr<const NavigateThroughPoses::Goal> goal)
 {
   if (operation_mode_ != NavigationMode::AUTONOMOUS)
@@ -43,6 +47,7 @@ rclcpp_action::GoalResponse RegulatedNavigator::handlePosesGoal(const rclcpp_act
   return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
 
+// 处理单目标 Action 取消请求并传播到下游子目标。
 rclcpp_action::CancelResponse RegulatedNavigator::handlePoseCancel(const std::shared_ptr<NavigatePoseHandle> goal)
 {
   if (goal == active_pose_goal_)
@@ -53,6 +58,7 @@ rclcpp_action::CancelResponse RegulatedNavigator::handlePoseCancel(const std::sh
   return rclcpp_action::CancelResponse::ACCEPT;
 }
 
+// 处理多目标 Action 取消请求并传播到下游子目标。
 rclcpp_action::CancelResponse RegulatedNavigator::handlePosesCancel(const std::shared_ptr<NavigatePosesHandle> goal)
 {
   if (goal == active_poses_goal_)
@@ -63,6 +69,7 @@ rclcpp_action::CancelResponse RegulatedNavigator::handlePosesCancel(const std::s
   return rclcpp_action::CancelResponse::ACCEPT;
 }
 
+// 接管已接受的单目标任务并启动规划流程。
 void RegulatedNavigator::handlePoseAccepted(const std::shared_ptr<NavigatePoseHandle> goal)
 {
   preemptCurrentTask();
@@ -77,6 +84,7 @@ void RegulatedNavigator::handlePoseAccepted(const std::shared_ptr<NavigatePoseHa
   startPlanning(false);
 }
 
+// 接管已接受的多目标任务并启动规划流程。
 void RegulatedNavigator::handlePosesAccepted(const std::shared_ptr<NavigatePosesHandle> goal)
 {
   preemptCurrentTask();
@@ -92,6 +100,7 @@ void RegulatedNavigator::handlePosesAccepted(const std::shared_ptr<NavigatePoses
   startPlanning(false);
 }
 
+// 将话题位姿目标接入同一导航任务流程。
 void RegulatedNavigator::onTopicGoal(const geometry_msgs::msg::PoseStamped::SharedPtr goal)
 {
   if (operation_mode_ != NavigationMode::AUTONOMOUS)
@@ -115,6 +124,7 @@ void RegulatedNavigator::onTopicGoal(const geometry_msgs::msg::PoseStamped::Shar
   startPlanning(false);
 }
 
+// 按固定频率向活动 Action 发布当前位置与任务进度。
 void RegulatedNavigator::publishFeedback()
 {
   if (!active_ || task_.type == TaskType::NONE)

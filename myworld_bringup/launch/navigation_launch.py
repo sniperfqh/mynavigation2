@@ -41,6 +41,8 @@ def generate_launch_description():
         'fixed_path_approach_velocity_scaling_dist')
     fixed_path_goal_linear_deceleration = LaunchConfiguration(
         'fixed_path_goal_linear_deceleration')
+    adaptive_goal_braking_enabled = LaunchConfiguration(
+        'adaptive_goal_braking_enabled')
     fixed_path_goal_final_approach_velocity = LaunchConfiguration(
         'fixed_path_goal_final_approach_velocity')
     fixed_path_goal_braking_reaction_time = LaunchConfiguration(
@@ -131,6 +133,8 @@ def generate_launch_description():
                 fixed_path_approach_distance,
             'controller_server.ros__parameters.FixedPathController.goal_linear_deceleration':
                 fixed_path_goal_deceleration,
+            'controller_server.ros__parameters.FixedPathController.adaptive_goal_braking_enabled':
+                adaptive_goal_braking_enabled,
             'controller_server.ros__parameters.FixedPathController.goal_final_approach_velocity':
                 fixed_path_goal_final_approach,
             'controller_server.ros__parameters.FixedPathController.goal_braking_reaction_time':
@@ -263,6 +267,10 @@ def generate_launch_description():
             'fixed_path_goal_linear_deceleration',
             default_value='0.25',
             description='Fixed-path goal deceleration (m/s^2)'),
+        DeclareLaunchArgument(
+            'adaptive_goal_braking_enabled',
+            default_value='false',
+            description='Opt in to unvalidated adaptive fixed-path goal braking'),
         DeclareLaunchArgument(
             'fixed_path_goal_final_approach_velocity',
             default_value='0.01',

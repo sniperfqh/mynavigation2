@@ -653,6 +653,7 @@ TEST_F(Tester, testCrossOver) {
   addPolygon("SlowDown", POLYGON, 2.0, "slowdown");
   addPolygon("Approach", CIRCLE, 1.0, "approach");
   addSource(POINTCLOUD_NAME, POINTCLOUD);
+  cm_->declare_parameter(std::string(POINTCLOUD_NAME) + ".noise_min_neighbors", rclcpp::ParameterValue(0));
   addSource(RANGE_NAME, RANGE);
   setVectors({"SlowDown", "Approach"}, {POINTCLOUD_NAME, RANGE_NAME});
 

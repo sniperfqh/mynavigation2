@@ -1,3 +1,5 @@
+// 导航运行监控。检测定位、进度和任务状态，触发恢复或结束并记录速度链。
+
 #include "nav2_regulated_modules/regulated_navigator.hpp"
 
 #include <chrono>
@@ -13,6 +15,7 @@ using namespace std::chrono_literals;
 namespace nav2_regulated_modules
 {
 
+// 取消当前子目标并进入恢复流程，避免继续执行失效路径。
 void RegulatedNavigator::startRecovery(const std::string & reason)
 {
   if (task_.type == TaskType::NONE)
@@ -43,6 +46,7 @@ void RegulatedNavigator::startRecovery(const std::string & reason)
   recovery_ready_time_ = now() + rclcpp::Duration::from_seconds(costmap_wait_duration_);
 }
 
+// 周期检查定位、任务进展及重规划时机，必要时停车或恢复。
 void RegulatedNavigator::monitorTask()
 {
   if (!active_ || task_.type == TaskType::NONE)
@@ -63,6 +67,7 @@ void RegulatedNavigator::monitorTask()
     return;
   }
   geometry_msgs::msg::PoseStamped current_pose;
+  // TF 丢失与位姿突跳分开处理：持续无 TF 必停，突跳检测由独立开关控制。
   if (!lookupCurrentPose(current_pose))
   {
     if ((now() - last_valid_tf_time_).seconds() > localization_timeout_ && task_.state != NavigationState::LOCALIZATION_LOST)
@@ -77,6 +82,7 @@ void RegulatedNavigator::monitorTask()
     return;
   }
 
+  // 定位恢复需连续稳定一段时间，避免单帧恢复后立即重启旧控制。
   if (task_.state == NavigationState::LOCALIZATION_LOST)
   {
     if ((now() - localization_lost_time_).seconds() > localization_recovery_timeout_)
@@ -114,6 +120,7 @@ void RegulatedNavigator::monitorTask()
   last_pose_ = current_pose;
   has_last_pose_ = true;
 
+  // 控制期间仅以足够的 map 坐标位移刷新进度时间，静止过久进入恢复。
   if (task_.state == NavigationState::CONTROLLING)
   {
     if (task_.last_progress_pose.header.frame_id.empty() || navigation_utils::poseDistance(current_pose, task_.last_progress_pose) >= progress_min_translation_)
@@ -135,6 +142,7 @@ void RegulatedNavigator::monitorTask()
   }
 }
 
+// 通过 TF 获取当前车体在全局坐标系中的位姿。
 bool RegulatedNavigator::lookupCurrentPose(geometry_msgs::msg::PoseStamped & pose)
 {
   try
@@ -154,6 +162,7 @@ bool RegulatedNavigator::lookupCurrentPose(geometry_msgs::msg::PoseStamped & pos
   }
 }
 
+// 根据机器人当前位置移除已经通过的多点目标。
 void RegulatedNavigator::updatePassedGoals(const geometry_msgs::msg::PoseStamped & current_pose)
 {
   if (task_.type != TaskType::THROUGH_POSES || task_.goals.size() <= 1)

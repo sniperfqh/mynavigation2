@@ -64,6 +64,7 @@ public:
    * Added data is transformed to base_frame_id_ coordinate system at curr_time.
    */
   void getData(const rclcpp::Time & curr_time, std::vector<Point> & data) const;
+  void denoise(std::vector<Point> & data) const;
 
 protected:
   /**
@@ -79,6 +80,8 @@ protected:
 
   /// @brief Latest data obtained from laser scanner
   sensor_msgs::msg::LaserScan::ConstSharedPtr data_;
+  double noise_radius_ { 0.1 };
+  int noise_min_neighbors_ { 2 };
 };  // class Scan
 
 }  // namespace nav2_collision_monitor

@@ -288,6 +288,31 @@ TEST_F(Tester, testPolygonGetStopParameters) {
   EXPECT_NEAR(poly[3].y, SQUARE_POLYGON[7], EPSILON);
 }
 
+TEST_F(Tester, testPolygonBoxUsesRobotDimensionsAndMargins)
+{
+  setCommonParameters(POLYGON_NAME, "stop");
+  test_node_->declare_parameter(std::string(POLYGON_NAME) + ".shape", rclcpp::ParameterValue("box"));
+  test_node_->declare_parameter(std::string(POLYGON_NAME) + ".front_margin", rclcpp::ParameterValue(1.2));
+  test_node_->declare_parameter(std::string(POLYGON_NAME) + ".back_margin", rclcpp::ParameterValue(0.8));
+  test_node_->declare_parameter(std::string(POLYGON_NAME) + ".side_margin", rclcpp::ParameterValue(0.4));
+  test_node_->declare_parameter("robot_half_length", rclcpp::ParameterValue(0.265));
+  test_node_->declare_parameter("robot_half_width", rclcpp::ParameterValue(0.18));
+
+  polygon_ = std::make_shared<PolygonWrapper>(test_node_, POLYGON_NAME, tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
+  ASSERT_TRUE(polygon_->configure());
+  std::vector<nav2_collision_monitor::Point> poly;
+  polygon_->getPolygon(poly);
+  ASSERT_EQ(poly.size(), 4u);
+  EXPECT_NEAR(poly[0].x, 1.465, EPSILON);
+  EXPECT_NEAR(poly[0].y, 0.58, EPSILON);
+  EXPECT_NEAR(poly[1].x, 1.465, EPSILON);
+  EXPECT_NEAR(poly[1].y, -0.58, EPSILON);
+  EXPECT_NEAR(poly[2].x, -1.065, EPSILON);
+  EXPECT_NEAR(poly[2].y, -0.58, EPSILON);
+  EXPECT_NEAR(poly[3].x, -1.065, EPSILON);
+  EXPECT_NEAR(poly[3].y, 0.58, EPSILON);
+}
+
 TEST_F(Tester, testPolygonGetSlowdownParameters) {
   createPolygon("slowdown");
 

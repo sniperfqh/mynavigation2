@@ -1,3 +1,5 @@
+// 导航控制回调。发送 FollowPath、处理跟踪结果、发布固定路径与停车指令。
+
 #include "nav2_regulated_modules/regulated_navigator.hpp"
 
 #include <algorithm>
@@ -6,6 +8,7 @@
 namespace nav2_regulated_modules
 {
 
+// 把有效路径提交给控制服务器，并注册反馈与结果回调。
 void RegulatedNavigator::sendFollowPath(const nav_msgs::msg::Path & path)
 {
   if (path.poses.empty() || task_.type == TaskType::NONE)
@@ -92,11 +95,13 @@ void RegulatedNavigator::sendFollowPath(const nav_msgs::msg::Path & path)
   follow_client_->async_send_goal(goal, options);
 }
 
+// 比较任务代次和跟踪序号，防止旧 FollowPath 回调污染新任务。
 bool RegulatedNavigator::isCurrentFollow(const uint64_t generation, const uint64_t sequence) const
 {
   return generation == task_.generation && sequence == follow_sequence_;
 }
 
+// 向控制速度入口发布全零指令，确保取消或异常时停车。
 void RegulatedNavigator::stopRobot()
 {
   if (!stop_cmd_pub_)
@@ -110,6 +115,7 @@ void RegulatedNavigator::stopRobot()
   LOG_DEBUG("已向速度链入口连续发布 3 帧零速度");
 }
 
+// 记录控制器原始速度，供速度链诊断。
 void RegulatedNavigator::onControllerVelocity(const geometry_msgs::msg::Twist::SharedPtr velocity)
 {
   std::lock_guard<std::mutex> lock(velocity_mutex_);
@@ -117,6 +123,7 @@ void RegulatedNavigator::onControllerVelocity(const geometry_msgs::msg::Twist::S
   has_controller_velocity_ = true;
 }
 
+// 记录速度平滑器输出，供速度链诊断。
 void RegulatedNavigator::onSmoothedVelocity(const geometry_msgs::msg::Twist::SharedPtr velocity)
 {
   std::lock_guard<std::mutex> lock(velocity_mutex_);
@@ -124,6 +131,7 @@ void RegulatedNavigator::onSmoothedVelocity(const geometry_msgs::msg::Twist::Sha
   has_smoothed_velocity_ = true;
 }
 
+// 记录实际里程计速度，供上下游速度比较。
 void RegulatedNavigator::onVelocityOdometry(const nav_msgs::msg::Odometry::SharedPtr odometry)
 {
   std::lock_guard<std::mutex> lock(velocity_mutex_);
@@ -131,6 +139,7 @@ void RegulatedNavigator::onVelocityOdometry(const nav_msgs::msg::Odometry::Share
   has_velocity_odometry_ = true;
 }
 
+// 周期性汇总控制器、平滑器与里程计速度。
 void RegulatedNavigator::logVelocityChain()
 {
   if (!active_)

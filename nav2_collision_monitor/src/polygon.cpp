@@ -14,6 +14,7 @@
 
 #include "nav2_collision_monitor/polygon.hpp"
 
+#include <cmath>
 #include <exception>
 #include <utility>
 
@@ -277,26 +278,58 @@ bool Polygon::getParameters(std::string & polygon_pub_topic, std::string & footp
       footprint_topic.clear();
     }
 
-    // Leave it not initialized: the will cause an error if it will not set
-    nav2_util::declare_parameter_if_not_declared(node, polygon_name_ + ".points", rclcpp::PARAMETER_DOUBLE_ARRAY);
-    std::vector<double> poly_row = node->get_parameter(polygon_name_ + ".points").as_double_array();
-    // Check for points format correctness
-    if (poly_row.size() <= 6 || poly_row.size() % 2 != 0) {
-      RCLCPP_ERROR(logger_, "[%s]: Polygon has incorrect points description", polygon_name_.c_str());
-      return false;
-    }
-
-    // Obtain polygon vertices
-    Point point;
-    bool first = true;
-    for (double val : poly_row) {
-      if (first) {
-        point.x = val;
-      } else {
-        point.y = val;
-        poly_.push_back(point);
+    nav2_util::declare_parameter_if_not_declared(node, polygon_name_ + ".shape", rclcpp::ParameterValue("polygon"));
+    const std::string shape = node->get_parameter(polygon_name_ + ".shape").as_string();
+    if (shape == "box")
+    {
+      nav2_util::declare_parameter_if_not_declared(node, polygon_name_ + ".front_margin", rclcpp::ParameterValue(0.5));
+      nav2_util::declare_parameter_if_not_declared(node, polygon_name_ + ".back_margin", rclcpp::ParameterValue(0.5));
+      nav2_util::declare_parameter_if_not_declared(node, polygon_name_ + ".side_margin", rclcpp::ParameterValue(0.3));
+      nav2_util::declare_parameter_if_not_declared(node, "robot_half_length", rclcpp::ParameterValue(0.265));
+      nav2_util::declare_parameter_if_not_declared(node, "robot_half_width", rclcpp::ParameterValue(0.18));
+      const double half_length = node->get_parameter("robot_half_length").as_double();
+      const double half_width = node->get_parameter("robot_half_width").as_double();
+      const double front_margin = node->get_parameter(polygon_name_ + ".front_margin").as_double();
+      const double back_margin = node->get_parameter(polygon_name_ + ".back_margin").as_double();
+      const double side_margin = node->get_parameter(polygon_name_ + ".side_margin").as_double();
+      if (!std::isfinite(half_length) || !std::isfinite(half_width) || !std::isfinite(front_margin) || !std::isfinite(back_margin) || !std::isfinite(side_margin) || half_length <= 0.0 || half_width <= 0.0 || front_margin < 0.0 || back_margin < 0.0 || side_margin < 0.0)
+      {
+        RCLCPP_ERROR(logger_, "[%s]: Box dimensions and margins must be finite and nonnegative", polygon_name_.c_str());
+        return false;
       }
-      first = !first;
+      const double front = half_length + front_margin;
+      const double back = -(half_length + back_margin);
+      const double side = half_width + side_margin;
+      poly_ = {{front, side}, {front, -side}, {back, -side}, {back, side}};
+    }
+    else
+    {
+      // Leave it not initialized: the will cause an error if it will not set
+      nav2_util::declare_parameter_if_not_declared(node, polygon_name_ + ".points", rclcpp::PARAMETER_DOUBLE_ARRAY);
+      std::vector<double> poly_row = node->get_parameter(polygon_name_ + ".points").as_double_array();
+      // Check for points format correctness
+      if (poly_row.size() <= 6 || poly_row.size() % 2 != 0)
+      {
+        RCLCPP_ERROR(logger_, "[%s]: Polygon has incorrect points description", polygon_name_.c_str());
+        return false;
+      }
+
+      // Obtain polygon vertices
+      Point point;
+      bool first = true;
+      for (double val : poly_row)
+      {
+        if (first)
+        {
+          point.x = val;
+        }
+        else
+        {
+          point.y = val;
+          poly_.push_back(point);
+        }
+        first = !first;
+      }
     }
   } catch (const std::exception & ex) {
     RCLCPP_ERROR(logger_, "[%s]: Error while getting polygon parameters: %s", polygon_name_.c_str(), ex.what());

@@ -1,3 +1,5 @@
+// 底盘控制输入实现。负责订阅、指令合法性与超时校验、S 曲线输出及停车保护。
+
 #include "nav2_regulated_modules/chassis_control_subscriber.hpp"
 
 #include <algorithm>
@@ -13,6 +15,7 @@
 namespace nav2_regulated_modules
 {
 
+// 建立底盘控制订阅、输出发布器和定时器；参数决定指令超时与速度限幅。
 ChassisControlSubscriber::ChassisControlSubscriber(
     nav2_util::LifecycleNode & node,
     MotionStateSubscriber & motion_state_subscriber,
@@ -40,13 +43,12 @@ ChassisControlSubscriber::ChassisControlSubscriber(
     throw std::invalid_argument("ChassisControl 闭环参数非法");
   }
   const auto qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable();
-  subscription_ = node.create_subscription<byd_custom_msgs::msg::ChassisControl>(
-      config_.input_topic, qos,
+  subscription_ = node.create_subscription<byd_custom_msgs::msg::ChassisControl>(config_.input_topic, qos,
       std::bind(&ChassisControlSubscriber::onChassisControl, this, std::placeholders::_1));
-  publisher_ = node.create_publisher<byd_custom_msgs::msg::ControlRes>(
-      config_.output_topic, qos);
+  publisher_ = node.create_publisher<byd_custom_msgs::msg::ControlRes>(config_.output_topic, qos);
 }
 
+// 解析底盘控制消息并更新目标运动状态；无效输入不应绕过安全停车。
 void ChassisControlSubscriber::onChassisControl(const byd_custom_msgs::msg::ChassisControl::ConstSharedPtr message) {
   if (!active_) {
     LOG_WARN("忽略 Lifecycle 未激活时收到的 ChassisControl");
@@ -83,6 +85,7 @@ void ChassisControlSubscriber::onChassisControl(const byd_custom_msgs::msg::Chas
   LOG_DEBUG("收到 ChassisControl：op={}，linear_velocity={}，angular_velocity={}，acceleration={}", static_cast<unsigned int>(message->op), message->linear_velocity, message->angular_velocity, message->acceleration);
 }
 
+// 激活订阅和周期输出；重新进入运行态前清理旧指令。
 void ChassisControlSubscriber::activate() {
   motion_state_subscriber_.reset();
   {
@@ -95,6 +98,7 @@ void ChassisControlSubscriber::activate() {
   LOG_INFO("ChassisControl 事件驱动闭环已激活，output_topic={}", config_.output_topic);
 }
 
+// 停用控制输出并发布停车指令，防止旧目标继续生效。
 void ChassisControlSubscriber::deactivate() {
   std::lock_guard<std::mutex> lock(mutex_);
   active_ = false;
@@ -103,6 +107,7 @@ void ChassisControlSubscriber::deactivate() {
   LOG_INFO("ChassisControl 事件驱动闭环已停用");
 }
 
+// 清空控制或检查器历史状态，避免跨任务沿用上次进度。
 void ChassisControlSubscriber::reset() {
   std::lock_guard<std::mutex> lock(mutex_);
   active_ = false;
@@ -110,6 +115,7 @@ void ChassisControlSubscriber::reset() {
   motion_state_subscriber_.reset();
 }
 
+// 在互斥锁下处理超时、运动状态及加减速，再发布本周期控制值。
 void ChassisControlSubscriber::processControlCommand() {
   std::lock_guard<std::mutex> lock(mutex_);
   if (!active_) {return;}
@@ -169,12 +175,14 @@ void ChassisControlSubscriber::processControlCommand() {
   publishControl(linear_output, angular_output);
 }
 
+// 清除锁保护的控制目标与时间状态；调用方须已持有互斥锁。
 void ChassisControlSubscriber::clearControlStateLocked() {
   target_command_ = TargetCommand{};
   has_command_ = false;
   is_remote_control_ = false;
 }
 
+// 将限幅后的线角速度转换为底盘控制消息并发布。
 void ChassisControlSubscriber::publishControl(const double linear_velocity, const double angular_velocity) {
   byd_custom_msgs::msg::ControlRes output;
   output.v = linear_velocity;
@@ -184,8 +192,10 @@ void ChassisControlSubscriber::publishControl(const double linear_velocity, cons
   publisher_->publish(output);
 }
 
+// 通过统一发布路径输出零线速度和零角速度。
 void ChassisControlSubscriber::publishZero() { publishControl(0.0, 0.0); }
 
+// 校验控制参数的数值范围及话题设置；失败时拒绝进入运行态。
 bool ChassisControlSubscriber::validateConfig() const
 {
   // 话题名称不能为空

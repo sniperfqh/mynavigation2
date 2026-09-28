@@ -1,3 +1,5 @@
+# RViz 独立启动入口。根据命名空间和仿真时间装载可视化配置，不改变导航控制链。
+
 # Copyright (c) 2018 Intel Corporation
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -26,6 +28,7 @@ from launch_ros.actions import Node
 from nav2_common.launch import ReplaceString
 
 
+# 生成 RViz 启动描述；根据命名空间选择原配置或替换占位符后的配置。
 def generate_launch_description():
     # Get the launch directory
     bringup_dir = get_package_share_directory('nav2_regulated_modules')
@@ -53,6 +56,7 @@ def generate_launch_description():
         description='Full path to the RVIZ config file to use')
 
     # Launch rviz
+    # 无命名空间时直接启动 RViz，加载原配置文件。
     start_rviz_cmd = Node(
         condition=UnlessCondition(use_namespace),
         package='rviz2',
@@ -60,10 +64,12 @@ def generate_launch_description():
         arguments=['-d', rviz_config_file],
         output='screen')
 
+    # 把 RViz 配置中的机器人命名空间占位符替换为当前启动参数。
     namespaced_rviz_config_file = ReplaceString(
             source_file=rviz_config_file,
             replacements={'<robot_namespace>': ('/', namespace)})
 
+    # 启用命名空间时加载替换后的配置，并重映射 TF、地图与交互话题。
     start_namespaced_rviz_cmd = Node(
         condition=IfCondition(use_namespace),
         package='rviz2',
@@ -78,12 +84,14 @@ def generate_launch_description():
                     ('/clicked_point', 'clicked_point'),
                     ('/initialpose', 'initialpose')])
 
+    # 无命名空间的 RViz 进程退出后结束整个 Launch。
     exit_event_handler = RegisterEventHandler(
         condition=UnlessCondition(use_namespace),
         event_handler=OnProcessExit(
             target_action=start_rviz_cmd,
             on_exit=EmitEvent(event=Shutdown(reason='rviz exited'))))
 
+    # 有命名空间的 RViz 进程退出后结束整个 Launch。
     exit_event_handler_namespaced = RegisterEventHandler(
         condition=IfCondition(use_namespace),
         event_handler=OnProcessExit(

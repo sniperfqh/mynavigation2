@@ -14,6 +14,7 @@
 
 #include "nav2_collision_monitor/pointcloud.hpp"
 
+#include <cmath>
 #include <functional>
 
 #include "sensor_msgs/point_cloud2_iterator.hpp"
@@ -80,6 +81,7 @@ void PointCloud::getData(const rclcpp::Time & curr_time, std::vector<Point> & da
   sensor_msgs::PointCloud2ConstIterator<float> iter_z(*data_, "z");
 
   // Refill data array with PointCloud points in base frame
+  std::vector<Point> source_data;
   for (; iter_x != iter_x.end(); ++iter_x, ++iter_y, ++iter_z) {
     // Transform point coordinates from source frame -> to base frame
     tf2::Vector3 p_v3_s(*iter_x, *iter_y, *iter_z);
@@ -87,9 +89,45 @@ void PointCloud::getData(const rclcpp::Time & curr_time, std::vector<Point> & da
 
     // Refill data array
     if (p_v3_b.z() >= min_height_ && p_v3_b.z() <= max_height_) {
-      data.push_back({p_v3_b.x(), p_v3_b.y()});
+      source_data.push_back({p_v3_b.x(), p_v3_b.y()});
     }
   }
+  denoise(source_data);
+  data.insert(data.end(), source_data.begin(), source_data.end());
+}
+
+void PointCloud::denoise(std::vector<Point> & data) const
+{
+  if (data.empty() || noise_min_neighbors_ <= 0)
+  {
+    return;
+  }
+
+  const double radius_squared = noise_radius_ * noise_radius_;
+  std::vector<Point> kept;
+  kept.reserve(data.size());
+  for (size_t i = 0; i < data.size(); ++i)
+  {
+    int neighbors = 0;
+    for (size_t j = 0; j < data.size(); ++j)
+    {
+      if (i == j)
+      {
+        continue;
+      }
+      const double dx = data[i].x - data[j].x;
+      const double dy = data[i].y - data[j].y;
+      if (dx * dx + dy * dy <= radius_squared && ++neighbors >= noise_min_neighbors_)
+      {
+        break;
+      }
+    }
+    if (neighbors >= noise_min_neighbors_)
+    {
+      kept.push_back(data[i]);
+    }
+  }
+  data.swap(kept);
 }
 
 void PointCloud::getParameters(std::string & source_topic) {
@@ -104,6 +142,10 @@ void PointCloud::getParameters(std::string & source_topic) {
   min_height_ = node->get_parameter(source_name_ + ".min_height").as_double();
   nav2_util::declare_parameter_if_not_declared(node, source_name_ + ".max_height", rclcpp::ParameterValue(0.5));
   max_height_ = node->get_parameter(source_name_ + ".max_height").as_double();
+  nav2_util::declare_parameter_if_not_declared(node, source_name_ + ".noise_radius", rclcpp::ParameterValue(0.1));
+  noise_radius_ = node->get_parameter(source_name_ + ".noise_radius").as_double();
+  nav2_util::declare_parameter_if_not_declared(node, source_name_ + ".noise_min_neighbors", rclcpp::ParameterValue(2));
+  noise_min_neighbors_ = node->get_parameter(source_name_ + ".noise_min_neighbors").as_int();
 }
 
 void PointCloud::dataCallback(sensor_msgs::msg::PointCloud2::ConstSharedPtr msg) {

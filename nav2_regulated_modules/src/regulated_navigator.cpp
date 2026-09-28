@@ -1,3 +1,5 @@
+// 规控生命周期节点实现。初始化 ROS 接口、加载参数，并在生命周期转换时启停任务资源。
+
 #include "nav2_regulated_modules/regulated_navigator.hpp"
 
 #include <chrono>
@@ -11,6 +13,7 @@ using namespace std::chrono_literals;
 namespace nav2_regulated_modules
 {
 
+// 声明规控运行参数；真正的 ROS 实体在生命周期配置阶段建立。
 RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : nav2_util::LifecycleNode("regulated_navigator", "", options)
 {
   declare_parameter("global_frame", "map");
@@ -81,6 +84,7 @@ RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : na
   declare_parameter("chassis_angular_decel_jerk_max", 6.0);
 }
 
+// 读取并验证参数、创建 Action 客户端及 ROS 通信对象；失败则阻止节点激活。
 nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycle::State &)
 {
   global_frame_ = get_parameter("global_frame").as_string();
@@ -234,6 +238,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
+// 激活生命周期发布器及任务入口，允许外部请求进入。
 nav2_util::CallbackReturn RegulatedNavigator::on_activate(const rclcpp_lifecycle::State &)
 {
   if (fixed_path_pub_)
@@ -254,6 +259,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_activate(const rclcpp_lifecycle
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
+// 停止接收新任务、取消在途目标并输出零速。
 nav2_util::CallbackReturn RegulatedNavigator::on_deactivate(const rclcpp_lifecycle::State &)
 {
   active_ = false;
@@ -275,6 +281,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_deactivate(const rclcpp_lifecyc
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
+// 销毁配置阶段创建的接口与资源，恢复未配置状态。
 nav2_util::CallbackReturn RegulatedNavigator::on_cleanup(const rclcpp_lifecycle::State &)
 {
   cancelTask("节点清理");
@@ -316,6 +323,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_cleanup(const rclcpp_lifecycle:
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
+// 在 ROS 关闭前取消任务并执行安全停车。
 nav2_util::CallbackReturn RegulatedNavigator::on_shutdown(const rclcpp_lifecycle::State &)
 {
   if (chassis_control_subscriber_)

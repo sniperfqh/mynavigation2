@@ -185,7 +185,7 @@ public:
 
 protected:
   // Data sources creation routine
-  void createSources(const bool base_shift_correction = true);
+  void createSources(const bool base_shift_correction = true, const bool disable_noise = true);
 
   // Setting TF chains
   void sendTransforms(const rclcpp::Time & stamp);
@@ -227,10 +227,15 @@ Tester::~Tester() {
   tf_buffer_.reset();
 }
 
-void Tester::createSources(const bool base_shift_correction) {
+void Tester::createSources(const bool base_shift_correction, const bool disable_noise)
+{
   // Create Scan object
   test_node_->declare_parameter(std::string(SCAN_NAME) + ".topic", rclcpp::ParameterValue(SCAN_TOPIC));
   test_node_->set_parameter(rclcpp::Parameter(std::string(SCAN_NAME) + ".topic", SCAN_TOPIC));
+  if (disable_noise)
+  {
+    test_node_->declare_parameter(std::string(SCAN_NAME) + ".noise_min_neighbors", rclcpp::ParameterValue(0));
+  }
 
   scan_ = std::make_shared<ScanWrapper>(test_node_, SCAN_NAME, tf_buffer_, BASE_FRAME_ID, GLOBAL_FRAME_ID, TRANSFORM_TOLERANCE, DATA_TIMEOUT, base_shift_correction);
   scan_->configure();
@@ -242,6 +247,10 @@ void Tester::createSources(const bool base_shift_correction) {
   test_node_->set_parameter(rclcpp::Parameter(std::string(POINTCLOUD_NAME) + ".min_height", 0.1));
   test_node_->declare_parameter(std::string(POINTCLOUD_NAME) + ".max_height", rclcpp::ParameterValue(1.0));
   test_node_->set_parameter(rclcpp::Parameter(std::string(POINTCLOUD_NAME) + ".max_height", 1.0));
+  if (disable_noise)
+  {
+    test_node_->declare_parameter(std::string(POINTCLOUD_NAME) + ".noise_min_neighbors", rclcpp::ParameterValue(0));
+  }
 
   pointcloud_ = std::make_shared<PointCloudWrapper>(test_node_, POINTCLOUD_NAME, tf_buffer_, BASE_FRAME_ID, GLOBAL_FRAME_ID, TRANSFORM_TOLERANCE, DATA_TIMEOUT, base_shift_correction);
   pointcloud_->configure();
@@ -404,6 +413,33 @@ TEST_F(Tester, testGetData) {
   data.clear();
   range_->getData(curr_time, data);
   checkRange(data);
+}
+
+TEST_F(Tester, testDefaultDenoiseKeepsClustersAndPreviousSourceData)
+{
+  const rclcpp::Time curr_time = test_node_->now();
+  createSources(true, false);
+  EXPECT_EQ(test_node_->get_parameter(std::string(SCAN_NAME) + ".noise_min_neighbors").as_int(), 2);
+  EXPECT_EQ(test_node_->get_parameter(std::string(POINTCLOUD_NAME) + ".noise_min_neighbors").as_int(), 2);
+
+  std::vector<nav2_collision_monitor::Point> cluster{{0.0, 0.0}, {0.03, 0.0}, {0.0, 0.04}, {1.0, 1.0}};
+  scan_->denoise(cluster);
+  ASSERT_EQ(cluster.size(), 3u);
+  cluster = {{0.0, 0.0}, {0.03, 0.0}, {0.0, 0.04}, {1.0, 1.0}};
+  pointcloud_->denoise(cluster);
+  ASSERT_EQ(cluster.size(), 3u);
+
+  sendTransforms(curr_time);
+  test_node_->publishScan(curr_time, 1.0);
+  test_node_->publishPointCloud(curr_time);
+  ASSERT_TRUE(waitScan(500ms));
+  ASSERT_TRUE(waitPointCloud(500ms));
+  std::vector<nav2_collision_monitor::Point> data{{42.0, 42.0}};
+  scan_->getData(curr_time, data);
+  pointcloud_->getData(curr_time, data);
+  ASSERT_EQ(data.size(), 1u);
+  EXPECT_DOUBLE_EQ(data.front().x, 42.0);
+  EXPECT_DOUBLE_EQ(data.front().y, 42.0);
 }
 
 TEST_F(Tester, testGetOutdatedData) {

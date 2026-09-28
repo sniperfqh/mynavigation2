@@ -1,3 +1,5 @@
+// 固定路径目标检查器实现。结合机器人位置、停止速度和控制器终点锁存状态判断 FollowPath 完成。
+
 #include "nav2_regulated_modules/fixed_path_goal_checker.hpp"
 
 #include <cmath>
@@ -11,6 +13,7 @@
 namespace nav2_regulated_modules
 {
 
+// 读取目标位置、停车速度和稳定周期阈值，并绑定目标检查器运行上下文。
 void FixedPathGoalChecker::initialize(const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent, const std::string & plugin_name, const std::shared_ptr<nav2_costmap_2d::Costmap2DROS>)
 {
   auto node = parent.lock();
@@ -34,6 +37,7 @@ void FixedPathGoalChecker::initialize(const rclcpp_lifecycle::LifecycleNode::Wea
   LOG_INFO("固定路径位置 GoalChecker 配置完成，plugin={}，位置容差={:.4f}m，停止线速度={:.3f}m/s，停止角速度={:.3f}rad/s，位置稳定周期={}", plugin_name_, xy_goal_tolerance_, trans_stopped_velocity_, rot_stopped_velocity_, position_stable_cycles_);
 }
 
+// 清空控制或检查器历史状态，避免跨任务沿用上次进度。
 void FixedPathGoalChecker::reset()
 {
   path_ = nav_msgs::msg::Path();
@@ -45,6 +49,7 @@ void FixedPathGoalChecker::reset()
   stopped_cycles_ = 0;
 }
 
+// 装入新路径终点并重置到点稳定计数，防止旧路径状态延续。
 void FixedPathGoalChecker::setPath(const nav_msgs::msg::Path & path)
 {
   if (path.poses.size() < 2)
@@ -79,6 +84,7 @@ void FixedPathGoalChecker::setPath(const nav_msgs::msg::Path & path)
   stopped_cycles_ = 0;
 }
 
+// 判断机器人是否到达终点位置容差或越过末段终点平面。
 bool FixedPathGoalChecker::isTerminalPositionReached(const geometry_msgs::msg::Pose & query_pose)
 {
   if (!path_valid_)
@@ -98,6 +104,7 @@ bool FixedPathGoalChecker::isTerminalPositionReached(const geometry_msgs::msg::P
   return terminal_reached_;
 }
 
+// 综合位置与停车状态判断固定路径是否完成。
 bool FixedPathGoalChecker::isGoalReached(const geometry_msgs::msg::Pose & query_pose, const geometry_msgs::msg::Pose &, const geometry_msgs::msg::Twist & velocity)
 {
   isTerminalPositionReached(query_pose);
@@ -117,6 +124,7 @@ bool FixedPathGoalChecker::isGoalReached(const geometry_msgs::msg::Pose & query_
   return stopped_cycles_ >= position_stable_cycles_;
 }
 
+// 向 Nav2 目标检查接口提供当前距离、速度容差。
 bool FixedPathGoalChecker::getTolerances(geometry_msgs::msg::Pose & pose_tolerance, geometry_msgs::msg::Twist & velocity_tolerance)
 {
   const double invalid_field = std::numeric_limits<double>::lowest();
@@ -136,6 +144,7 @@ bool FixedPathGoalChecker::getTolerances(geometry_msgs::msg::Pose & pose_toleran
   return true;
 }
 
+// 从当前路径搜索区间选出距机器人最近的轨迹点索引。
 std::size_t FixedPathGoalChecker::findNearestIndex(const geometry_msgs::msg::Pose & query_pose) const
 {
   std::size_t best_index = 0;

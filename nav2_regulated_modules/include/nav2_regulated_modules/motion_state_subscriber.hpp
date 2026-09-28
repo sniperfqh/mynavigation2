@@ -1,3 +1,5 @@
+// 底盘运动状态订阅接口。将下游状态缓存并提供超时判定，供控制指令安全处理使用。
+
 #ifndef NAV2_REGULATED_MODULES__MOTION_STATE_SUBSCRIBER_HPP_
 #define NAV2_REGULATED_MODULES__MOTION_STATE_SUBSCRIBER_HPP_
 
@@ -22,11 +24,15 @@ struct MotionStateSnapshot
 class MotionStateSubscriber
 {
   public:
+  // 创建底盘运动反馈订阅。
   explicit MotionStateSubscriber(nav2_util::LifecycleNode & node);
+  // 返回最近一次底盘运动状态及采样时间，供超时判断。
   MotionStateSnapshot latestState() const;
+  // 清除缓存的底盘运动状态及采样时间。
   void reset();
 
 private:
+  // 缓存最新底盘运动反馈；后续读取需检查消息是否过期。
   void onMotionState(const byd_custom_msgs::msg::MotionState::ConstSharedPtr message);
 
   mutable std::mutex mutex_;

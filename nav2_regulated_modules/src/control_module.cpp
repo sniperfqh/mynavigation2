@@ -1,3 +1,5 @@
+// 控制模块参数实现。维护跟踪插件选择和进度超时，供任务切换时读取。
+
 #include "nav2_regulated_modules/control_module.hpp"
 
 #include <stdexcept>
@@ -6,6 +8,7 @@
 namespace nav2_regulated_modules
 {
 
+// 保存控制器、目标检查器标识和进度超时；本模块不创建 ROS 实体。
 void ControlModule::configure(std::string controller_id, std::string goal_checker_id, const double progress_timeout)
 {
   if (progress_timeout <= 0.0)
@@ -17,16 +20,19 @@ void ControlModule::configure(std::string controller_id, std::string goal_checke
   progress_timeout_ = progress_timeout;
 }
 
+// 返回当前控制器插件标识。
 const std::string & ControlModule::controllerId() const
 {
   return controller_id_;
 }
 
+// 返回当前目标检查器插件标识。
 const std::string & ControlModule::goalCheckerId() const
 {
   return goal_checker_id_;
 }
 
+// 返回当前模式下无进展超时阈值，单位秒。
 double ControlModule::progressTimeout() const
 {
   return progress_timeout_;
