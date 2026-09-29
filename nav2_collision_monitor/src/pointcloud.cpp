@@ -14,8 +14,14 @@
 
 #include "nav2_collision_monitor/pointcloud.hpp"
 
-#include <cmath>
 #include <functional>
+
+#ifndef PCL_NO_PREDEFINED
+#define PCL_NO_PREDEFINED
+#endif
+#include <pcl/filters/radius_outlier_removal.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
 
 #include "sensor_msgs/point_cloud2_iterator.hpp"
 
@@ -81,7 +87,6 @@ void PointCloud::getData(const rclcpp::Time & curr_time, std::vector<Point> & da
   sensor_msgs::PointCloud2ConstIterator<float> iter_z(*data_, "z");
 
   // Refill data array with PointCloud points in base frame
-  std::vector<Point> source_data;
   for (; iter_x != iter_x.end(); ++iter_x, ++iter_y, ++iter_z) {
     // Transform point coordinates from source frame -> to base frame
     tf2::Vector3 p_v3_s(*iter_x, *iter_y, *iter_z);
@@ -89,11 +94,11 @@ void PointCloud::getData(const rclcpp::Time & curr_time, std::vector<Point> & da
 
     // Refill data array
     if (p_v3_b.z() >= min_height_ && p_v3_b.z() <= max_height_) {
-      source_data.push_back({p_v3_b.x(), p_v3_b.y()});
+      data.push_back({p_v3_b.x(), p_v3_b.y()});
     }
   }
-  denoise(source_data);
-  data.insert(data.end(), source_data.begin(), source_data.end());
+  // 与外部实现一致：点云与此前来源的碰撞点一并进行半径过滤。
+  denoise(data);
 }
 
 void PointCloud::denoise(std::vector<Point> & data) const
@@ -103,31 +108,30 @@ void PointCloud::denoise(std::vector<Point> & data) const
     return;
   }
 
-  const double radius_squared = noise_radius_ * noise_radius_;
-  std::vector<Point> kept;
-  kept.reserve(data.size());
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
+  cloud->resize(data.size());
   for (size_t i = 0; i < data.size(); ++i)
   {
-    int neighbors = 0;
-    for (size_t j = 0; j < data.size(); ++j)
-    {
-      if (i == j)
-      {
-        continue;
-      }
-      const double dx = data[i].x - data[j].x;
-      const double dy = data[i].y - data[j].y;
-      if (dx * dx + dy * dy <= radius_squared && ++neighbors >= noise_min_neighbors_)
-      {
-        break;
-      }
-    }
-    if (neighbors >= noise_min_neighbors_)
-    {
-      kept.push_back(data[i]);
-    }
+    (*cloud)[i].x = static_cast<float>(data[i].x);
+    (*cloud)[i].y = static_cast<float>(data[i].y);
+    (*cloud)[i].z = 0.0f;
   }
-  data.swap(kept);
+  cloud->is_dense = true;
+
+  pcl::RadiusOutlierRemoval<pcl::PointXYZ> ror;
+  ror.setInputCloud(cloud);
+  ror.setRadiusSearch(noise_radius_);
+  ror.setMinNeighborsInRadius(noise_min_neighbors_);
+  ror.setNegative(false);
+
+  pcl::PointCloud<pcl::PointXYZ> filtered;
+  ror.filter(filtered);
+  data.clear();
+  data.reserve(filtered.size());
+  for (const auto & point : filtered.points)
+  {
+    data.push_back({point.x, point.y});
+  }
 }
 
 void PointCloud::getParameters(std::string & source_topic) {

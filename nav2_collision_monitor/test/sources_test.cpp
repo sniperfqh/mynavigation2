@@ -415,7 +415,7 @@ TEST_F(Tester, testGetData) {
   checkRange(data);
 }
 
-TEST_F(Tester, testDefaultDenoiseKeepsClustersAndPreviousSourceData)
+TEST_F(Tester, testDefaultDenoiseKeepsClustersAndFiltersAccumulatedOutliers)
 {
   const rclcpp::Time curr_time = test_node_->now();
   createSources(true, false);
@@ -436,10 +436,10 @@ TEST_F(Tester, testDefaultDenoiseKeepsClustersAndPreviousSourceData)
   ASSERT_TRUE(waitPointCloud(500ms));
   std::vector<nav2_collision_monitor::Point> data{{42.0, 42.0}};
   scan_->getData(curr_time, data);
+  // 外部实现会对包含已有来源点的汇总数据去噪，先前的孤立点也会被移除。
+  EXPECT_TRUE(data.empty());
   pointcloud_->getData(curr_time, data);
-  ASSERT_EQ(data.size(), 1u);
-  EXPECT_DOUBLE_EQ(data.front().x, 42.0);
-  EXPECT_DOUBLE_EQ(data.front().y, 42.0);
+  EXPECT_TRUE(data.empty());
 }
 
 TEST_F(Tester, testGetOutdatedData) {

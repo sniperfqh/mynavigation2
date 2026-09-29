@@ -15,6 +15,7 @@ find_package(nav2_common REQUIRED)
 find_package(nav2_util REQUIRED)
 find_package(nav2_costmap_2d REQUIRED)
 find_package(nav2_msgs REQUIRED)
+find_package(PCL REQUIRED COMPONENTS common filters)
 
 ### Header ###
 
@@ -52,6 +53,8 @@ add_library(${library_name} SHARED
   src/range.cpp
   src/kinematics.cpp
 )
+target_link_libraries(${library_name} ${PCL_LIBRARIES})
+target_include_directories(${library_name} PUBLIC ${PCL_INCLUDE_DIRS})
 
 add_executable(${executable_name}
   src/main.cpp

@@ -17,6 +17,13 @@
 #include <cmath>
 #include <functional>
 
+#ifndef PCL_NO_PREDEFINED
+#define PCL_NO_PREDEFINED
+#endif
+#include <pcl/filters/radius_outlier_removal.h>
+#include <pcl/point_cloud.h>
+#include <pcl/point_types.h>
+
 #include "nav2_util/node_utils.hpp"
 
 namespace nav2_collision_monitor
@@ -80,7 +87,6 @@ void Scan::getData(const rclcpp::Time & curr_time, std::vector<Point> & data) co
   }
 
   // Calculate poses and refill data array
-  std::vector<Point> source_data;
   float angle = data_->angle_min;
   for (size_t i = 0; i < data_->ranges.size(); i++) {
     if (data_->ranges[i] >= data_->range_min && data_->ranges[i] <= data_->range_max) {
@@ -89,12 +95,12 @@ void Scan::getData(const rclcpp::Time & curr_time, std::vector<Point> & data) co
       tf2::Vector3 p_v3_b = tf_transform * p_v3_s;
 
       // Refill data array
-      source_data.push_back({p_v3_b.x(), p_v3_b.y()});
+      data.push_back({p_v3_b.x(), p_v3_b.y()});
     }
     angle += data_->angle_increment;
   }
-  denoise(source_data);
-  data.insert(data.end(), source_data.begin(), source_data.end());
+  // 与外部实现一致：对已经汇总的碰撞点执行半径离群点去除。
+  denoise(data);
 }
 
 void Scan::denoise(std::vector<Point> & data) const
@@ -104,31 +110,30 @@ void Scan::denoise(std::vector<Point> & data) const
     return;
   }
 
-  const double radius_squared = noise_radius_ * noise_radius_;
-  std::vector<Point> kept;
-  kept.reserve(data.size());
+  pcl::PointCloud<pcl::PointXYZ>::Ptr cloud(new pcl::PointCloud<pcl::PointXYZ>);
+  cloud->resize(data.size());
   for (size_t i = 0; i < data.size(); ++i)
   {
-    int neighbors = 0;
-    for (size_t j = 0; j < data.size(); ++j)
-    {
-      if (i == j)
-      {
-        continue;
-      }
-      const double dx = data[i].x - data[j].x;
-      const double dy = data[i].y - data[j].y;
-      if (dx * dx + dy * dy <= radius_squared && ++neighbors >= noise_min_neighbors_)
-      {
-        break;
-      }
-    }
-    if (neighbors >= noise_min_neighbors_)
-    {
-      kept.push_back(data[i]);
-    }
+    (*cloud)[i].x = static_cast<float>(data[i].x);
+    (*cloud)[i].y = static_cast<float>(data[i].y);
+    (*cloud)[i].z = 0.0f;
   }
-  data.swap(kept);
+  cloud->is_dense = true;
+
+  pcl::RadiusOutlierRemoval<pcl::PointXYZ> ror;
+  ror.setInputCloud(cloud);
+  ror.setRadiusSearch(noise_radius_);
+  ror.setMinNeighborsInRadius(noise_min_neighbors_);
+  ror.setNegative(false);
+
+  pcl::PointCloud<pcl::PointXYZ> filtered;
+  ror.filter(filtered);
+  data.clear();
+  data.reserve(filtered.size());
+  for (const auto & point : filtered.points)
+  {
+    data.push_back({point.x, point.y});
+  }
 }
 
 void Scan::dataCallback(sensor_msgs::msg::LaserScan::ConstSharedPtr msg) {

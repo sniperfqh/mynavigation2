@@ -140,10 +140,10 @@ def generate_launch_description():
         default_value='true',
         description='Whether to start Collision Monitor and insert it into the velocity chain')
 
-    # 按需启动碰撞区域 Marker 可视化。
+    # 默认启动碰撞区域 Marker 可视化，仍可通过启动参数关闭。
     declare_use_collision_visualization_cmd = DeclareLaunchArgument(
         'use_collision_visualization',
-        default_value='false',
+        default_value='true',
         description='Whether to start the Collision Monitor boundary visualizer')
 
     # 控制 Lifecycle Manager 是否自动激活受管节点。
