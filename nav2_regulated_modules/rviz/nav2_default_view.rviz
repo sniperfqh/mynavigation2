@@ -186,6 +186,7 @@ Visualization Manager:
     #       Value: true
     #   Enabled: true
     #   Name: Collision Monitor Boundaries
+    # ooii 碰撞框可视化：订阅 visualizer 发出的 MarkerArray
     - Class: rviz_default_plugins/MarkerArray
       Enabled: true
       Name: Collision Monitor Boundaries

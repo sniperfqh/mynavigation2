@@ -927,6 +927,7 @@ collision_monitor:
     base_shift_correction: true
     stop_pub_timeout: 2.0
     polygons: ["PolygonSlowL1", "PolygonSlowL2", "PolygonStopL3"]
+    #ooii 矩形模式：写留白，代码自动加车体半尺寸算四角（不用手算坐标）
     robot_half_length: 0.265
     robot_half_width: 0.18
 

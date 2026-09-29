@@ -22,6 +22,16 @@
 #include "sensor_msgs/msg/laser_scan.hpp"
 #include "nav2_util/robot_utils.hpp"
 
+// ooii 去噪：PCL RadiusOutlierRemoval
+// 必须在 include PCL 之前定义，避免 PCL 预定义的 min/max 宏
+// 与 <algorithm> / sensor_msgs 头文件冲突
+#ifndef PCL_NO_PREDEFINED
+#define PCL_NO_PREDEFINED
+#endif
+#include <pcl/point_types.h>
+#include <pcl/point_cloud.h>
+#include <pcl/filters/radius_outlier_removal.h>
+
 #include "nav2_collision_monitor/source.hpp"
 
 namespace nav2_collision_monitor
@@ -64,6 +74,8 @@ public:
    * Added data is transformed to base_frame_id_ coordinate system at curr_time.
    */
   void getData(const rclcpp::Time & curr_time, std::vector<Point> & data) const;
+
+  //ooii 去噪：删除周围邻居太少的孤立点
   void denoise(std::vector<Point> & data) const;
 
 protected:
@@ -80,7 +92,10 @@ protected:
 
   /// @brief Latest data obtained from laser scanner
   sensor_msgs::msg::LaserScan::ConstSharedPtr data_;
+  //ooii 去噪参数
+  /// @brief 去噪半径（m）
   double noise_radius_ { 0.1 };
+  /// @brief 保留点所需的最小邻居数
   int noise_min_neighbors_ { 2 };
 };  // class Scan
 

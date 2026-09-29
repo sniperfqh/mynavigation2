@@ -137,13 +137,13 @@ def generate_launch_description():
     # 决定是否让速度经过 Collision Monitor；同时影响速度话题路由。
     declare_use_collision_monitor_cmd = DeclareLaunchArgument(
         'use_collision_monitor',
-        default_value='true',
+        default_value='true',#'false', #ooii
         description='Whether to start Collision Monitor and insert it into the velocity chain')
 
     # 默认启动碰撞区域 Marker 可视化，仍可通过启动参数关闭。
     declare_use_collision_visualization_cmd = DeclareLaunchArgument(
         'use_collision_visualization',
-        default_value='true',
+        default_value='true',#'false', #ooii
         description='Whether to start the Collision Monitor boundary visualizer')
 
     # 控制 Lifecycle Manager 是否自动激活受管节点。
@@ -474,7 +474,8 @@ def generate_launch_description():
         parameters=[{'input_topic': '/cmd_vel'},
                     {'output_topic': '/control_to_uart'}])
 
-    # 边界可视化只在显式启用时启动，订阅实车 Approach 与仿真新增 L1 区域。
+    ## ooii
+    # 外部可视化按话题动态分配 Marker；默认订阅 Stop、Slowdown 和 L1。
     collision_boundary_visualizer_cmd = Node(
         condition=IfCondition(use_collision_visualization),
         package='nav2_regulated_modules',
@@ -484,7 +485,6 @@ def generate_launch_description():
         parameters=[{'polygon_topics': [
             'collision_stop_zone',
             'collision_slowdown_zone',
-            'collision_approach_footprint',
             'collision_slowdown_l1',
         ]}])
 

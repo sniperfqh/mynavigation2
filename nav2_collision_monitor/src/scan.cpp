@@ -17,6 +17,8 @@
 #include <cmath>
 #include <functional>
 
+// ooii 去噪：放在 nav2_util 头文件之前，并禁用 PCL 的 min/max 预定义宏，
+// 避免与 <algorithm> / sensor_msgs 冲突
 #ifndef PCL_NO_PREDEFINED
 #define PCL_NO_PREDEFINED
 #endif
@@ -24,6 +26,7 @@
 #include <pcl/point_cloud.h>
 #include <pcl/point_types.h>
 
+//ooii 去噪参数读取需要
 #include "nav2_util/node_utils.hpp"
 
 namespace nav2_collision_monitor
@@ -49,6 +52,7 @@ void Scan::configure() {
 
   // Laser scanner has no own parameters
   getCommonParameters(source_topic);
+  //ooii 去噪参数
   nav2_util::declare_parameter_if_not_declared(node, source_name_ + ".noise_radius", rclcpp::ParameterValue(0.1));
   noise_radius_ = node->get_parameter(source_name_ + ".noise_radius").as_double();
   nav2_util::declare_parameter_if_not_declared(node, source_name_ + ".noise_min_neighbors", rclcpp::ParameterValue(2));
@@ -99,10 +103,12 @@ void Scan::getData(const rclcpp::Time & curr_time, std::vector<Point> & data) co
     }
     angle += data_->angle_increment;
   }
+  //ooii 去噪
   // 与外部实现一致：对已经汇总的碰撞点执行半径离群点去除。
   denoise(data);
 }
 
+//ooii 去噪：删除周围邻居太少的孤立点
 void Scan::denoise(std::vector<Point> & data) const
 {
   if (data.empty() || noise_min_neighbors_ <= 0)

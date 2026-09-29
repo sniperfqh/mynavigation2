@@ -16,6 +16,8 @@
 
 #include <functional>
 
+// ooii 去噪：放在 sensor_msgs 头文件之前，并禁用 PCL 的 min/max 预定义宏，
+// 避免与 <algorithm> / sensor_msgs 冲突
 #ifndef PCL_NO_PREDEFINED
 #define PCL_NO_PREDEFINED
 #endif
@@ -97,10 +99,12 @@ void PointCloud::getData(const rclcpp::Time & curr_time, std::vector<Point> & da
       data.push_back({p_v3_b.x(), p_v3_b.y()});
     }
   }
+  //ooii
   // 与外部实现一致：点云与此前来源的碰撞点一并进行半径过滤。
   denoise(data);
 }
 
+// ooii
 void PointCloud::denoise(std::vector<Point> & data) const
 {
   if (data.empty() || noise_min_neighbors_ <= 0)
@@ -146,6 +150,7 @@ void PointCloud::getParameters(std::string & source_topic) {
   min_height_ = node->get_parameter(source_name_ + ".min_height").as_double();
   nav2_util::declare_parameter_if_not_declared(node, source_name_ + ".max_height", rclcpp::ParameterValue(0.5));
   max_height_ = node->get_parameter(source_name_ + ".max_height").as_double();
+  //ooii 去噪
   nav2_util::declare_parameter_if_not_declared(node, source_name_ + ".noise_radius", rclcpp::ParameterValue(0.1));
   noise_radius_ = node->get_parameter(source_name_ + ".noise_radius").as_double();
   nav2_util::declare_parameter_if_not_declared(node, source_name_ + ".noise_min_neighbors", rclcpp::ParameterValue(2));

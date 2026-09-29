@@ -15,6 +15,7 @@ find_package(nav2_common REQUIRED)
 find_package(nav2_util REQUIRED)
 find_package(nav2_costmap_2d REQUIRED)
 find_package(nav2_msgs REQUIRED)
+# ooii 去噪：PCL( RadiusOutlierRemoval 在 filters 模块)
 find_package(PCL REQUIRED COMPONENTS common filters)
 
 ### Header ###
@@ -53,6 +54,7 @@ add_library(${library_name} SHARED
   src/range.cpp
   src/kinematics.cpp
 )
+# ooii 去噪：链接 PCL(库 + 头文件路径)
 target_link_libraries(${library_name} ${PCL_LIBRARIES})
 target_include_directories(${library_name} PUBLIC ${PCL_INCLUDE_DIRS})
 

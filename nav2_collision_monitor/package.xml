@@ -21,6 +21,7 @@
   <depend>nav2_util</depend>
   <depend>nav2_costmap_2d</depend>
 
+  <!-- ooii 去噪：PCL RadiusOutlierRemoval -->
   <build_depend>libpcl-all-dev</build_depend>
   <exec_depend>libpcl-all</exec_depend>
 
