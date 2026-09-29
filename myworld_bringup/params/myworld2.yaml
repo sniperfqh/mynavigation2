@@ -364,6 +364,7 @@ controller_server:
       max_angular_accel: 3.2
       max_robot_pose_search_dist: 3.0
       use_interpolation: true
+      max_start_distance: 1.2
 
     FixedPathController:
       plugin: "nav2_regulated_modules::FixedPathController"
@@ -372,7 +373,7 @@ controller_server:
       min_lookahead_dist: 0.25
       max_lookahead_dist: 0.75
       lookahead_time: 1.5
-      start_position_tolerance: 0.70
+      start_position_tolerance: 1.20
       direct_tracking_lateral_tolerance: 0.20
       direct_tracking_max_yaw_error: 0.2617993877991494
       initial_yaw_tolerance: 0.12217304763960307

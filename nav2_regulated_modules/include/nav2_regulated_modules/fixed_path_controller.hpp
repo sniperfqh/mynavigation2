@@ -105,7 +105,7 @@ private:
   double min_lookahead_dist_ { 0.25 };
   double max_lookahead_dist_ { 0.75 };
   double lookahead_time_ { 1.5 };
-  double start_position_tolerance_ { 0.70 };
+  double start_position_tolerance_ { 1.20 };
   double direct_tracking_lateral_tolerance_ { 0.20 };
   double direct_tracking_max_yaw_error_ { 0.2617993877991494 };
   double initial_yaw_tolerance_ { 0.12217304763960307 };

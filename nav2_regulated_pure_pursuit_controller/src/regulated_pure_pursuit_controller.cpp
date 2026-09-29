@@ -62,7 +62,7 @@ void RegulatedPurePursuitController::configure(const rclcpp_lifecycle::Lifecycle
   declare_parameter_if_not_declared(node, plugin_name_ + ".lookahead_dist", rclcpp::ParameterValue(0.6));
   declare_parameter_if_not_declared(node, plugin_name_ + ".min_lookahead_dist", rclcpp::ParameterValue(0.3));
   declare_parameter_if_not_declared(node, plugin_name_ + ".max_lookahead_dist", rclcpp::ParameterValue(0.9));
-  declare_parameter_if_not_declared(node, plugin_name_ + ".max_start_distance", rclcpp::ParameterValue(1.0));
+  declare_parameter_if_not_declared(node, plugin_name_ + ".max_start_distance", rclcpp::ParameterValue(1.2));
   declare_parameter_if_not_declared(node, plugin_name_ + ".max_horizontal_error", rclcpp::ParameterValue(0.5));
   declare_parameter_if_not_declared(node, plugin_name_ + ".lookahead_time", rclcpp::ParameterValue(1.5));
   declare_parameter_if_not_declared(node, plugin_name_ + ".rotate_to_heading_angular_vel", rclcpp::ParameterValue(1.8));

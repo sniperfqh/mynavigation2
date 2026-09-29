@@ -40,7 +40,7 @@ void FixedPathController::configure(const rclcpp_lifecycle::LifecycleNode::WeakP
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".min_lookahead_dist", rclcpp::ParameterValue(0.25));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".max_lookahead_dist", rclcpp::ParameterValue(0.75));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".lookahead_time", rclcpp::ParameterValue(1.5));
-  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".start_position_tolerance", rclcpp::ParameterValue(0.70));
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".start_position_tolerance", rclcpp::ParameterValue(1.20));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".direct_tracking_lateral_tolerance", rclcpp::ParameterValue(0.20));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".direct_tracking_max_yaw_error", rclcpp::ParameterValue(0.2617993877991494));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".initial_yaw_tolerance", rclcpp::ParameterValue(0.12217304763960307));

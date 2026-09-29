@@ -504,9 +504,9 @@ controller_server:
       max_robot_pose_search_dist: 3.0
       # 是否对轨迹前视点插值。
       use_interpolation: true
-      # 固定路径起点允许的最大距离，单位米。
-      max_start_distance: 1.0
-      # 固定路径允许的横向误差，单位米。
+      # RPP 通用导航起点允许的最大距离，单位米。
+      max_start_distance: 1.2
+      # RPP 通用导航跟踪允许的横向误差，单位米。
       max_horizontal_error: 0.5
 
     # 固定路径专用控制器。
@@ -524,7 +524,7 @@ controller_server:
       # 速度缩放前视的时间系数，单位秒。
       lookahead_time: 1.5
       # 固定路径起点位置容差，单位米。
-      start_position_tolerance: 0.70
+      start_position_tolerance: 1.20
       # 允许直接跟踪的起点横向误差，单位米。
       direct_tracking_lateral_tolerance: 0.20
       # 允许直接跟踪的起点航向误差，单位弧度。
