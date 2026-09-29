@@ -527,10 +527,16 @@ controller_server:
       start_position_tolerance: 1.20
       # 允许直接跟踪的起点横向误差，单位米。
       direct_tracking_lateral_tolerance: 0.20
+      # 首次起点横向偏差超过上述阈值时的纵向速度指令上限，单位米每秒。
+      start_offset_speed_limit: 0.30
+      # 当前最近路径段的运动方向航向误差需不超过 20 度，才能解除起步限速。
+      start_speed_release_yaw_tolerance: 0.3490658503988659
+      # 横向及航向误差连续达标的控制周期数；解除后本条路径不再重新限速。
+      start_speed_release_stable_cycles: 5
       # 允许直接跟踪的起点航向误差，单位弧度。
       direct_tracking_max_yaw_error: 0.2617993877991494
-      # 严格起点对齐的航向容差，单位弧度。
-      initial_yaw_tolerance: 0.12217304763960307
+      # 大横向偏差时结束原地对齐的航向容差，3 度，单位弧度。
+      initial_yaw_tolerance: 0.05235987755982989
       # 原地对齐角速度，单位弧度每秒。
       rotate_to_heading_angular_vel: 0.4
       # 角加速度上限，单位弧度每二次方秒。
@@ -573,8 +579,8 @@ controller_server:
       goal_terminal_lookahead_max_dist: 0.25
       # 终点误差诊断输出频率，单位 Hz。
       goal_error_log_frequency: 1.0
-      # 起点对齐需连续达标的周期数。
-      alignment_stable_cycles: 5
+      # 起点航向连续达标的周期数；1 表示进入 3 度容差的同一控制周期开始跟踪。
+      alignment_stable_cycles: 1
       # 允许的 TF 时间误差，单位秒。
       transform_tolerance: 0.2
 

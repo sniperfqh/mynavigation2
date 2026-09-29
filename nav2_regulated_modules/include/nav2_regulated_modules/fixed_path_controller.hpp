@@ -7,9 +7,11 @@
 #include <memory>
 #include <mutex>
 #include <string>
+#include <vector>
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "geometry_msgs/msg/twist_stamped.hpp"
+#include "nav2_regulated_modules/detail/fixed_path_start_speed_guard.hpp"
 #include "nav2_core/controller.hpp"
 #include "nav2_core/terminal_aware_controller.hpp"
 #include "nav2_costmap_2d/costmap_2d_ros.hpp"
@@ -84,6 +86,8 @@ private:
   rclcpp::Clock::SharedPtr clock_;
   std::string plugin_name_;
   nav_msgs::msg::Path global_plan_;
+  std::vector<detail::StartPathPoint> start_path_points_;
+  detail::FixedPathStartSpeedGuard start_speed_guard_;
   std::mutex mutex_;
   Phase phase_ { Phase::ALIGN_START };
   std::size_t nearest_index_ { 0 };
@@ -107,8 +111,11 @@ private:
   double lookahead_time_ { 1.5 };
   double start_position_tolerance_ { 1.20 };
   double direct_tracking_lateral_tolerance_ { 0.20 };
+  double start_offset_speed_limit_ = 0.30;
+  double start_speed_release_yaw_tolerance_ = 0.3490658503988659;
+  int start_speed_release_stable_cycles_ = 5;
   double direct_tracking_max_yaw_error_ { 0.2617993877991494 };
-  double initial_yaw_tolerance_ { 0.12217304763960307 };
+  double initial_yaw_tolerance_ { 0.05235987755982989 };
   double rotate_to_heading_angular_vel_ { 0.4 };
   double max_angular_accel_ { 0.8 };
   double rotate_to_heading_kp_ { 1.5 };
@@ -137,7 +144,7 @@ private:
   double goal_error_log_frequency_ { 1.0 };
   double transform_tolerance_ { 0.2 };
   double control_duration_ { 0.02 };
-  int alignment_stable_cycles_ { 5 };
+  int alignment_stable_cycles_ { 1 };
   rclcpp::Time last_error_log_time_ { 0, 0, RCL_ROS_TIME };
   bool error_log_initialized_ { false };
 };

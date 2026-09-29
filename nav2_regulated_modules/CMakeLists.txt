@@ -96,4 +96,12 @@ ament_export_include_directories(include)
 ament_export_libraries(nav2_regulated_modules_fixed_path_controller)
 ament_export_dependencies(nav2_core nav2_costmap_2d pluginlib)
 
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(fixed_path_start_speed_guard_test test/fixed_path_start_speed_guard_test.cpp)
+  target_include_directories(fixed_path_start_speed_guard_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_compile_features(fixed_path_start_speed_guard_test PRIVATE cxx_std_17)
+  add_test(NAME fixed_path_start_speed_guard_test COMMAND fixed_path_start_speed_guard_test)
+endif()
+
 ament_package()

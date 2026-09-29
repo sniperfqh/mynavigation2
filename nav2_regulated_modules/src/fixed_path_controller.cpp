@@ -42,8 +42,11 @@ void FixedPathController::configure(const rclcpp_lifecycle::LifecycleNode::WeakP
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".lookahead_time", rclcpp::ParameterValue(1.5));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".start_position_tolerance", rclcpp::ParameterValue(1.20));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".direct_tracking_lateral_tolerance", rclcpp::ParameterValue(0.20));
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".start_offset_speed_limit", rclcpp::ParameterValue(0.30));
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".start_speed_release_yaw_tolerance", rclcpp::ParameterValue(0.3490658503988659));
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".start_speed_release_stable_cycles", rclcpp::ParameterValue(5));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".direct_tracking_max_yaw_error", rclcpp::ParameterValue(0.2617993877991494));
-  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".initial_yaw_tolerance", rclcpp::ParameterValue(0.12217304763960307));
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".initial_yaw_tolerance", rclcpp::ParameterValue(0.05235987755982989));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".rotate_to_heading_angular_vel", rclcpp::ParameterValue(0.4));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".max_angular_accel", rclcpp::ParameterValue(0.8));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".rotate_to_heading_kp", rclcpp::ParameterValue(1.5));
@@ -65,7 +68,7 @@ void FixedPathController::configure(const rclcpp_lifecycle::LifecycleNode::WeakP
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_terminal_lookahead_min_dist", rclcpp::ParameterValue(0.15));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_terminal_lookahead_max_dist", rclcpp::ParameterValue(0.25));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_error_log_frequency", rclcpp::ParameterValue(1.0));
-  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".alignment_stable_cycles", rclcpp::ParameterValue(5));
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".alignment_stable_cycles", rclcpp::ParameterValue(1));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".transform_tolerance", rclcpp::ParameterValue(0.2));
   double controller_frequency = 50.0;
   node->get_parameter(plugin_name_ + ".desired_linear_vel", base_linear_velocity_);
@@ -75,6 +78,9 @@ void FixedPathController::configure(const rclcpp_lifecycle::LifecycleNode::WeakP
   node->get_parameter(plugin_name_ + ".lookahead_time", lookahead_time_);
   node->get_parameter(plugin_name_ + ".start_position_tolerance", start_position_tolerance_);
   node->get_parameter(plugin_name_ + ".direct_tracking_lateral_tolerance", direct_tracking_lateral_tolerance_);
+  node->get_parameter(plugin_name_ + ".start_offset_speed_limit", start_offset_speed_limit_);
+  node->get_parameter(plugin_name_ + ".start_speed_release_yaw_tolerance", start_speed_release_yaw_tolerance_);
+  node->get_parameter(plugin_name_ + ".start_speed_release_stable_cycles", start_speed_release_stable_cycles_);
   node->get_parameter(plugin_name_ + ".direct_tracking_max_yaw_error", direct_tracking_max_yaw_error_);
   node->get_parameter(plugin_name_ + ".initial_yaw_tolerance", initial_yaw_tolerance_);
   node->get_parameter(plugin_name_ + ".rotate_to_heading_angular_vel", rotate_to_heading_angular_vel_);
@@ -106,6 +112,10 @@ void FixedPathController::configure(const rclcpp_lifecycle::LifecycleNode::WeakP
   {
     throw nav2_core::PlannerException("FixedPathController parameters are invalid");
   }
+  if (!std::isfinite(direct_tracking_lateral_tolerance_) || !std::isfinite(start_offset_speed_limit_) || start_offset_speed_limit_ <= 0.0 || !std::isfinite(start_speed_release_yaw_tolerance_) || start_speed_release_yaw_tolerance_ <= 0.0 || start_speed_release_yaw_tolerance_ >= M_PI || start_speed_release_stable_cycles_ < 1)
+  {
+    throw nav2_core::PlannerException("FixedPathController start speed guard parameters are invalid");
+  }
   speed_limit_ = base_linear_velocity_;
   control_duration_ = 1.0 / controller_frequency;
   // 仅在显式启用新制动路径时校验专属参数；关闭时不改变旧配置的接受条件。
@@ -114,6 +124,7 @@ void FixedPathController::configure(const rclcpp_lifecycle::LifecycleNode::WeakP
     throw nav2_core::PlannerException("FixedPathController adaptive braking parameters are invalid");
   }
   LOG_INFO("固定路径控制器配置完成，plugin={}，最大线速度={:.3f}m/s，终点减速度={:.3f}m/s^2，终点微量接近速度={:.3f}m/s，制动反应时间={:.3f}s，制动距离裕量={:.3f}m，终点基础前视={:.3f}m，前视参考速度={:.3f}m/s，前视速度增益={:.3f}s，前视范围=[{:.3f},{:.3f}]m，起点位置容差={:.3f}m，直接跟踪横向容差={:.3f}m，直接跟踪航向门限={:.3f}rad，严格对齐航向容差={:.3f}rad，终点按位置或越界锁存停车", plugin_name_, base_linear_velocity_, goal_linear_deceleration_, goal_final_approach_velocity_, goal_braking_reaction_time_, goal_braking_distance_margin_, goal_terminal_lookahead_dist_, goal_terminal_lookahead_reference_speed_, goal_terminal_lookahead_speed_gain_, goal_terminal_lookahead_min_dist_, goal_terminal_lookahead_max_dist_, start_position_tolerance_, direct_tracking_lateral_tolerance_, direct_tracking_max_yaw_error_, initial_yaw_tolerance_);
+  LOG_INFO("固定路径起步限速配置：触发横向偏差>{:.3f}m，限速={:.3f}m/s，解除航向误差≤{:.3f}rad，连续周期={}", direct_tracking_lateral_tolerance_, start_offset_speed_limit_, start_speed_release_yaw_tolerance_, start_speed_release_stable_cycles_);
 }
 
 // 释放插件资源并复位控制器内部阶段与路径状态。
@@ -121,6 +132,8 @@ void FixedPathController::cleanup()
 {
   std::lock_guard<std::mutex> lock(mutex_);
   global_plan_ = nav_msgs::msg::Path();
+  start_path_points_.clear();
+  start_speed_guard_.reset();
   nearest_index_ = 0;
   goal_tangent_index_ = 0;
   stable_cycles_ = 0;
@@ -199,6 +212,13 @@ void FixedPathController::setPlan(const nav_msgs::msg::Path & path)
     throw nav2_core::PlannerException("Fixed path orientation does not encode a clear direction");
   }
   global_plan_ = path;
+  start_path_points_.clear();
+  start_path_points_.reserve(path.poses.size());
+  for (const auto & path_pose : path.poses)
+  {
+    start_path_points_.emplace_back(path_pose.pose.position.x, path_pose.pose.position.y);
+  }
+  start_speed_guard_.reset();
   nearest_index_ = 0;
   goal_tangent_index_ = goal_tangent_index;
   // 车头与起点切线同向记为前进，反向记为倒车；后续速度输出使用此符号。
@@ -278,6 +298,10 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
     {
       direct_start_tracking_ = lateral_error <= direct_tracking_lateral_tolerance_;
       start_strategy_evaluated_ = true;
+      if (start_speed_guard_.evaluateStart(lateral_error, direct_tracking_lateral_tolerance_))
+      {
+        LOG_INFO("固定路径起点横向偏差={:.3f}m，起步纵向速度指令上限锁定为{:.3f}m/s", lateral_error, start_offset_speed_limit_);
+      }
       LOG_INFO("固定路径起点策略已锁定，方向={}，起点距离={:.3f}m，横向误差={:.3f}m，运动方向航向误差={:.3f}rad，策略={}", direction_sign_ > 0 ? "forward" : "backward", start_distance, lateral_error, yaw_error, direct_start_tracking_ ? "direct_tracking" : "strict_alignment");
     }
     // 横向误差较小时采用较宽的航向门槛，尽量直接进入路径跟踪。
@@ -298,26 +322,28 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
     }
     else
     {
-      // 横向偏差较大时要求更严的航向和停稳条件，连续达标才准许起步。
-      if (std::abs(yaw_error) <= initial_yaw_tolerance_ && std::abs(velocity.linear.x) <= linear_stopped_velocity && std::abs(velocity.angular.z) <= angular_stopped_velocity)
+      // 横向偏差较大时，只按更严的航向容差决定何时结束原地旋转，不再等待车速停稳。
+      if (std::abs(yaw_error) <= initial_yaw_tolerance_)
       {
         ++stable_cycles_;
       }
       else
       {
-        // 任一条件失效即清零稳定计数，不能把不连续的对齐周期累加。
+        // 航向重新超出容差时清零计数，避免累计不连续的对齐周期。
         stable_cycles_ = 0;
       }
-      // 稳定周期足够后先输出一帧零速，再由下一周期进入纵向跟踪。
+      // 默认只需当前周期达标：立即切到跟踪，并沿本周期后续逻辑输出受限纵向速度。
       if (stable_cycles_ >= alignment_stable_cycles_)
       {
         phase_ = Phase::TRACK_PATH;
         stable_cycles_ = 0;
-        LOG_INFO("固定路径严格起点航向对齐完成，方向={}，运动方向航向误差={:.3f}rad", direction_sign_ > 0 ? "forward" : "backward", yaw_error);
-        return zeroCommand();
+        LOG_INFO("固定路径严格起点航向对齐完成并进入低速跟踪，方向={}，运动方向航向误差={:.3f}rad", direction_sign_ > 0 ? "forward" : "backward", yaw_error);
       }
-      // 尚未连续达标，继续用严格航向容差原地调整车头方向。
-      return rotateCommand(yaw_error, initial_yaw_tolerance_, rotate_to_heading_angular_vel_, max_angular_accel_, rotate_to_heading_kp_, velocity);
+      else
+      {
+        // 严格分支已单独判断 3 度切换门槛；转向指令按完整误差计算，避免在门槛外速度趋零而迟迟无法进入跟踪。
+        return rotateCommand(yaw_error, 0.0, rotate_to_heading_angular_vel_, max_angular_accel_, rotate_to_heading_kp_, velocity);
+      }
     }
   }
   const double goal_distance = poseDistance(robot_pose, global_plan_.poses.back());
@@ -325,6 +351,24 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
   const double vehicle_motion_yaw = normalizeAngle(poseYaw(robot_pose) + (direction_sign_ < 0 ? M_PI : 0.0));
   const double goal_yaw_error = normalizeAngle(goal_path_yaw_ - vehicle_motion_yaw);
   nearest_index_ = findNearestIndex(robot_pose);
+  // 仅在已触发起步限速时复核当前最近有效路径段；连续达标后单向解除。
+  if (start_speed_guard_.active())
+  {
+    double local_lateral_error = 0.0;
+    double local_heading_error = 0.0;
+    if (detail::calculateStartRecoveryErrors(start_path_points_, nearest_index_, robot_pose.pose.position.x, robot_pose.pose.position.y, poseYaw(robot_pose), direction_sign_, local_lateral_error, local_heading_error))
+    {
+      if (start_speed_guard_.observe(local_lateral_error, local_heading_error, direct_tracking_lateral_tolerance_, start_speed_release_yaw_tolerance_, start_speed_release_stable_cycles_))
+      {
+        LOG_INFO("固定路径起步限速已解除，横向误差={:.3f}m，运动方向航向误差={:.3f}rad，连续达标周期={}", local_lateral_error, local_heading_error, start_speed_release_stable_cycles_);
+      }
+    }
+    else
+    {
+      start_speed_guard_.resetStability();
+    }
+  }
+  const double effective_linear_limit = std::min(std::min(base_linear_velocity_, speed_limit_), start_speed_guard_.active() ? start_offset_speed_limit_ : base_linear_velocity_);
   const auto & goal_position = global_plan_.poses.back().pose.position;
   const double goal_delta_x = robot_pose.pose.position.x - goal_position.x;
   const double goal_delta_y = robot_pose.pose.position.y - goal_position.y;
@@ -336,9 +380,9 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
   // 旧模式只取运动方向上的正速度；新模式取绝对值，避免反向残余速度低估停车距离。
   const double current_linear_velocity = adaptive_goal_braking_enabled_ ? std::abs(velocity.linear.x) : std::max(0.0, static_cast<double>(direction_sign_) * velocity.linear.x);
   // 自适应关闭时不调用新包络；旧模式仍以固定减速度计算制动距离。
-  const auto speed_profile = adaptive_goal_braking_enabled_ ? calculateFixedPathSpeedProfile(current_linear_velocity, remaining, std::min(base_linear_velocity_, speed_limit_), adaptive_goal_max_deceleration_, adaptive_goal_jerk_limit_, adaptive_goal_response_time_, adaptive_goal_distance_margin_, goal_xy_tolerance, adaptive_goal_approach_speed_) : FixedPathSpeedProfile{0.0, 0.0, 0.0};
+  const auto speed_profile = adaptive_goal_braking_enabled_ ? calculateFixedPathSpeedProfile(current_linear_velocity, remaining, effective_linear_limit, adaptive_goal_max_deceleration_, adaptive_goal_jerk_limit_, adaptive_goal_response_time_, adaptive_goal_distance_margin_, goal_xy_tolerance, adaptive_goal_approach_speed_) : FixedPathSpeedProfile{0.0, 0.0, 0.0};
   const double stopping_distance = adaptive_goal_braking_enabled_ ? speed_profile.stopping_distance : current_linear_velocity * current_linear_velocity / (2.0 * goal_linear_deceleration_);
-  const double expected_linear_velocity = std::max(0.0, std::min(base_linear_velocity_, speed_limit_));
+  const double expected_linear_velocity = std::max(0.0, effective_linear_limit);
   // 末段前视随有效速度变化，但始终限制在配置的最小和最大距离之间。
   const double dynamic_terminal_lookahead_distance = std::clamp(goal_terminal_lookahead_dist_ + goal_terminal_lookahead_speed_gain_ * (expected_linear_velocity - goal_terminal_lookahead_reference_speed_), goal_terminal_lookahead_min_dist_, goal_terminal_lookahead_max_dist_);
   // 进入 XY 容差或越过终点平面都会触发零速锁存，避免继续向前驶离终点。
@@ -395,7 +439,7 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
   const double carrot_distance_squared = local_carrot.pose.position.x * local_carrot.pose.position.x + local_carrot.pose.position.y * local_carrot.pose.position.y;
   // 前视点几乎与车体重合时曲率分母趋零，改用零曲率避免速度命令发散。
   const double curvature = carrot_distance_squared > 1e-6 ? 2.0 * local_carrot.pose.position.y / carrot_distance_squared : 0.0;
-  double linear_magnitude = std::min(base_linear_velocity_, speed_limit_);
+  double linear_magnitude = effective_linear_limit;
   // 弯道曲率非零时再受最大角速度约束，直线段保持原线速度上限。
   if (std::abs(curvature) > 1e-6)
   {

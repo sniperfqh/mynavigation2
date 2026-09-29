@@ -7,11 +7,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     use_sim_time = LaunchConfiguration('use_sim_time', default='true')
 
-    bridge = Node(
-        package='ros_gz_bridge',
-        executable='parameter_bridge',
-        parameters=[{'use_sim_time': use_sim_time}],
-        arguments=[
+    bridge = Node(package='ros_gz_bridge', executable='parameter_bridge', parameters=[{'use_sim_time': use_sim_time}], arguments=[
                 # Velocity command (ROS2 -> IGN)
                 '/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist',
                 # Odometry (IGN -> ROS2)
@@ -30,16 +26,6 @@ def generate_launch_description():
                 '/camera/rgb/image_raw@sensor_msgs/msg/Image[gz.msgs.Image',
                 '/camera/rgb/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
                 ],
-        remappings=[
-            ("/odom/tf", "tf"),
-        ],
-        output='screen'
-    )
+        remappings=[("/odom/tf", "tf"),], output='screen')
 
-    return LaunchDescription([
-        bridge,
-        DeclareLaunchArgument(
-            'use_sim_time',
-            default_value='true',
-            description='Use simulation (Gazebo) clock if true'),
-    ])
+    return LaunchDescription([bridge, DeclareLaunchArgument('use_sim_time', default_value='true', description='Use simulation (Gazebo) clock if true'),])

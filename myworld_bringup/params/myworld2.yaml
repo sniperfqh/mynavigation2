@@ -375,8 +375,11 @@ controller_server:
       lookahead_time: 1.5
       start_position_tolerance: 1.20
       direct_tracking_lateral_tolerance: 0.20
+      start_offset_speed_limit: 0.30
+      start_speed_release_yaw_tolerance: 0.3490658503988659
+      start_speed_release_stable_cycles: 5
       direct_tracking_max_yaw_error: 0.2617993877991494
-      initial_yaw_tolerance: 0.12217304763960307
+      initial_yaw_tolerance: 0.05235987755982989
       rotate_to_heading_angular_vel: 0.4
       max_angular_accel: 0.8
       rotate_to_heading_kp: 1.5
@@ -398,7 +401,7 @@ controller_server:
       goal_terminal_lookahead_min_dist: 0.15
       goal_terminal_lookahead_max_dist: 0.25
       goal_error_log_frequency: 1.0
-      alignment_stable_cycles: 5
+      alignment_stable_cycles: 1
       transform_tolerance: 0.2
 
     # Timed Elastic Band controller. Configured for a differential drive robot
