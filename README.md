@@ -241,14 +241,16 @@ Action、速度命令或 Topic 发布者残留。
 | --- | --- | --- | --- |
 | `remote` | 交互式终端键盘 | 键盘 → `myagv_keyboard_control` → `/control_to_uart` | 人工接管、底盘方向和串口联调 |
 | `autonomous` | `/goal_pose`、`NavigateToPose`、`NavigateThroughPoses` | Planner → Smoother → FollowPath → Velocity Smoother → `controlpub` | 自主规划并实时导航 |
-| `fixed_path` | `/navigation_service`，类型为 `byd_custom_msgs/action/NavigationService` | 业务分段 → Path 生成／校验 → FollowPath → Velocity Smoother → `controlpub` | 上游提供连续直线段或贝塞尔段 |
+| `fixed_path` | `/navigation_service`，类型为 `byd_custom_msgs/action/NavigationService` | 业务分段 → Path 生成／校验 → FollowPath（`FixedPathController`）→ Velocity Smoother → Collision Monitor（默认启用）→ `controlpub` | 上游提供连续直线段或贝塞尔段 |
 
-三种模式都保证 `/control_to_uart` 只有一个发布源：
+三种模式都只启动一个主控制链；`/control_to_uart` 仍需在现场核对实际发布者：
 
 - `remote` 只启动 `myagv_keyboard_control`，不启动地图、规划、控制、速度平滑、RViz 和
   `controlpub`。
 - `autonomous` 和 `fixed_path` 不启动 `myagv_keyboard_control`，由 `controlpub` 把
   `/cmd_vel` 转换为 `/control_to_uart`。
+- `regulated_navigator` 内另有 `ChassisControlSubscriber`，订阅
+  `/downstream/chassis_control` 并持有 `/control_to_uart` 发布器；该支路在检测到多个发布者时停止自身输出。
 - `fixed_path` 为保持统一 Lifecycle 节点集合仍会启动 Planner Server 和 Smoother Server，但
   `regulated_navigator` 不会向它们发送规划或路径平滑 Goal。
 
@@ -390,14 +392,14 @@ ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose "{
 | --- | --- | --- |
 | `planner_server.selected_planner` | `GridBasedAstar` | Planner Server 最终采用的规划插件；非空时覆盖 Action 中的 `planner_id` |
 | `regulated_navigator.planner_id` | `GridBasedAstar` | `regulated_navigator` 写入规划 Action Goal 的插件 ID |
-| `regulated_navigator.controller_id` | `DWB` | FollowPath 使用的控制器插件 ID |
+| `regulated_navigator.controller_id` | `RPP` | 普通导航 FollowPath 使用的控制器插件 ID |
 | `regulated_navigator.smoother_id` | `simple_smoother` | SmoothPath 使用的平滑器插件 ID |
 | `regulated_navigator.use_smoother` | `true` | 是否执行规划后路径平滑 |
 | `regulated_navigator.replan_frequency` | `1.0` | 控制期间周期重规划频率，单位 Hz |
 | `regulated_navigator.feedback_frequency` | `5.0` | 外层导航 Action 反馈频率，单位 Hz |
 | `regulated_navigator.max_recovery_rounds` | `2` | 清理双 Costmap 后重新规划的最大轮数 |
-| `velocity_smoother.feedback` | `CLOSED_LOOP` | 使用 `/odometry` 实测速度作为平滑起点 |
-| `velocity_smoother.max_velocity` | `[0.26, 0.0, 1.0]` | X、Y、Theta 三轴最大速度 |
+| `velocity_smoother.feedback` | `CLOSED_LOOP` | 使用 `/motion_state` 实测速度作为平滑起点 |
+| `velocity_smoother.max_velocity` | `[1.5, 0.0, 2.0]` | X、Y、Theta 三轴最大速度 |
 | `velocity_smoother.max_accel` | `[2.5, 0.0, 3.2]` | X、Y、Theta 三轴最大加速度 |
 | `velocity_smoother.max_decel` | `[-2.5, 0.0, -3.2]` | X、Y、Theta 三轴最大减速度 |
 
@@ -407,10 +409,13 @@ ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose "{
 YAML 后应重新启动 Launch。
 
 当前已加载的规划器 ID 为 `GridBased`、`GridBasedAstar`、`Smac2D`、`SmacHybrid`、
-`SmacLattice` 和 `ThetaStar`；控制器 ID 为 `DWB`、`RPP`、`MPPI`、
+`SmacLattice` 和 `ThetaStar`；控制器 ID 为 `DWB`、`RPP`、`FixedPathController`、`MPPI`、
 `GracefulController` 和 `RotationShimController`。
 
 ### 4.6 固定路径模式
+
+完整启动架构、模块职责、周期函数和任务细节见
+[固定路径模式架构与调用链](nav2_regulated_modules/doc/fixed_path_architecture.md)。
 
 终端一启动固定路径模式：
 
@@ -433,7 +438,7 @@ source install/setup.bash
 ros2 action send_goal /navigation_service \
   byd_custom_msgs/action/NavigationService \
   "{task_id: demo_line, navi_segment: [
-    {segment_type: 1, node1: {x: 70.1, y: -12.4, z: 0.0}, node2: {x: 63.8, y: -12.1, z: 0.0}, control_pos1: {x: 0.0, y: 0.0, z: 0.0}, control_pos2: {x: 0.0, y: 0.0, z: 0.0}}
+    {segment_type: 1, node1: {x: 70.1, y: -12.4, z: 0.0}, node2: {x: 63.8, y: -12.1, z: 0.0}, control_pos1: {x: 0.0, y: 0.0, z: 0.0}, control_pos2: {x: 0.0, y: 0.0, z: 0.0}, motion_direction: 1, max_speed: 0.6}
   ]}" --feedback
 ```
 
@@ -451,8 +456,8 @@ Gazebo 提供机器人、里程计和传感器数据，使用 AMCL 提供 `map` 
 ros2 launch myworld_bringup entry.launch.py operation_mode:=fixed_path use_rviz:=true
 ```
 
-终端二发送前进任务。控制器先保持零线速度，原地旋转到 `node1 -> node2` 的起点切线方向，再以正线速度
-跟踪到终点，并以终点切线方向停车：
+终端二发送前进任务。控制器按起点横向和航向误差决定直接跟踪或先原地转向，再以正线速度跟踪；
+终点按位置及停稳速度判定，不额外执行航向对齐：
 
 ```bash
 ros2 action send_goal --feedback /navigation_service byd_custom_msgs/action/NavigationService "{task_id: 'myworld_fixed_path_001', navi_segment: [{segment_type: 1, segment_name: 'diagonal_corridor', segment_id: 'segment_001', node1: {x: -2.8, y: -1.7, z: 0.0}, node2: {x: 1.91, y: -4.83, z: 0.0}, control_pos1: {x: -0.933333, y: -2.933333, z: 0.0}, control_pos2: {x: 0.933333, y: -4.166667, z: 0.0}, max_load_speed: 0.0, max_speed: 0.20, motion_direction: 1, dwell_time: 0}]}"
@@ -464,8 +469,8 @@ ros2 action send_goal --feedback /navigation_service byd_custom_msgs/action/Navi
 
 [直接播放或下载前进仿真视频](./vedio/forward.webm)
 
-终端二发送后退任务。控制器先保持零线速度，原地旋转到起点切线的反方向，再以负线速度沿相同几何路径
-跟踪到终点，并以终点切线的反方向停车：
+终端二发送后退任务。控制器按车体反向轴与起点切线的误差决定直接跟踪或先原地转向，再以负线速度沿
+相同几何路径跟踪；终点同样不额外执行航向对齐：
 
 ```bash
 ros2 action send_goal --feedback /navigation_service byd_custom_msgs/action/NavigationService "{task_id: 'myworld_fixed_path_001', navi_segment: [{segment_type: 1, segment_name: 'diagonal_corridor', segment_id: 'segment_001', node1: {x: -2.8, y: -1.7, z: 0.0}, node2: {x: 1.91, y: -4.83, z: 0.0}, control_pos1: {x: -0.933333, y: -2.933333, z: 0.0}, control_pos2: {x: 0.933333, y: -4.166667, z: 0.0}, max_load_speed: 0.0, max_speed: 0.20, motion_direction: 2, dwell_time: 0}]}"
@@ -515,7 +520,9 @@ ros2 action send_goal /navigation_service \
       node1: {x: 14.8, y: -12.0, z: 0.0},
       node2: {x: 17.9, y: -16.0, z: 0.0},
       control_pos1: {x: 16.9, y: -12.0, z: 0.0},
-      control_pos2: {x: 18.0, y: -13.9, z: 0.0}
+      control_pos2: {x: 18.0, y: -13.9, z: 0.0},
+      motion_direction: 1,
+      max_speed: 0.6
     },
     {
       segment_type: 1,
@@ -524,7 +531,9 @@ ros2 action send_goal /navigation_service \
       node1: {x: 17.9, y: -16.0, z: 0.0},
       node2: {x: 17.9, y: -20.6, z: 0.0},
       control_pos1: {x: 0.0, y: 0.0, z: 0.0},
-      control_pos2: {x: 0.0, y: 0.0, z: 0.0}
+      control_pos2: {x: 0.0, y: 0.0, z: 0.0},
+      motion_direction: 1,
+      max_speed: 0.6
     }
   ]}" \
   --feedback
@@ -609,11 +618,11 @@ ros2 action send_goal /navigation_service \
 
 固定路径仍使用以下控制参数：
 
-- `regulated_navigator.fixed_path_controller_id` 和 `goal_checker_id`。
+- `regulated_navigator.fixed_path_controller_id` 和 `fixed_path_goal_checker_id`。
 - `controller_server` 对应控制器插件参数。
-- `FixedPathController.start_position_tolerance=1.20 m` 保持起点总距离安全门；首次横向误差不超过 `0.20 m` 且运动方向航向误差严格小于 `15°` 时直接进入 Pure Pursuit 跟踪，横向误差较大时原地对齐到 `±3°` 后在同一控制周期进入低速跟踪，不再额外等待停稳或插入零速帧。严格对齐的角速度按完整航向误差计算，避免接近门槛时过早趋零；后退航向误差使用车辆反向与路径切线之差。
-- `controller_server.stopped_goal_checker` 是终点位置、终点航向、停止线速度和停止角速度阈值的唯一来源；Launch 和 `FixedPathController` 不再重复配置这些阈值。
-- `velocity_smoother` 的速度、加减速度和 `/odometry` 闭环参数。
+- `FixedPathController.start_position_tolerance=1.20 m` 保持起点总距离安全门；首次横向误差不超过 `0.20 m` 且运动方向航向误差不超过 `15°` 时直接进入 Pure Pursuit 跟踪，横向误差较大时原地对齐到 `±3°` 后在同一控制周期进入低速跟踪，不再额外等待停稳或插入零速帧。严格对齐的角速度按完整航向误差计算，避免接近门槛时过早趋零；后退航向误差使用车辆反向与路径切线之差。
+- `controller_server.fixed_path_goal_checker` 提供终点位置及停稳速度阈值；固定路径终点不检查航向。终点感知控制器由 Controller Server 专用分支判定停车锁存、位置精度和实测停稳。
+- `velocity_smoother` 的速度、加减速度和 `/motion_state` 闭环参数；Controller Server 的速度反馈来自 `/odometry`。
 - 默认 Launch 将 spdlog 控制台级别设为 `info`、文件级别设为 `trace`，并每秒刷新文件：初始化、Action 摘要、状态切换和警告错误显示在终端；逐帧原始速度、完整速度链、Costmap 更新／发布／膨胀统计与 `/control_to_uart` 输出以 `DEBUG` 高频保存到 `SPDLOG_WRAPPER_LOG_DIR`。车辆运动期间，终端另以 1 秒间隔显示一次最终 `/control_to_uart` 的 `v/w`，零速度和 Costmap 更新期间不循环打印。
 
 它不使用 `planner_id`、`use_smoother` 或 `replan_frequency` 执行规划。
@@ -651,7 +660,8 @@ ros2 topic info /control_to_uart --verbose
 
 - 自主和固定路径模式的 Lifecycle 节点均为 `active [3]`。
 - `remote` 中 `/control_to_uart` 只有 `myagv_keyboard_control` 发布。
-- `autonomous` 和 `fixed_path` 中 `/control_to_uart` 只有 `controlpub` 发布。
+- `autonomous` 和 `fixed_path` 中 `controlpub` 是导航主链的发布者；另检查
+  `regulated_navigator` 内 `ChassisControlSubscriber` 的发布器与外部底盘节点，确认没有同时输出的控制链。
 - `fixed_path` 中 `/navigation_service` 有一个 `regulated_navigator` Action Server，并且不再存在
   `/fixed_path` Topic 订阅入口。
 
@@ -664,10 +674,11 @@ ros2 topic info /control_to_uart --verbose
 `byd_custom_msgs/msg/ChassisControl`，订阅 QoS 为 Keep Last 10、Reliable、Volatile。线速度、角速度和
 加速度均为 `float32`；`op` 负责方向，三个控制量只提供非负绝对值。
 
-该入口采用事件驱动方式，没有命令超时和后台控制 Timer：每收到一条有效 `ChassisControl`，才执行
-一次反馈检查、速度平滑和闭环计算，并向 `/control_to_uart` 发布一条 `ControlRes`；没有收到新消息时
-不计算也不发布。需要连续控制时，上层应按所需控制频率持续发布 `ChassisControl`。上层还必须保证
-该入口不会与固定路径、自主导航或键盘遥控的底盘发布链同时运行。
+该入口在收到有效 `ChassisControl` 后缓存目标命令，由默认 `50 Hz` 的
+`processControlCommand()` 定时器读取 `/motion_state` 反馈并执行 S 曲线加减速；命令超过
+`0.15 s` 未更新后进入停车过程。空闲且从未收到命令时，定时器不发布控制消息。该支路会检查
+`/control_to_uart` 发布者数量，发现多个发布者时停止自身输出；联调仍应核对所有发布源，
+避免它与固定路径、自主导航或键盘链同时向底盘发送有效指令。
 
 先在一个已加载工作空间的终端以 Sensor Data QoS 持续发布模拟反馈：
 
@@ -715,11 +726,11 @@ ros2 topic pub --once \
 ros2 topic echo /control_to_uart byd_custom_msgs/msg/ControlRes
 ```
 
-`regulated_navigator` 在每次 `ChassisControl` 回调中根据两次命令的接收间隔执行加速度限制，使用
-`/motion_state` 的 `v_car/w_car` 执行 PI 修正，并直接发布一条 `ControlRes`。`op` 可取
+`regulated_navigator` 在 `ChassisControl` 回调中校验并缓存目标，由定时器根据
+`/motion_state` 的 `v_car/w_car` 初始化速度规划器、限速并周期发布 `ControlRes`。`op` 可取
 `0`（前进）、`1`（后退）、`2`（左转）或
 `3`（右转）；直行只使用 `linear_velocity`，原地转向只使用 `angular_velocity`。停止
-`/motion_state` 超过 `0.2 s` 后，下一次 `ChassisControl` 回调只发布零速度；恢复反馈后必须再次发送
+`/motion_state` 超过 `0.2 s` 后，下一次底盘控制定时回调发布零速度并清理状态；恢复反馈后必须再次发送
 新的 `ChassisControl` 才会重新运动。
 
 `controlpub` 采用同样的事件触发边界：节点启动时只创建 `/cmd_vel` 订阅，不创建
