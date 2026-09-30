@@ -284,11 +284,11 @@ regulated_navigator:
     # 底盘未指定线速度时采用的速度上限，单位米每秒。
     chassis_default_linear_speed_max: 1.5
     # 底盘线速度硬上限，单位米每秒。
-    chassis_linear_speed_max: 1.5
+    chassis_linear_speed_max: 0.3
     # 底盘未指定角速度时采用的上限，单位弧度每秒。
     chassis_default_angular_speed_max: 0.5
     # 底盘角速度硬上限，单位弧度每秒。
-    chassis_angular_speed_max: 0.8
+    chassis_angular_speed_max: 0.3
     # 底盘默认线加速度上限，单位米每二次方秒。
     chassis_default_linear_accel_max: 2.0
     # 底盘线加速度硬上限，单位米每二次方秒。
@@ -1156,6 +1156,8 @@ myagv_keyboard_control:
     linear_speed: 1.0
     # 遥控角速度，单位弧度每秒。
     angular_speed: 0.5
+    max_linear_speed: 0.3  # 遥控线速度上限，单位 m/s。
+    max_angular_speed: 0.3  # 遥控角速度上限，单位 rad/s。
     # 遥控线加速度上限，单位米每二次方秒。
     linear_accel_limit: 2.0
     # 遥控线加加速度上限，单位米每三次方秒。

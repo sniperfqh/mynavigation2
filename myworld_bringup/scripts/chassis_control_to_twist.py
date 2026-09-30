@@ -16,8 +16,8 @@ class ChassisControlToTwist(Node):
         self.declare_parameter('output_topic', '/cmd_vel')
         self.declare_parameter('publish_frequency', 50.0)
         self.declare_parameter('command_timeout', 0.5)
-        self.declare_parameter('max_linear_velocity', 1.5)
-        self.declare_parameter('max_angular_velocity', 2.0)
+        self.declare_parameter('max_linear_velocity', 0.3)
+        self.declare_parameter('max_angular_velocity', 0.3)
         self.declare_parameter('default_linear_acceleration', 0.5)
         self.declare_parameter('default_angular_acceleration', 1.0)
         self.declare_parameter('max_linear_acceleration', 2.5)
@@ -180,8 +180,8 @@ class ChassisControlToTwist(Node):
 
     def _publish(self, linear, angular):
         output = Twist()
-        output.linear.x = linear
-        output.angular.z = angular
+        output.linear.x = max(-self.max_linear_velocity, min(linear, self.max_linear_velocity))
+        output.angular.z = max(-self.max_angular_velocity, min(angular, self.max_angular_velocity))
         self.publisher.publish(output)
 
     @staticmethod

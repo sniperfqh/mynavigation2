@@ -5,6 +5,8 @@ myagv_keyboard_control:
     publish_rate: 50.0
     linear_speed: 1.0
     angular_speed: 0.5
+    max_linear_speed: 0.3  # 遥控线速度上限，单位 m/s。
+    max_angular_speed: 0.3  # 遥控角速度上限，单位 rad/s。
     linear_accel_limit: 0.4
     linear_accel_jerk_limit: 0.4
     linear_decel_limit: 0.8

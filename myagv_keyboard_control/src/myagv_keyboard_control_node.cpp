@@ -279,6 +279,8 @@ public:
     publish_rate_ = declare_parameter<double>("publish_rate", 50.0);
     linear_speed_ = declare_parameter<double>("linear_speed", 0.2);
     angular_speed_ = declare_parameter<double>("angular_speed", 0.5);
+    max_linear_speed_ = declare_parameter<double>("max_linear_speed", 0.3);
+    max_angular_speed_ = declare_parameter<double>("max_angular_speed", 0.3);
     linear_accel_limit_ = declare_parameter<double>("linear_accel_limit", 0.4);
     linear_decel_limit_ = declare_parameter<double>("linear_decel_limit", 0.8);
     angular_accel_limit_ = declare_parameter<double>("angular_accel_limit", 1.0);
@@ -293,9 +295,9 @@ public:
 
     double dt = 1.0/publish_rate_;
     linear_planner_ = std::make_unique<SCurvePlanner>(dt, 
-      linear_speed_, linear_accel_limit_, linear_accel_jerk_limit_, linear_decel_limit_, linear_decel_jerk_limit_);
+      std::min(linear_speed_, max_linear_speed_), linear_accel_limit_, linear_accel_jerk_limit_, linear_decel_limit_, linear_decel_jerk_limit_);
     angular_planner_ = std::make_unique<SCurvePlanner>(dt, 
-      angular_speed_, angular_accel_limit_, angular_accel_jerk_limit_, angular_decel_limit_, angular_decel_jerk_limit_);
+      std::min(angular_speed_, max_angular_speed_), angular_accel_limit_, angular_accel_jerk_limit_, angular_decel_limit_, angular_decel_jerk_limit_);
 
     terminal_mode_ = std::make_unique<TerminalMode>(input_device);
     publisher_ = create_publisher<byd_custom_msgs::msg::ControlRes>(output_topic, 10);
@@ -308,6 +310,7 @@ public:
     RCLCPP_INFO(get_logger(), "Publishing byd_custom_msgs/msg/ControlRes to %s at %.1f Hz", output_topic.c_str(), publish_rate_);
     RCLCPP_INFO(get_logger(), "Controls: W/Up forward, S/Down reverse, A/Left turn left, D/Right turn right, " "Space/X stop, Q quit");
     RCLCPP_INFO(get_logger(), "Speeds: linear %.3f m/s, angular %.3f rad/s, command timeout %.3f s", linear_speed_, angular_speed_, command_timeout_);
+    RCLCPP_INFO(get_logger(), "Remote speed limits: linear %.3f m/s, angular %.3f rad/s", max_linear_speed_, max_angular_speed_);
     RCLCPP_INFO(get_logger(), "Rate limits: linear accel/decel %.3f/%.3f m/s^2, angular accel/decel " "%.3f/%.3f rad/s^2", linear_accel_limit_, linear_decel_limit_, angular_accel_limit_, angular_decel_limit_);
   }
 
@@ -327,11 +330,19 @@ private:
     if (!std::isfinite(angular_speed_) || angular_speed_ < 0.0) {
       throw std::invalid_argument("angular_speed must be finite and non-negative");
     }
+    if (!std::isfinite(max_linear_speed_) || max_linear_speed_ <= 0.0)
+    {
+      throw std::invalid_argument("max_linear_speed must be finite and greater than zero");
+    }
     if (!std::isfinite(linear_accel_limit_) || linear_accel_limit_ <= 0.0) {
       throw std::invalid_argument("linear_accel_limit must be finite and greater than zero");
     }
     if (!std::isfinite(linear_decel_limit_) || linear_decel_limit_ <= 0.0) {
       throw std::invalid_argument("linear_decel_limit must be finite and greater than zero");
+    }
+    if (!std::isfinite(max_angular_speed_) || max_angular_speed_ <= 0.0)
+    {
+      throw std::invalid_argument("max_angular_speed must be finite and greater than zero");
     }
     if (!std::isfinite(angular_accel_limit_) || angular_accel_limit_ <= 0.0) {
       throw std::invalid_argument("angular_accel_limit must be finite and greater than zero");
@@ -466,26 +477,26 @@ private:
     motion_ = motion;
     switch (motion_) {
       case Motion::FORWARD:
-        target_v_ = linear_speed_;
+        target_v_ = std::min(linear_speed_, max_linear_speed_);
         target_w_ = 0.0;
         linear_planner_->setDirection(1.0);
         angular_planner_->setDirection(0.0);
         break;
       case Motion::REVERSE:
-        target_v_ = -linear_speed_;
+        target_v_ = -std::min(linear_speed_, max_linear_speed_);
         target_w_ = 0.0;
         linear_planner_->setDirection(-1.0);
         angular_planner_->setDirection(0.0);
         break;
       case Motion::LEFT:
         target_v_ = 0.0;
-        target_w_ = angular_speed_;
+        target_w_ = std::min(angular_speed_, max_angular_speed_);
         linear_planner_->setDirection(0.0);
         angular_planner_->setDirection(1.0);
         break;
       case Motion::RIGHT:
         target_v_ = 0.0;
-        target_w_ = -angular_speed_;
+        target_w_ = -std::min(angular_speed_, max_angular_speed_);
         linear_planner_->setDirection(0.0);
         angular_planner_->setDirection(-1.0);
         break;
@@ -544,8 +555,8 @@ private:
 
   void publishCommand() {
     byd_custom_msgs::msg::ControlRes msg;
-    msg.v = current_v_;
-    msg.w = current_w_;
+    msg.v = std::clamp(current_v_, -max_linear_speed_, max_linear_speed_);
+    msg.w = std::clamp(current_w_, -max_angular_speed_, max_angular_speed_);
     msg.v_lift = 0.0;
     msg.w_rotation = 0.0;
     publisher_->publish(msg);
@@ -560,6 +571,8 @@ private:
   double publish_rate_{50.0};
   double linear_speed_{0.2};
   double angular_speed_{0.5};
+  double max_linear_speed_ = 0.3;
+  double max_angular_speed_ = 0.3;
   double linear_accel_limit_{0.4};
   double linear_decel_limit_{0.8};
   double angular_accel_limit_{1.0};

@@ -25,14 +25,14 @@ ChassisControlSubscriber::ChassisControlSubscriber(
     config_(std::move(config)),
     linear_planner_(
         1.0 / config_.publish_rate,
-        config_.default_linear_speed_max,
+        std::min(config_.default_linear_speed_max, config_.linear_speed_max),
         config_.default_linear_accel_max,
         config_.linear_accel_jerk_max,
         config_.linear_decel_max,
         config_.linear_decel_jerk_max),
     angular_planner_(
         1.0 / config_.publish_rate,
-        config_.default_angular_speed_max,
+        std::min(config_.default_angular_speed_max, config_.angular_speed_max),
         config_.default_angular_accel_max,
         config_.angular_accel_jerk_max,
         config_.angular_decel_max,
@@ -185,8 +185,8 @@ void ChassisControlSubscriber::clearControlStateLocked() {
 // 将限幅后的线角速度转换为底盘控制消息并发布。
 void ChassisControlSubscriber::publishControl(const double linear_velocity, const double angular_velocity) {
   byd_custom_msgs::msg::ControlRes output;
-  output.v = linear_velocity;
-  output.w = angular_velocity;
+  output.v = std::clamp(linear_velocity, -config_.linear_speed_max, config_.linear_speed_max);
+  output.w = std::clamp(angular_velocity, -config_.angular_speed_max, config_.angular_speed_max);
   output.v_lift = 0.0;
   output.w_rotation = 0.0;
   publisher_->publish(output);
@@ -227,16 +227,18 @@ bool ChassisControlSubscriber::validateConfig() const
     LOG_ERROR("配置错误: default_linear_speed_max 必须大于 0，当前值: {}", config_.default_linear_speed_max);
     return false;
   }
-  if (config_.linear_speed_max <= 0.0) {
-    LOG_ERROR("配置错误: linear_speed_max 必须大于 0，当前值: {}", config_.linear_speed_max);
+  if (!std::isfinite(config_.linear_speed_max) || config_.linear_speed_max <= 0.0)
+  {
+    LOG_ERROR("配置错误: linear_speed_max 必须为有限正数，当前值: {}", config_.linear_speed_max);
     return false;
   }
   if (config_.default_angular_speed_max <= 0.0) {
     LOG_ERROR("配置错误: default_angular_speed_max 必须大于 0，当前值: {}", config_.default_angular_speed_max);
     return false;
   }
-  if (config_.angular_speed_max <= 0.0) {
-    LOG_ERROR("配置错误: angular_speed_max 必须大于 0，当前值: {}", config_.angular_speed_max);
+  if (!std::isfinite(config_.angular_speed_max) || config_.angular_speed_max <= 0.0)
+  {
+    LOG_ERROR("配置错误: angular_speed_max 必须为有限正数，当前值: {}", config_.angular_speed_max);
     return false;
   }
 
@@ -284,17 +286,7 @@ bool ChassisControlSubscriber::validateConfig() const
     return false;
   }
 
-  // 交叉约束：default 不能超过 max
-  if (config_.default_linear_speed_max > config_.linear_speed_max) {
-    LOG_ERROR("配置错误: default_linear_speed_max({}) 不能大于 linear_speed_max({})",
-              config_.default_linear_speed_max, config_.linear_speed_max);
-    return false;
-  }
-  if (config_.default_angular_speed_max > config_.angular_speed_max) {
-    LOG_ERROR("配置错误: default_angular_speed_max({}) 不能大于 angular_speed_max({})",
-              config_.default_angular_speed_max, config_.angular_speed_max);
-    return false;
-  }
+  // 速度初始化值在构造时按遥控上限钳位；加速度默认值仍须满足上限。
   if (config_.default_linear_accel_max > config_.linear_accel_max) {
     LOG_ERROR("配置错误: default_linear_accel_max({}) 不能大于 linear_accel_max({})",
               config_.default_linear_accel_max, config_.linear_accel_max);

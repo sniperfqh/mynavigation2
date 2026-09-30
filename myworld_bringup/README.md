@@ -86,7 +86,8 @@ ros2 topic pub --once \
 ```
 
 `ChassisControl` 当前一次只能表示直行或原地旋转，不能同时表达非零线速度和角速度。
-网关默认将线速度限制在 `1.5 m/s`、角速度限制在 `2.0 rad/s`；非法数值、未知
+网关默认将线速度限制在 `0.3 m/s`、角速度限制在 `0.3 rad/s`；可在 YAML 中配置
+`max_linear_velocity`、`max_angular_velocity`，或直接启动节点时通过 `--ros-args -p 参数名:=值` 覆盖。非法数值、未知
 `op` 或多个 `/cmd_vel` Publisher 会触发停车并等待新的有效遥控命令。
 
 自主与固定路径模式的统一算法链为：

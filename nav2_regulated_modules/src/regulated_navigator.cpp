@@ -69,9 +69,9 @@ RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : na
   declare_parameter("chassis_command_timeout", 0.15);
   declare_parameter("chassis_publish_rate", 50.0);
   declare_parameter("chassis_default_linear_speed_max", 1.5);
-  declare_parameter("chassis_linear_speed_max", 1.5);
+  declare_parameter("chassis_linear_speed_max", 0.3);
   declare_parameter("chassis_default_angular_speed_max", 0.5);
-  declare_parameter("chassis_angular_speed_max", 0.8);
+  declare_parameter("chassis_angular_speed_max", 0.3);
   declare_parameter("chassis_default_linear_accel_max", 2.0);
   declare_parameter("chassis_linear_accel_max", 3.0);
   declare_parameter("chassis_linear_decel_max", 4.0);

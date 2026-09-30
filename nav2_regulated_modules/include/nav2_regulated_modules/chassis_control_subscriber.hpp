@@ -190,9 +190,9 @@ struct ChassisControlConfig
   double command_timeout{0.15};
   double publish_rate{50.0};
   double default_linear_speed_max{1.5};
-  double linear_speed_max{1.5};
+  double linear_speed_max = 0.3;
   double default_angular_speed_max{0.5};
-  double angular_speed_max{0.8};
+  double angular_speed_max = 0.3;
   double default_linear_accel_max{2.0};
   double linear_accel_max{3.0};
   double linear_decel_max{4.0};

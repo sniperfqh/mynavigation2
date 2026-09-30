@@ -81,6 +81,8 @@ ros2 launch nav2_regulated_modules regulated_modules.launch.py operation_mode:=r
 
 ```bash
 ros2 run myagv_keyboard_control myagv_keyboard_control_node --ros-args \
+  -p max_linear_speed:=0.3 \
+  -p max_angular_speed:=0.3 \
   -p linear_speed:=0.1 \
   -p angular_speed:=0.3 \
   -p linear_accel_limit:=0.3 \
@@ -97,14 +99,16 @@ ros2 run myagv_keyboard_control myagv_keyboard_control_node --ros-args \
 | `publish_rate` | `50.0` | 周期发布频率，单位 Hz |
 | `linear_speed` | `0.2` | 前进和后退速度绝对值，单位 m/s |
 | `angular_speed` | `0.5` | 左右转角速度绝对值，单位 rad/s |
+| `max_linear_speed` | `0.3` | 遥控线速度上限，单位 m/s，必须为有限正数 |
+| `max_angular_speed` | `0.3` | 遥控角速度上限，单位 rad/s，必须为有限正数 |
 | `linear_accel_limit` | `0.4` | 线速度加速限制，单位 m/s²，必须大于零 |
 | `linear_decel_limit` | `0.8` | 线速度减速限制绝对值，单位 m/s²，必须大于零 |
 | `angular_accel_limit` | `1.0` | 角速度加速限制，单位 rad/s²，必须大于零 |
 | `angular_decel_limit` | `2.0` | 角速度减速限制绝对值，单位 rad/s²，必须大于零 |
 | `command_timeout` | `0.5` | 最后一次方向键输入后的松键判定超时，超时后平滑减速，单位 s；设为 `0.0` 表示关闭超时 |
 
-默认 `50 Hz` 下，线速度从零提升到 `0.2 m/s` 约需 `0.5 s`，平滑停车约需 `0.25 s`；
-角速度从零提升到 `0.5 rad/s` 约需 `0.5 s`，平滑停车约需 `0.25 s`。
+实际目标速度取原目标参数与对应最大限速的较小值，发布输出也按正负方向限幅。
+加减速时间取决于实际目标速度、加减速度及 Jerk 参数。最大限速在启动时读取，可通过上述终端参数或 YAML 配置覆盖；不支持运行期动态更新。
 
 ## 五、安全约束
 
@@ -120,3 +124,15 @@ ros2 topic echo /control_to_uart
 ros2 topic hz /control_to_uart
 ros2 topic info /control_to_uart --verbose
 ```
+
+## 遥控最大限速配置
+
+三个遥控入口均默认限制为线速度 `0.3 m/s`、角速度 `0.3 rad/s`。参数在启动时读取，显式配置可使用其他有限正数。
+
+| 入口 | 线速度上限参数 | 角速度上限参数 |
+| --- | --- | --- |
+| 本键盘节点 | `max_linear_speed` | `max_angular_speed` |
+| `regulated_navigator` 的 `ChassisControl` | `chassis_linear_speed_max` | `chassis_angular_speed_max` |
+| `chassis_control_to_twist` 仿真适配器 | `max_linear_velocity` | `max_angular_velocity` |
+
+YAML 中将上表参数放在对应节点的 `ros__parameters` 下；直接运行节点时使用 `--ros-args -p 参数名:=值`。修改 Launch 加载的源码 YAML 后需重新构建对应包，使安装配置生效。

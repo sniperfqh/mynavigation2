@@ -172,9 +172,9 @@ regulated_navigator:
     chassis_output_topic: "/control_to_uart"
     motion_state_timeout: 0.2
     chassis_default_linear_speed_max: 1.5
-    chassis_linear_speed_max: 1.5
+    chassis_linear_speed_max: 0.3
     chassis_default_angular_speed_max: 0.5
-    chassis_angular_speed_max: 0.8
+    chassis_angular_speed_max: 0.3
     chassis_default_linear_accel_max: 2.0
     chassis_linear_accel_max: 3.0
     chassis_linear_decel_max: 4.0
@@ -861,8 +861,8 @@ chassis_control_to_twist:
     output_topic: "/cmd_vel"
     publish_frequency: 50.0
     command_timeout: 0.5
-    max_linear_velocity: 1.5
-    max_angular_velocity: 2.0
+    max_linear_velocity: 0.3
+    max_angular_velocity: 0.3
     default_linear_acceleration: 0.5
     default_angular_acceleration: 1.0
     max_linear_acceleration: 2.5
