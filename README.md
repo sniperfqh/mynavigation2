@@ -98,7 +98,9 @@ source install/setup.bash
 
 ## 1. Nav2 数据流
 
-完整运行链路：
+本节对应保留的 `myagv_test_bringup` 标准 BT 入口；推荐的无 BT 三模式入口见第 4 节。当前默认 BT 将规划结果直接交给 FollowPath，没有自动调用 SmoothPath；`smoother_server` 虽已启动，是否执行路径平滑仍由实际 BT 决定。
+
+标准 BT 默认运行链路：
 
 ```text
 1. 地图
@@ -127,20 +129,16 @@ source install/setup.bash
      -> global_costmap + /map + TF
      -> nav_msgs/Path
 
-6. 路径平滑
-   smoother_server
-     -> smoothed path
-
-7. 局部控制
+6. 局部控制
    controller_server
      -> local_costmap + path + TF
      -> /cmd_vel_nav
 
-8. 速度平滑
+7. 速度平滑
    velocity_smoother
      -> /cmd_vel
 
-9. 底盘输出
+8. 底盘输出
    controlpub
      -> /control_to_uart
      -> chassis driver
@@ -235,8 +233,10 @@ ros2 lifecycle nodes
 Velocity Smoother，以及键盘遥控和 `ChassisControl` 输出均使用这一频率。
 速度、加减速度、jerk、位置容差及秒制超时保持原配置。固定路径起步限速解除采用
 连续 `10` 个稳定周期，保留原先约 `0.1 s` 的名义稳定时间；目标检查器的
-`position_stable_cycles` 配置同步为 `10`。默认固定路径仍沿用 Controller Server 的
-终点停车锁存、位置精度与停稳速度判定流程，不新增停车等待；起点航向达标当周期
+`position_stable_cycles` 配置为 `10`，但固定路径专用成功分支不调用该稳定计数方法，
+不能把它解释成实际终点稳定等待。默认固定路径沿用 Controller Server 的
+终点停车锁存、位置准确标志与停稳速度判定，不使用已撤销的连续 1 秒精度窗口或
+3 秒终点超时；FollowPath 失败仍可进入原恢复流程。起点航向达标当周期
 进入跟踪的 `alignment_stable_cycles: 1` 保持不变。
 本地仿真 `/odom` 和由其逐条转换的 `/motion_state` 同步为 `100 Hz`；直接规控入口的
 `/odometry`、`/motion_state` 由外部实车驱动发布，需要独立核对真实频率。
@@ -256,7 +256,7 @@ Action、速度命令或 Topic 发布者残留。
 | `operation_mode` | 上游输入 | 实际数据流 | 适用场景 |
 | --- | --- | --- | --- |
 | `remote` | 交互式终端键盘 | 键盘 → `myagv_keyboard_control` → `/control_to_uart` | 人工接管、底盘方向和串口联调 |
-| `autonomous` | `/goal_pose`、`NavigateToPose`、`NavigateThroughPoses` | Planner → Smoother → FollowPath → Velocity Smoother → `controlpub` | 自主规划并实时导航 |
+| `autonomous` | `/goal_pose`、`NavigateToPose`、`NavigateThroughPoses` | Planner → Smoother（默认启用）→ FollowPath（RPP）→ Velocity Smoother → Collision Monitor（默认启用）→ `controlpub` | 自主规划并实时导航 |
 | `fixed_path` | `/navigation_service`，类型为 `byd_custom_msgs/action/NavigationService` | 业务分段 → Path 生成／校验 → FollowPath（`FixedPathController`）→ Velocity Smoother → Collision Monitor（默认启用）→ `controlpub` | 上游提供连续直线段或贝塞尔段 |
 
 三种模式都只启动一个主控制链；`/control_to_uart` 仍需在现场核对实际发布者：
@@ -279,8 +279,9 @@ Action、速度命令或 Topic 发布者残留。
 - 外部定位能够持续提供 `map -> base_link` TF。
 - 雷达发布 `/c200_lidar_node/scan`，类型为 `sensor_msgs/msg/LaserScan`，其 `frame_id` 能通过
   TF 接入 `base_link`。
-- 里程计发布 `/odometry`，类型为 `nav_msgs/msg/Odometry`，供 Controller Server 和
-  CLOSED_LOOP Velocity Smoother 使用。
+- 里程计发布 `/odometry`，类型为 `nav_msgs/msg/Odometry`，供 Controller Server 和速度链诊断使用。
+- 底盘反馈发布 `/motion_state`，类型为 `byd_custom_msgs/msg/MotionState`，其中 `v_car/w_car`
+  供 CLOSED_LOOP Velocity Smoother 和独立底盘输入支路使用；两个反馈入口不能混为同一话题。
 - 底盘控制节点能够接收 `/control_to_uart`。
 
 每个终端先加载环境：
@@ -310,7 +311,7 @@ ros2 launch nav2_regulated_modules regulated_modules.launch.py \
 | --- | --- | --- |
 | `operation_mode` | `autonomous` | 只能取 `remote`、`autonomous`、`fixed_path` |
 | `map` | 包内 `maps/out.yaml` | 地图 YAML 绝对路径；只影响导航模式 |
-| `params_file` | 包内 `params/regulated_modules.yaml` | Planner、Controller、Smoother、Navigator 和 Costmap 参数 |
+| `params_file` | 包内 `params/regulated_modules.yaml` | 导航各节点及 Costmap 参数；remote 读取其中的 `myagv_keyboard_control` 块 |
 | `use_sim_time` | `false` | 是否使用 `/clock` |
 | `use_rviz` | `True` | 是否启动 RViz；遥控模式始终不启动 RViz |
 | `rviz_config_file` | 包内 `rviz/nav2_default_view.rviz` | RViz 配置文件 |
@@ -319,6 +320,10 @@ ros2 launch nav2_regulated_modules regulated_modules.launch.py \
 | `container_name` | `nav2_regulated_container` | 组合模式使用的外部组件容器名称 |
 | `use_respawn` | `False` | 非组合模式下节点异常退出后是否重启 |
 | `log_level` | `info` | ROS 日志等级 |
+| `use_collision_monitor` | `true` | 导航模式启用碰撞速度保护；关闭后平滑器直接发布 `/cmd_vel` |
+| `use_collision_visualization` | `true` | 导航模式显示碰撞区域，不参与速度判定 |
+| `adaptive_goal_braking_enabled` | `false` | 固定路径可选自适应制动，默认不启用 |
+| `fixed_path_progress_timeout` | `120.0` | 固定路径进度等待阈值，单位秒；不是单独的终点等待超时 |
 | `enable_localization_jump_detection` | `false` | 是否在相邻 `map -> base_link` 位姿跳变超过阈值时取消控制并停车；不影响 TF 丢失超时停车 |
 | `namespace` | 空 | 顶层命名空间 |
 | `use_namespace` | `False` | 是否启用顶层命名空间 |
@@ -346,9 +351,11 @@ ros2 launch nav2_regulated_modules regulated_modules.launch.py \
   keyboard_input_device:=/dev/pts/N
 ```
 
-统一三模式 Launch 只传入 `input_device` 和 `output_topic`，不会加载
-`myagv_keyboard_control/config/keyboard_control.yaml`。因此该入口使用键盘节点内置的速度和平滑
-默认值；需要自定义遥控参数时，使用第 10 节的独立 Launch 或 `ros2 run --ros-args -p`。
+统一三模式 Launch 读取 `params_file` 中的 `myagv_keyboard_control` 参数块，再覆盖终端设备和
+输出话题，不读取键盘包独立的 `config/keyboard_control.yaml`。默认目标速度为 `linear_speed=1.0 m/s`、
+`angular_speed=0.5 rad/s`，但 `max_linear_speed=0.3 m/s`、`max_angular_speed=0.3 rad/s` 同时约束
+目标和最终输出，实际遥控上限均为 `0.3`；`command_timeout=0.10 s`。这些目标值、硬上限与
+节点内置值是不同概念。自定义时修改传入的规控参数文件；另外两种键盘启动方式见第 6 节。
 
 ### 4.5 自主规划模式
 
@@ -379,6 +386,8 @@ ros2 launch nav2_regulated_modules regulated_modules.launch.py \
   -> FollowPath
   -> /cmd_vel_nav
   -> velocity_smoother
+  -> /cmd_vel_collision_in
+  -> collision_monitor（默认开启）
   -> /cmd_vel
   -> controlpub
   -> /control_to_uart
@@ -414,7 +423,11 @@ ros2 action send_goal /navigate_to_pose nav2_msgs/action/NavigateToPose "{
 | `regulated_navigator.replan_frequency` | `1.0` | 控制期间周期重规划频率，单位 Hz |
 | `regulated_navigator.feedback_frequency` | `5.0` | 外层导航 Action 反馈频率，单位 Hz |
 | `regulated_navigator.max_recovery_rounds` | `2` | 清理双 Costmap 后重新规划的最大轮数 |
-| `velocity_smoother.feedback` | `CLOSED_LOOP` | 使用 `/motion_state` 实测速度作为平滑起点 |
+| `velocity_smoother.feedback` | `CLOSED_LOOP` | 用 `/motion_state` 实测速度按时间校正内部连续速度斜坡 |
+| `controller_server.controller_frequency` | `100.0` | 控制循环目标频率，单位 Hz |
+| `velocity_smoother.smoothing_frequency` | `100.0` | 平滑输出目标频率，单位 Hz |
+| `velocity_smoother.feedback_correction_time` | `0.1` | 实测速度校正时间常数，单位秒 |
+| `velocity_smoother.immediate_stop_on_zero_command` | `false` | 默认全零输入仍受平滑减速约束 |
 | `velocity_smoother.max_velocity` | `[1.5, 0.0, 2.0]` | X、Y、Theta 三轴最大速度 |
 | `velocity_smoother.max_accel` | `[2.5, 0.0, 3.2]` | X、Y、Theta 三轴最大加速度 |
 | `velocity_smoother.max_decel` | `[-2.5, 0.0, -3.2]` | X、Y、Theta 三轴最大减速度 |
@@ -466,10 +479,25 @@ Gazebo 提供机器人、里程计和传感器数据，使用 AMCL 提供 `map` 
 `/cmd_vel` 驱动 Gazebo，实车则由底盘适配链把控制结果送到 `/control_to_uart`，因此仿真验证不能替代
 实车上的急停、通信、制动距离、定位质量和唯一控制发布者检查。
 
+默认非组合仿真中，Controller Server 与 Velocity Smoother 的速度反馈均被包装入口重写为 `/odom`；
+`odom_to_motion_state.py` 另将里程计逐条转换到 `/motion_state`，供底盘输入支路使用。
+Gazebo 里程计发布、控制器和速度平滑器配置均为 100 Hz。仿真 fixed_path 包装入口还将
+`immediate_stop_on_zero_command` 重写为 true；直接规控默认非自适应入口则为 false。
+显式切换组合模式或其他参数文件时应核对最终节点参数，不只看原始 YAML。
+
 终端一启动 Gazebo、AMCL、固定路径规控栈和 RViz：
 
 ```bash
 ros2 launch myworld_bringup entry.launch.py operation_mode:=fixed_path use_rviz:=true
+```
+
+该仿真入口的 `use_collision_monitor` 默认 false；需要与本文直接规控入口的默认碰撞速度链一致时，
+显式传入 `use_collision_monitor:=true`。无图形环境可以使用：
+
+```bash
+ros2 launch myworld_bringup entry.launch.py \
+  operation_mode:=fixed_path headless:=true use_rviz:=false \
+  use_collision_monitor:=true
 ```
 
 终端二发送前进任务。控制器按起点横向和航向误差决定直接跟踪或先原地转向，再以正线速度跟踪；
@@ -503,6 +531,8 @@ ros2 action send_goal --feedback /navigation_service byd_custom_msgs/action/Navi
 [![前进与后退连续固定路径仿真](./vedio/backandforward-preview.gif)](./vedio/backandforward.webm)
 
 [直接播放或下载前进与后退连续仿真视频](./vedio/backandforward.webm)
+
+这些视频是历史演示，时长不是当前 100 Hz 配置的性能或停车精度验收结果。
 
 前进和后退示例必须分别从路径起点附近运行。完成其中一个任务后，如需验证另一个方向，应停止并重新启动
 `myworld_bringup`，确认机器人重新位于 `node1=(-2.8,-1.7)` 附近后再发送 Goal。实车运行时不要启动
@@ -620,10 +650,12 @@ ros2 action send_goal /navigation_service \
 输入要求：
 
 - Action 默认是 `/navigation_service`，可通过 `regulated_navigator.navigation_service_action` 修改。
-- Goal 输入为 `string task_id` 和 `NaviSegment[] navi_segment`；路径生成只读取每段的 `segment_type`、`node1`、`node2`、`control_pos1`、`control_pos2`。
+- Goal 输入为 `string task_id` 和 `NaviSegment[] navi_segment`；几何形状由每段的 `segment_type`、`node1`、`node2`、`control_pos1`、`control_pos2` 决定，`motion_direction` 和 `max_speed` 另用于方向与速度控制。
 - Feedback 为 `cur_task_id`、空的 `cur_seg_id` 和 `float32 progress`；`progress` 表示总路径完成比例，范围为 `0.0–1.0`。Result 为 `bool finish`。
 - `segment_type=1` 为直线段，节点根据 `node1/node2` 自动生成共线控制点；`segment_type=2` 为三次贝塞尔段，依次使用 `node1/control_pos1/control_pos2/node2`。
 - 所有坐标按 `global_frame` 解释且必须为有限值；相邻段的前段 `node2` 与后段 `node1` 必须连续，节点按 `fixed_path_step` 近似等距采样并生成切线朝向。
+- 所有段的 `motion_direction` 必须一致且为 `1`（前进）或 `2`（后退）；`max_speed` 必须为有限正数。整条路径取最小请求速度，再受 `fixed_path_max_speed=1.5 m/s` 钳位。
+- `max_load_speed`、`segment_name`、`segment_id`、`dwell_time` 当前不参与路径控制；不能据此推断有负载限速或分段停留。
 - 上游仍负责路径几何、避障、可行性以及与机器人运动学约束的一致性；插值只增加路径密度，不会把不可行线段变成可行路径。
 
 运行中发送新的 `/navigation_service` Goal 会先校验并生成新 Path，再取消旧 FollowPath、终止旧
@@ -637,11 +669,13 @@ ros2 action send_goal /navigation_service \
 - `regulated_navigator.fixed_path_controller_id` 和 `fixed_path_goal_checker_id`。
 - `controller_server` 对应控制器插件参数。
 - `FixedPathController.start_position_tolerance=1.20 m` 保持起点总距离安全门；首次横向误差不超过 `0.20 m` 且运动方向航向误差不超过 `15°` 时直接进入 Pure Pursuit 跟踪，横向误差较大时原地对齐到 `±3°` 后在同一控制周期进入低速跟踪，不再额外等待停稳或插入零速帧。严格对齐的角速度按完整航向误差计算，避免接近门槛时过早趋零；后退航向误差使用车辆反向与路径切线之差。
-- `controller_server.fixed_path_goal_checker` 提供终点位置及停稳速度阈值；固定路径终点不检查航向。终点感知控制器由 Controller Server 专用分支判定停车锁存、位置精度和实测停稳。
+- 首次大横向偏差触发的纵向命令上限为 `0.30 m/s`；当前最近路径段横向误差 ≤`0.20 m`、运动方向航向误差 ≤`20°` 连续 10 周期达标后单向解除，同条路径不重新触发此起步限速。
+- `controller_server.fixed_path_goal_checker` 提供 XY `0.01 m`、平面停稳线速度 `0.01 m/s`、停稳角速度 `0.05 rad/s` 阈值；终点航向只作诊断。进入 XY 容差或越过终点平面均锁存零速，Controller Server 还要求位置准确标志为真和阈值处理后的速度达标才成功。默认位置准确标志单向锁存，不是停后持续误差检查；GoalChecker 的 10 周期计数在该成功分支没有被调用。
+- 越界后位置仍不准确时保持零速并拒绝成功，不自动反向补偿，也没有独立 3 秒终点超时。后续取消、进度超时或控制失败由原任务流程处理；FollowPath 非成功结果仍可触发 Costmap 清理与保存路径重试，默认最多 2 轮。
 - `velocity_smoother` 的速度、加减速度和 `/motion_state` 闭环参数；Controller Server 的速度反馈来自 `/odometry`。
 - 默认 Launch 将 spdlog 控制台级别设为 `info`、文件级别设为 `trace`，并每秒刷新文件：初始化、Action 摘要、状态切换和警告错误显示在终端；逐帧原始速度、完整速度链、Costmap 更新／发布／膨胀统计与 `/control_to_uart` 输出以 `DEBUG` 高频保存到 `SPDLOG_WRAPPER_LOG_DIR`。车辆运动期间，终端另以 1 秒间隔显示一次最终 `/control_to_uart` 的 `v/w`，零速度和 Costmap 更新期间不循环打印。
 
-它不使用 `planner_id`、`use_smoother` 或 `replan_frequency` 执行规划。
+它不使用 `planner_id`、`use_smoother` 或 `replan_frequency` 执行规划。Action 的 `finish=true` 反映当前软件判定，不能代替实车独立测量的物理 10 mm 精度证明。
 
 ### 4.7 启动后检查与停止
 
@@ -655,6 +689,12 @@ ros2 lifecycle get /smoother_server
 ros2 lifecycle get /velocity_smoother
 ros2 lifecycle get /regulated_navigator
 ros2 param get /regulated_navigator operation_mode
+ros2 param get /controller_server controller_frequency
+ros2 param get /controller_server odom_topic
+ros2 param get /velocity_smoother smoothing_frequency
+ros2 param get /velocity_smoother odom_topic
+ros2 param get /velocity_smoother feedback_correction_time
+ros2 param get /velocity_smoother immediate_stop_on_zero_command
 ros2 topic info /control_to_uart --verbose
 ```
 
@@ -912,17 +952,17 @@ git push
 
 `myagv_keyboard_control` 通过交互式终端读取方向键或 `WASD`，以固定周期直接发布
 `byd_custom_msgs/msg/ControlRes` 到 `/control_to_uart`。按键只更新目标速度，节点依据独立的线
-速度和角速度加减速限制生成连续输出。该节点绕过 `/cmd_vel` 和 `controlpub`，适合人工接管、
+速度和角速度加减速度及 jerk 限制生成 S 曲线连续输出。该节点绕过 `/cmd_vel` 和 `controlpub`，适合人工接管、
 底盘速度符号检查和串口控制链联调。
 
 ### 6.1 平滑控制行为
 
 | 按键 | 目标动作 | `v` | `w` |
 | --- | --- | ---: | ---: |
-| `W` 或 `↑` | 平滑加速前进 | `→ +linear_speed` | `0.0` |
-| `S` 或 `↓` | 平滑加速后退 | `→ -linear_speed` | `0.0` |
-| `A` 或 `←` | 平滑加速原地左转 | `0.0` | `→ +angular_speed` |
-| `D` 或 `→` | 平滑加速原地右转 | `0.0` | `→ -angular_speed` |
+| `W` 或 `↑` | 平滑加速前进 | `→ +min(linear_speed, max_linear_speed)` | `0.0` |
+| `S` 或 `↓` | 平滑加速后退 | `→ -min(linear_speed, max_linear_speed)` | `0.0` |
+| `A` 或 `←` | 平滑加速原地左转 | `0.0` | `→ +min(angular_speed, max_angular_speed)` |
+| `D` 或 `→` | 平滑加速原地右转 | `0.0` | `→ -min(angular_speed, max_angular_speed)` |
 | `Space` 或 `X` | 按减速度限制平滑停车 | `→ 0.0` | `→ 0.0` |
 | `Q` | 立即清零、发布停车指令并退出 | `0.0` | `0.0` |
 
@@ -950,7 +990,8 @@ ros2 launch nav2_regulated_modules regulated_modules.launch.py \
   operation_mode:=remote
 ```
 
-该方式自动关闭自动导航输出链，但使用键盘节点内置参数，不加载键盘 YAML。
+该方式自动关闭自动导航输出链，读取 `params_file` 中的键盘参数块；默认使用
+`nav2_regulated_modules/params/regulated_modules.yaml`，不读取键盘包独立 YAML。
 
 方式二，使用键盘包独立 Launch。该入口加载
 `myagv_keyboard_control/config/keyboard_control.yaml`：
@@ -976,24 +1017,40 @@ ros2 run myagv_keyboard_control myagv_keyboard_control_node --ros-args \
 
 三种方式都必须在能够接收键盘输入的交互式 Shell 中启动。
 
+| 启动方式 | 速度／平滑参数来源 | 默认请求 `linear_speed/angular_speed` | 默认输出硬上限 `max_linear_speed/max_angular_speed` | `command_timeout` |
+| --- | --- | --- | --- | --- |
+| 统一 `operation_mode:=remote` | 规控 `params_file` 的键盘参数块 | `1.0 m/s / 0.5 rad/s` | `0.3 m/s / 0.3 rad/s` | `0.10 s` |
+| 键盘包独立 Launch | `config/keyboard_control.yaml` | `1.0 m/s / 0.5 rad/s` | `0.3 m/s / 0.3 rad/s` | `0.10 s` |
+| 直接 `ros2 run`，未覆盖参数 | 节点内置声明 | `0.2 m/s / 0.5 rad/s` | `0.3 m/s / 0.3 rad/s` | `0.5 s` |
+
+请求速度超过硬上限时，目标和最终输出都会被钳位；上面的命令行示例请求 `angular_speed=0.4`，
+在默认 `max_angular_speed=0.3` 下实际角速度上限仍是 `0.3 rad/s`。这两项硬上限只属于遥控节点，
+不能据此修改或推断自主／固定路径的最大速度。
+
 ### 6.3 参数说明
 
-| 参数 | 默认值 | 说明 |
+| 参数 | 节点内置值 | 说明 |
 | --- | ---: | --- |
 | `input_device` | `/dev/tty` | 键盘输入终端；Launch 通常覆盖为启动 Shell 的 `/dev/pts/*` |
 | `output_topic` | `/control_to_uart` | 最终底盘控制 Topic |
 | `publish_rate` | `100.0` | 周期发布频率，单位 Hz |
-| `linear_speed` | `0.2` | 前进和后退速度绝对值，单位 m/s |
-| `angular_speed` | `0.5` | 左右转角速度绝对值，单位 rad/s |
+| `linear_speed` | `0.2` | 请求前进／后退速度绝对值，实际受 `max_linear_speed` 钳位，单位 m/s |
+| `angular_speed` | `0.5` | 请求转向角速度绝对值，实际受 `max_angular_speed` 钳位，单位 rad/s |
+| `max_linear_speed` | `0.3` | 遥控目标与最终线速度输出硬上限，单位 m/s |
+| `max_angular_speed` | `0.3` | 遥控目标与最终角速度输出硬上限，单位 rad/s |
 | `linear_accel_limit` | `0.4` | 线速度加速限制，单位 m/s²，必须大于零 |
 | `linear_decel_limit` | `0.8` | 线速度减速限制绝对值，单位 m/s²，必须大于零 |
 | `angular_accel_limit` | `1.0` | 角速度加速限制，单位 rad/s²，必须大于零 |
 | `angular_decel_limit` | `2.0` | 角速度减速限制绝对值，单位 rad/s²，必须大于零 |
+| `linear_accel_jerk_limit` | `0.4` | 线加速度变化率上限，单位 m/s³ |
+| `linear_decel_jerk_limit` | `0.8` | 线减速度变化率上限，单位 m/s³ |
+| `angular_accel_jerk_limit` | `1.0` | 角加速度变化率上限，单位 rad/s³ |
+| `angular_decel_jerk_limit` | `2.0` | 角减速度变化率上限，单位 rad/s³ |
 | `command_timeout` | `0.5` | 最后一次方向输入后的松键判定超时，单位 s；`0.0` 表示关闭超时停车 |
 
 参数约束：
 
-- `publish_rate` 和四个加减速度限制必须大于零。
+- `publish_rate`、两个速度硬上限、四个加减速度限制及四个 jerk 限制必须为有限正数。
 - 目标线速度、目标角速度和 `command_timeout` 必须为有限非负数。
 - 参数在节点启动时读取，当前没有运行期动态参数回调；不要依赖启动后的
   `ros2 param set` 改变实际控制行为。
@@ -1002,14 +1059,11 @@ ros2 run myagv_keyboard_control myagv_keyboard_control_node --ros-args \
 
 ### 6.4 参数调节方法
 
-默认 `100 Hz` 下，加减速度的单位及限制保持不变：
-
-```text
-线速度加速时间 = linear_speed / linear_accel_limit = 0.2 / 0.4 = 0.5 s
-线速度停车时间 = linear_speed / linear_decel_limit = 0.2 / 0.8 = 0.25 s
-角速度加速时间 = angular_speed / angular_accel_limit = 0.5 / 1.0 = 0.5 s
-角速度停车时间 = angular_speed / angular_decel_limit = 0.5 / 2.0 = 0.25 s
-```
+默认 `100 Hz` 下，加减速度和 jerk 的物理单位及限制保持不变。忽略 jerk、从零开始加速时，
+仅由最大加速度给出的时间下界为 $t_{\min}=|v_{\mathrm{target}}|/a_{\max}$；停车用实际当前速度和减速度绝对值计算。
+直接运行节点的内置值对应线速度 `0.2 m/s`：加速下界 `0.5 s`、停车下界 `0.25 s`；
+请求角速度 `0.5 rad/s` 被默认硬上限限制为 `0.3 rad/s`，对应加速下界 `0.3 s`、停车下界 `0.15 s`。
+实际 S 曲线还受 jerk、当前加速度和换向先停车策略影响，不能把这些下界写成实际到速或停车时间。
 
 调参原则：
 
@@ -1028,14 +1082,21 @@ myagv_keyboard_control:
     publish_rate: 100.0
     linear_speed: 0.15
     angular_speed: 0.4
+    max_linear_speed: 0.3
+    max_angular_speed: 0.3
     linear_accel_limit: 0.3
+    linear_accel_jerk_limit: 0.4
     linear_decel_limit: 0.6
+    linear_decel_jerk_limit: 0.8
     angular_accel_limit: 0.8
+    angular_accel_jerk_limit: 1.0
     angular_decel_limit: 1.6
+    angular_decel_jerk_limit: 2.0
     command_timeout: 0.6
 ```
 
-该 YAML 只由键盘包独立 Launch 加载。统一三模式入口的遥控分支目前使用节点内置值。
+该 YAML 只由键盘包独立 Launch 加载。统一三模式遥控的长期参数写入所选规控
+`params_file` 的 `myagv_keyboard_control` 块；节点内置值只用于没有文件／命令行覆盖的参数。
 
 ### 6.5 检查输出
 

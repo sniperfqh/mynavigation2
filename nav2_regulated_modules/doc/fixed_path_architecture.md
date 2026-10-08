@@ -1,5 +1,7 @@
 # `fixed_path` 固定路径模式架构与调用链
 
+核对日期：2026-10-08，控制代码基线为 `e3154683`。控制器与速度平滑器默认 `100 Hz`；当前使用停车／位置锁存判定及原恢复流程，不包含已撤销的连续 1 秒精度窗口、3 秒终点超时或固定路径失败不重试改动。
+
 本文对应以下**默认**启动命令，以当前工作空间源码和 [启动文件](../launch/regulated_modules.launch.py)、[参数文件](../params/regulated_modules.yaml) 为准：
 
 ```bash
@@ -74,7 +76,7 @@ flowchart LR
 
 1. `handleNavigationServiceGoal()` 先检查模式、Lifecycle 活跃状态、分段非空；每段 `motion_direction` 只能为 `1` 前进或 `2` 后退，整条 Action 方向必须一致，`max_speed` 必须是有限正数。未通过时直接拒绝 Goal。
 2. 接受后 `prepareFixedPath()` 再检查全部几何点为有限值、每段首尾不重合、相邻段端点在 `0.001 m` 内连续、段类型受支持。此阶段失败则 Goal 已接受但返回 `ABORTED/finish=false`。
-3. `segment_type=1` 时把直线两端转换为共线的四个三次贝塞尔控制点；`segment_type=2` 时直接使用 `node1 → control_pos1 → control_pos2 → node2`。每段先密集估算弧长，再按 `fixed_path_step=0.1 m` 近似等距采样，强制保留终点；拼接时移除上一段重复终点。
+3. `segment_type=1` 时把直线两端转换为共线的四个三次贝塞尔控制点；`segment_type=2` 时直接使用 `node1 → control_pos1 → control_pos2 → node2`。每段先密集估算弧长，再按 `fixed_path_step=0.1 m` 近似等距采样，保留终点；拼接时移除上一段末点。当前以末点 `x/y` 是否与目标坐标精确相等决定是否再追加终点，不包含试验中的极近重复点合并；用于计算航向的切线向量长度不超过 `1e-9 m` 时，路径会被拒绝。
 4. 每个 Pose 都写入 `global_frame=map`，`z=0`；用相邻采样点求路径切线。前进时 Pose 航向沿切线，后退时加 `π`，编码**车辆朝向**和运动方向。插值只处理几何密度，不检查业务路径的可行性和全程避障。
 5. `handleNavigationServiceAccepted()` 等待 `FollowPath` 服务可用，先结束旧任务，再保存路径、总长度、方向、起终点航向和任务代次。当前车体位置不会被重置到 `node1`。`publishFixedPath()` 发布中心线及左右 `0.40 m` 的显示边界。
 6. 多段请求速度取最小值，再执行 $v_{\mathrm{effective}}=\min(\min_i v_{\mathrm{segment},i},v_{\mathrm{fixed\_path\_max}})$；默认全局上限为 `1.5 m/s`。`publishSpeedLimit()` 以 `percentage=false` 发布绝对速度值，Controller Server 和 Velocity Smoother 都订阅该话题。
@@ -95,7 +97,7 @@ sequenceDiagram
   N-->>C: /speed_limit（绝对 m/s）
   N->>C: FollowPath（Path + 两个插件 ID）
   C->>F: setPlan(Path)
-  loop 默认 50 Hz 控制周期
+  loop 默认 100 Hz 控制周期
     C->>F: computeVelocityCommands(位姿、里程计速度、GoalChecker)
     F-->>C: TwistStamped
     C-->>V: /cmd_vel_nav
@@ -113,7 +115,7 @@ sequenceDiagram
 
 ## 3. 控制周期、起点、跟踪与终点
 
-`Controller Server` 在 `FollowPath` 活跃时先等待 `local_costmap.isCurrent()`，然后每轮更新路径、通过进度检查器检查位移、取得机器人位姿与 `/odometry` 速度，调用 [`FixedPathController::computeVelocityCommands()`](../src/fixed_path_controller.cpp)，发布命令与反馈，再检查是否到点。等待 Costmap 更新的内部轮询为 `100 Hz`，并不等于控制输出频率。插件的 `setPlan()` 要求至少两个点、有效坐标系及起终点切线；首点 Pose 朝向和起点切线夹角的余弦须能明确区分前进／后退。每条新路径会重置最近点、起点策略、制动与停车锁存。
+`Controller Server` 在 `FollowPath` 活跃时先等待 `local_costmap.isCurrent()`，然后每轮更新路径、通过进度检查器检查位移、取得机器人位姿与 `/odometry` 速度，调用 [`FixedPathController::computeVelocityCommands()`](../src/fixed_path_controller.cpp)，发布命令与反馈，再检查是否到点。`controller_frequency=100.0` 对应名义周期 `0.01 s`；等待 Costmap 更新的内部轮询也为 `100 Hz`，但两者是不同执行环节，均不能代替实际输出频率测量。插件的 `setPlan()` 要求至少两个点、有效坐标系及起终点切线；首点 Pose 朝向和起点切线夹角的余弦须能明确区分前进／后退。每条新路径会重置最近点、起点策略、制动与停车锁存。控制器每轮将当前位姿转换到路径坐标系后计算误差，不在任务开始时冻结该变换。
 
 ```mermaid
 stateDiagram-v2
@@ -121,17 +123,18 @@ stateDiagram-v2
   ALIGN_START --> TRACK_PATH: 起点在 1.20 m 内，航向达到对应门槛
   ALIGN_START --> ALIGN_START: 航向未达标，原地旋转
   TRACK_PATH --> STOPPED: XY 进入 0.01 m 或越过终点平面
-  STOPPED --> STOPPED: 保持零速，等待实测停稳
+  STOPPED --> STOPPED: 保持零速，检查位置准确锁存与实测停稳
   STOPPED --> [*]: Controller Server 判定成功
   ALIGN_START --> [*]: 起点越界或控制失败
   TRACK_PATH --> [*]: TF／进度／控制失败
+  STOPPED --> [*]: 取消／进度超时／控制失败
 ```
 
 ### 3.1 起点
 
 - 起点到车辆的平面距离须不超过 `start_position_tolerance=1.20 m`，否则插件抛错。前进以车头朝向、后退以车头朝向加 `π`，同路径切线比较。
 - 首次横向误差不超过 `0.20 m` 时锁定“直接跟踪”策略：运动方向航向误差不超过 `15°` 就在**本控制周期**进入跟踪；否则先原地转到该门槛。
-- 首次横向误差超过 `0.20 m` 时锁定“严格对齐”策略：先原地转到 `±3°`；`alignment_stable_cycles=1`，因此默认在达标的同一控制周期开始跟踪，不要求先停稳。该路径的纵向命令暂限 `0.30 m/s`；最近有效路径段的横向误差回到 `0.20 m` 内、运动方向航向误差不超过 `20°`，且连续 `5` 个控制周期达标后，单向解除此起步限速。
+- 首次横向误差超过 `0.20 m` 时锁定“严格对齐”策略：先原地转到 `±3°`；`alignment_stable_cycles=1`，因此默认在达标的同一控制周期开始跟踪，不要求先停稳。该路径的纵向命令暂限 `0.30 m/s`；最近有效路径段的横向误差回到 `0.20 m` 内、运动方向航向误差不超过 `20°`，且连续 `10` 个控制周期达标后，单向解除此起步限速。100 Hz 下名义稳定时间约 `0.1 s`，这是起步限速解除计数，不是终点稳定计数。
 
 ### 3.2 跟踪与速度
 
@@ -145,16 +148,20 @@ stateDiagram-v2
 
 进入 `fixed_path_goal_checker.xy_goal_tolerance=0.01 m` 或到达末段且越过终点切线的法向平面时，控制器进入 `STOPPED` 并锁存零速，不再追点或原地转向。终点切线航向误差会记录到日志，但**不参与成功条件**。越界锁存也不自动等于位置准确：控制器分别维护停车锁存和位置精度状态。
 
-当前 [`ControllerServer::isGoalReached()`](../../nav2_controller/src/controller_server.cpp) 对 `TerminalAwareController` 走专用分支：要求已停车锁存、位置准确，以及 `/odometry` 实测线速度不超过 `0.01 m/s`、角速度不超过 `0.05 rad/s`。虽然 [`FixedPathGoalChecker`](../src/fixed_path_goal_checker.cpp) 配有 `position_stable_cycles=5` 并实现 `isGoalReached()`，当前专用成功分支不调用该方法，故不能把 5 周期写成实际完成门槛。Controller Server 的终点判定通过后，`FollowPath` 成功，外层 Action 返回 `finish=true`；否则保持等待或进入失败／恢复流程。
+默认非自适应分支在首次停车时记录 `terminal_position_accurate_`。停车后若原先不准确、后续位姿进入容差，会把该标志单向置为准确；已准确后不会因当前位姿又离开容差而撤回。因此该标志是位置准确锁存，不是停后持续误差检验。
+
+当前 [`ControllerServer::isGoalReached()`](../../nav2_controller/src/controller_server.cpp) 对 `TerminalAwareController` 走专用分支：要求已停车锁存、位置准确标志为真，以及 `/odometry` 的阈值处理后平面线速度幅值不超过 `0.01 m/s`、角速度绝对值不超过 `0.05 rad/s`。虽然 [`FixedPathGoalChecker`](../src/fixed_path_goal_checker.cpp) 配有 `position_stable_cycles=10` 并实现 `isGoalReached()`，当前专用成功分支只读取它的停稳容差，不调用该稳定计数方法。不能把 10 周期写成实际终点完成门槛，更不能解释成连续 1 秒精度验收。通过后 `FollowPath` 成功，外层 Action 返回 `finish=true`；航向误差仍只作诊断。
+
+如果越过终点平面后位置准确标志仍为假，插件保持零速，Controller Server 拒绝成功；默认没有独立的 3 秒终点超时，也不会自动反向补偿。后续由取消、原进度超时或控制异常决定是否结束并进入恢复。自适应分支不同：停车后逐周期复核当前 XY，实测线速度绝对值已降至停止阈值但 XY 仍在容差外时抛出控制异常；该异常检查没有同时要求角速度达标，该分支默认关闭。
 
 ## 4. 速度、传感器和周期函数
 
 ```mermaid
 flowchart TD
-  f["FollowPath Goal 活动中"] --> loop["Controller Server WallRate 50 Hz"]
+  f["FollowPath Goal 活动中"] --> loop["Controller Server WallRate 100 Hz"]
   loop --> pose["local_costmap 位姿 + /odometry"]
   pose --> cmd["进度检查 → FixedPathController → /cmd_vel_nav"]
-  cmd --> vs["VelocitySmoother::smootherTimer() 50 Hz"]
+  cmd --> vs["VelocitySmoother::smootherTimer() 100 Hz"]
   vs --> cm["CollisionMonitor::cmdVelInCallback() 消息触发"]
   cm --> cp["ControlPub::onCmdVel() 消息触发"]
   mon["RegulatedNavigator::monitorTask() 5 Hz"] --> tf["TF、取消、进度、恢复"]
@@ -165,12 +172,12 @@ flowchart TD
 
 | 触发方式／默认频率 | 入口与调用 | 作用 |
 | --- | --- | --- |
-| 控制循环，`50 Hz` | `ControllerServer::computeControl() → computeAndPublishVelocity() → FixedPathController::computeVelocityCommands()` | 读取局部代价地图位姿和 `/odometry`，运行进度检查、控制、反馈与 `/cmd_vel_nav` 发布；目标完成也在控制循环检查。 |
-| 平滑定时器，`50 Hz` | `VelocitySmoother::smootherTimer()` | 用 `/motion_state` 闭环反馈及限速、加减速参数处理最近命令；默认 `velocity_timeout=1.0 s`。 |
+| 控制循环，`100 Hz` | `ControllerServer::computeControl() → computeAndPublishVelocity() → FixedPathController::computeVelocityCommands()` | 读取局部代价地图位姿和 `/odometry`，运行进度检查、控制、反馈与 `/cmd_vel_nav` 发布；目标完成也在控制循环检查。 |
+| 平滑定时器，`100 Hz` | `VelocitySmoother::smootherTimer()` | 用 `/motion_state` 闭环反馈及限速、加减速参数处理最近命令；默认 `velocity_timeout=1.0 s`。 |
 | 导航监控定时器，`5 Hz` | `RegulatedNavigator::monitorTask()`，周期 `200 ms` | 处理取消、`map→base_link` TF 丢失、位姿突跳开关、任务无进展与恢复；仅自主导航分支会定期重规划。 |
 | 普通导航反馈定时器，`5 Hz` | `RegulatedNavigator::publishFeedback()` | 向普通 `NavigateToPose`／`NavigateThroughPoses` 发布反馈；固定路径进度由 `FollowPath` feedback 回调触发。 |
 | 诊断定时器，`1 Hz` | `RegulatedNavigator::logVelocityChain()` | 汇总里程计、控制器输出和平滑器输出；不参与控制。 |
-| 底盘输入支路，`50 Hz` | `ChassisControlSubscriber::processControlCommand()` | **仅收到该支路指令并保持其状态时**计算 S 曲线输出；检查指令／`MotionState` 超时和发布者冲突。 |
+| 底盘输入支路，`100 Hz` | `ChassisControlSubscriber::processControlCommand()` | **仅收到该支路指令并保持其状态时**计算 S 曲线输出；检查指令／`MotionState` 超时和发布者冲突。 |
 | 局部代价地图，更新 `5 Hz`／发布 `2 Hz` | `controller_server.local_costmap` | 激光 `voxel_layer` 与 `inflation_layer`，为控制服务器提供位姿与地图状态。 |
 | 全局代价地图，更新／发布 `1 Hz` | `planner_server.global_costmap` | 随 Planner Server 启动，但本模式不请求全局规划。 |
 | 消息触发，无固定输出频率 | `CollisionMonitor::cmdVelInCallback() → process()`；`ControlPub::onCmdVel()` | 前者依据最新扫描点和区域处理每条输入速度，后者转发有效速度；频率受上游消息和执行调度影响。 |
@@ -181,12 +188,32 @@ Collision Monitor 依据 `base_link` 周围的矩形区域处理激光点：Stop
 
 `/speed_limit` 的绝对值同时进入控制器插件和速度平滑器。速度平滑器默认线速度范围 `[-1.5, 1.5] m/s`、线加／减速度 `+2.5/-2.5 m/s²`，角速度范围 `[-2.0, 2.0] rad/s`，`CLOSED_LOOP` 反馈来自 `/motion_state`。`use_collision_monitor:=false` 时 Launch 把平滑器输出直接改映射至 `/cmd_vel`；默认开启时由碰撞监控发布最终 `/cmd_vel`。`controlpub` 只做消息字段映射，底盘驱动可能另有限速，须以现场实现核对。
 
+### 4.1 闭环平滑与全零停车
+
+当前 [`VelocitySmoother::feedbackReference()`](../../nav2_velocity_smoother/src/velocity_smoother.cpp) 以内部上一条速度斜坡为基准，按 $w=\operatorname{clamp}(1/(fT),0,1)$ 校正实测速度，再进行速度／加减速度约束；默认 `f=100 Hz`、`feedback_correction_time=T=0.1 s`，校正权重为 `0.1`。最终闭环输出还受相对上一内部命令的连续增量限制；内部命令在死区过滤前保存。该保留的升频修复避免每周期直接从有跟踪偏差的实测速度重启斜坡；它不等于切换 OPEN_LOOP，也不证明实车动态响应完全相同。
+
+直接启动本包、默认非自适应配置时，`immediate_stop_on_zero_command=false`，全零输入仍经过速度平滑减速；不能把控制器零速锁存等同于最终底盘指令在同一周期立即归零。显式启用自适应固定路径时，Launch 才将该项覆盖为 `true`，并覆盖正常线减速度为 `-1.0 m/s²`。停车后实际残余位移／转动仍取决于速度链与底盘。
+
+### 4.2 直接入口与本地仿真的反馈差异
+
+| 项目 | 本文的默认直接规控入口 | `myworld_bringup` 默认非组合固定路径仿真入口 |
+| --- | --- | --- |
+| Controller Server 速度反馈 | `/odometry`，`nav_msgs/Odometry` | `/odom`，`nav_msgs/Odometry` |
+| Velocity Smoother 闭环反馈 | `/motion_state`，`byd_custom_msgs/MotionState` | `/odom`，`nav_msgs/Odometry` |
+| `/motion_state` 发布源 | 外部底盘反馈 | `odom_to_motion_state.py` 从 `/odom` 逐条转换，底盘输入支路使用 |
+| 控制器／平滑器周期 | 默认 100 Hz | 默认 100 Hz |
+| 里程计发布频率 | 外部驱动负责，需实测 | Gazebo OdometryPublisher 配置 100 Hz |
+| 全零立即停车 | 默认非自适应为 false | 仿真导航包装入口在 fixed_path 下重写为 true |
+| 定位与传感器 | 外部提供 TF／雷达 | Gazebo 提供机器人、里程计、雷达；AMCL 提供 map 定位 |
+
+[`OdomSmoother`](../../nav2_util/src/odometry_utils.cpp) 按反馈话题末级名称选择消息类型：`motion_state` 使用 `MotionState.v_car/w_car`，其他名称使用 `Odometry.twist.twist`。仿真包装入口的 [`navigation_launch.py`](../../myworld_bringup/launch/navigation_launch.py) 会再次重写参数；组合组件还会叠加 `fixed_path_smoother_params`，因此显式切换组合模式后需核对最终节点参数。仅查看原 YAML 中的 `immediate_stop_on_zero_command` 不能得出最终设置。
+
 ## 5. 取消、异常和恢复
 
 - 新 Goal 通过路径生成及下游服务检查后，`preemptCurrentTask()` 取消旧 `FollowPath`、向 `/cmd_vel_nav` 连发三帧零速并终止旧外层 Goal；新任务以新的代次继续。旧回调被代次和序号过滤。客户端取消由 `monitorTask()` 收口为 `CANCELED/finish=false`；下游失败或路径准备失败返回 `ABORTED/finish=false`。
 - `monitorTask()` 每 `200 ms` 查询 TF。`localization_timeout=0.3 s` 内持续无有效 TF 后取消跟踪、发零速并进入 `LOCALIZATION_LOST`；恢复需连续稳定 `0.5 s`，超过 `10 s` 则失败。`enable_localization_jump_detection=false` 是默认值；显式启用后，超过平移／旋转阈值会取消旧跟踪并恢复。
 - 控制期间，导航器用 `map` 位姿至少移动 `progress_min_translation=0.1 m` 才刷新自己的进度时间；Launch 将其固定路径 `progress_timeout` 和 Controller Server `progress_checker.movement_time_allowance` 都覆盖为 `fixed_path_progress_timeout=120 s`。Controller Server 的进度检查器另有 `required_movement_radius=0.5 m`，两套判定不能混为一谈。
-- `startRecovery()` 取消下游 Goal、发零速，按服务可用性请求清理局部／全局代价地图，等待 `0.8 s` 后继续；默认最多 `2` 轮。`resumeCurrentTask()` 对固定路径重新发布已保存 Path 并重发 `FollowPath`，不改走自主规划。控制插件抛错由 Controller Server 的 `failure_tolerance=0.3 s` 先容忍短时失败，持续失败再使 `FollowPath` 失败并进入导航器恢复。
+- `startRecovery()` 取消下游 Goal、发零速，按服务可用性请求清理局部／全局代价地图，等待 `0.8 s` 后继续；默认最多 `2` 轮。`resumeCurrentTask()` 对固定路径重新发布已保存 Path 并重发 `FollowPath`，不改走自主规划。当前固定路径的下游非成功结果，在外层任务并非取消状态时仍调用 `startRecovery()`，不采用试验中的“FollowPath 失败直接结束且不重试”。控制插件抛出的 `PlannerException` 可由 Controller Server 的 `failure_tolerance=0.3 s` 先容忍短时失败，持续失败再使 `FollowPath` 失败并进入导航器恢复。
 - 完成、取消或失败时 `resetTask()` 发布 `SpeedLimit=0` 并清理任务状态。零速命令经过速度链后的实际停稳取决于平滑器、碰撞监控和底盘反馈；文档中的控制周期是配置目标频率，不能代替实车测量。
 
 ## 6. 源码索引与核对入口
