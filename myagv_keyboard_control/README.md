@@ -30,7 +30,7 @@ myagv_keyboard_control/
 ```text
 Topic: /control_to_uart
 Type:  byd_custom_msgs/msg/ControlRes
-Rate:  50Hz
+Rate:  100Hz
 ```
 
 字段定义：
@@ -96,7 +96,7 @@ ros2 run myagv_keyboard_control myagv_keyboard_control_node --ros-args \
 | --- | ---: | --- |
 | `input_device` | `/dev/tty` | 键盘输入终端；Launch 会自动覆盖为启动 Shell 的 `/dev/pts/*` |
 | `output_topic` | `/control_to_uart` | 底盘控制输出 Topic |
-| `publish_rate` | `50.0` | 周期发布频率，单位 Hz |
+| `publish_rate` | `100.0` | 周期发布频率，单位 Hz |
 | `linear_speed` | `0.2` | 前进和后退速度绝对值，单位 m/s |
 | `angular_speed` | `0.5` | 左右转角速度绝对值，单位 rad/s |
 | `max_linear_speed` | `0.3` | 遥控线速度上限，单位 m/s，必须为有限正数 |

@@ -17,6 +17,7 @@
 #include <string>
 #include <vector>
 #include <limits>
+#include <thread>
 
 #include "gtest/gtest.h"
 #include "rclcpp/rclcpp.hpp"
@@ -60,6 +61,94 @@ public:
   double targetMinVelocity() const {return target_minvx_;}
   bool isLimitTransitionPending() const {return limitv2target;}
 };
+
+TEST(VelocitySmootherTest, closedLoopRampPreservesRatesLimitsAndFeedback)
+{
+  for (const double frequency : {50.0, 100.0})
+  {
+    auto smoother = std::make_shared<VelSmootherShim>();
+    smoother->declare_parameter("smoothing_frequency", rclcpp::ParameterValue(frequency));
+    smoother->declare_parameter("feedback", rclcpp::ParameterValue(std::string("CLOSED_LOOP")));
+    smoother->declare_parameter("max_velocity", rclcpp::ParameterValue(std::vector<double>{1.0, 0.0, 1.0}));
+    smoother->declare_parameter("min_velocity", rclcpp::ParameterValue(std::vector<double>{-1.0, 0.0, -1.0}));
+    rclcpp_lifecycle::State state;
+    smoother->configure(state);
+    smoother->activate(state);
+    double last_output = 0.0;
+    double previous_output = 0.0;
+    size_t samples = 0;
+    auto subscription = smoother->create_subscription<geometry_msgs::msg::Twist>("cmd_vel_smoothed", 10, [&](geometry_msgs::msg::Twist::SharedPtr msg)
+    {
+      EXPECT_LE(std::abs(msg->angular.z - previous_output), 3.2 / frequency + 1e-9);
+      EXPECT_LE(std::abs(msg->angular.z), 0.8 + 1e-9);
+      last_output = msg->angular.z;
+      previous_output = last_output;
+      ++samples;
+    }
+    );
+    auto feedback_publisher = smoother->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
+    feedback_publisher->on_activate();
+    for (const double target : {0.8, -0.8, 0.0})
+    {
+      const auto start = smoother->now();
+      while (smoother->now() - start < 1.5s)
+      {
+        nav_msgs::msg::Odometry feedback;
+        feedback.header.stamp = smoother->now();
+        feedback.twist.twist.angular.z = 0.9 * last_output;
+        feedback_publisher->publish(feedback);
+        auto command = std::make_shared<geometry_msgs::msg::Twist>();
+        command->angular.z = target;
+        smoother->sendCommandMsg(command);
+        rclcpp::spin_some(smoother->get_node_base_interface());
+        std::this_thread::sleep_for(1ms);
+      }
+      EXPECT_NEAR(last_output, target, 1e-3);
+    }
+    EXPECT_GT(samples, static_cast<size_t>(frequency * 3.0));
+    EXPECT_TRUE(smoother->isOdomSmoother());
+    smoother->deactivate(state);
+    smoother->cleanup(state);
+  }
+}
+
+TEST(VelocitySmootherTest, stalledClosedLoopFeedbackRemainsBounded)
+{
+  for (const double frequency : {50.0, 100.0})
+  {
+    auto smoother = std::make_shared<VelSmootherShim>();
+    smoother->declare_parameter("smoothing_frequency", rclcpp::ParameterValue(frequency));
+    smoother->declare_parameter("feedback", rclcpp::ParameterValue(std::string("CLOSED_LOOP")));
+    smoother->declare_parameter("max_velocity", rclcpp::ParameterValue(std::vector<double>{1.0, 0.0, 1.0}));
+    rclcpp_lifecycle::State state;
+    smoother->configure(state);
+    smoother->activate(state);
+    double last_output = 0.0;
+    auto subscription = smoother->create_subscription<geometry_msgs::msg::Twist>("cmd_vel_smoothed", 10, [&](geometry_msgs::msg::Twist::SharedPtr msg)
+    {
+      last_output = msg->angular.z;
+      EXPECT_LE(last_output, 0.32 + 1e-9);
+    }
+    );
+    auto feedback_publisher = smoother->create_publisher<nav_msgs::msg::Odometry>("odom", 10);
+    feedback_publisher->on_activate();
+    const auto start = smoother->now();
+    while (smoother->now() - start < 1.5s)
+    {
+      nav_msgs::msg::Odometry feedback;
+      feedback.header.stamp = smoother->now();
+      feedback_publisher->publish(feedback);
+      auto command = std::make_shared<geometry_msgs::msg::Twist>();
+      command->angular.z = 0.8;
+      smoother->sendCommandMsg(command);
+      rclcpp::spin_some(smoother->get_node_base_interface());
+      std::this_thread::sleep_for(1ms);
+    }
+    EXPECT_NEAR(last_output, 0.32, 1e-3);
+    smoother->deactivate(state);
+    smoother->cleanup(state);
+  }
+}
 
 TEST(VelocitySmootherTest, absoluteSpeedLimitIsSymmetric)
 {
@@ -114,6 +203,8 @@ TEST(VelocitySmootherTest, openLoopTestTimer) {
   EXPECT_LT(linear_vels.size(), 30u);
 
   // Should have last command be a stop since we timed out the command stream
+  ASSERT_FALSE(linear_vels.empty());
+  EXPECT_NEAR(*std::max_element(linear_vels.begin(), linear_vels.end()), 0.5, 1e-6);
   EXPECT_EQ(linear_vels.back(), 0.0);
 
   // From deadband, first few should be 0 until above 0.2

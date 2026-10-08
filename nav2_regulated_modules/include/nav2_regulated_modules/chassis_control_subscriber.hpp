@@ -188,7 +188,7 @@ struct ChassisControlConfig
   std::string output_topic{"/control_to_uart"};
   double motion_state_timeout{0.2};
   double command_timeout{0.15};
-  double publish_rate{50.0};
+  double publish_rate{100.0};
   double default_linear_speed_max{1.5};
   double linear_speed_max = 0.3;
   double default_angular_speed_max{0.5};

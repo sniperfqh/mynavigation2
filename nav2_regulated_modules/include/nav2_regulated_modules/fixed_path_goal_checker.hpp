@@ -46,7 +46,7 @@ private:
   double xy_goal_tolerance_ { 0.01 };
   double trans_stopped_velocity_ { 0.01 };
   double rot_stopped_velocity_ { 0.05 };
-  int position_stable_cycles_ { 5 };
+  int position_stable_cycles_ { 10 };
   int stopped_cycles_ { 0 };
   bool path_valid_ { false };
   bool terminal_reached_ { false };

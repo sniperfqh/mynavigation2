@@ -113,7 +113,7 @@ private:
   double direct_tracking_lateral_tolerance_ { 0.20 };
   double start_offset_speed_limit_ = 0.30;
   double start_speed_release_yaw_tolerance_ = 0.3490658503988659;
-  int start_speed_release_stable_cycles_ = 5;
+  int start_speed_release_stable_cycles_ = 10;
   double direct_tracking_max_yaw_error_ { 0.2617993877991494 };
   double initial_yaw_tolerance_ { 0.05235987755982989 };
   double rotate_to_heading_angular_vel_ { 0.4 };
@@ -143,7 +143,7 @@ private:
   rclcpp::Time last_braking_update_time_ { 0, 0, RCL_ROS_TIME };
   double goal_error_log_frequency_ { 1.0 };
   double transform_tolerance_ { 0.2 };
-  double control_duration_ { 0.02 };
+  double control_duration_ { 0.01 };
   int alignment_stable_cycles_ { 1 };
   rclcpp::Time last_error_log_time_ { 0, 0, RCL_ROS_TIME };
   bool error_log_initialized_ { false };

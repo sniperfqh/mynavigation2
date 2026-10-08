@@ -16,6 +16,13 @@ This controller has been measured to run at well over 1 kHz on a modern intel pr
 
 See its [Configuration Guide Page](https://navigation.ros.org/configuration/packages/configuring-regulated-pp.html) for additional parameter descriptions.
 
+## 本仓库的原地转向反馈修正
+
+原地转向使用连续角速度斜坡，并以实测角速度校正斜坡状态，避免底盘轻微跟踪误差在
+高控制频率下形成额外速度上限。`rotate_to_heading_feedback_time` 默认 `0.1 s`，必须为
+有限正数，支持动态调整；越小越快贴近实测速度。原角速度、角加速度、终点制动包络和
+碰撞检查保持不变。进入普通路径跟踪、更新路径、停用或碰撞拒绝时清除转向斜坡状态。
+
 ## Pure Pursuit Basics
 
 The Pure Pursuit algorithm has been in use for over 30 years. You can read more about the details of the pure pursuit controller in its [introduction paper](http://www.enseignement.polytechnique.fr/profs/informatique/Eric.Goubault/MRIS/coulter_r_craig_1992_1.pdf). The core idea is to find a point on the path in front of the robot and find the linear and angular velocity to help drive towards it. Once it moves forward, a new point is selected, and the process repeats until the end of the path. The distance used to find the point to drive towards is the `lookahead` distance.

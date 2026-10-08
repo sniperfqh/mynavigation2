@@ -162,6 +162,9 @@ protected:
    */
   void rotateToHeading(double & linear_vel, double & angular_vel, const double & angle_to_path, const geometry_msgs::msg::Twist & curr_speed);
 
+  // 在原转向约束外维护由实测速度校正的连续角速度斜坡。
+  void computeRotationCommand(double & linear_vel, double & angular_vel, const double & angle_to_path, const geometry_msgs::msg::Twist & curr_speed);
+
   /**
    * @brief Whether collision is imminent
    * @param robot_pose Pose of robot
@@ -262,6 +265,9 @@ protected:
   double min_approach_linear_velocity_;
   double approach_velocity_scaling_dist_;
   double control_duration_;
+  double rotation_feedback_time_ = 0.1;
+  double last_rotation_velocity_ = 0.0;
+  bool rotation_active_ = false;
   double max_allowed_time_to_collision_up_to_carrot_;
   bool use_collision_detection_;
   bool use_regulated_linear_velocity_scaling_;

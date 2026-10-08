@@ -231,6 +231,22 @@ ros2 lifecycle nodes
 
 ## 4. 推荐入口：nav2_regulated_modules 三模式运行
 
+默认控制周期统一为 `100 Hz`（`10 ms`）：自主导航和固定路径的 Controller Server、
+Velocity Smoother，以及键盘遥控和 `ChassisControl` 输出均使用这一频率。
+速度、加减速度、jerk、位置容差及秒制超时保持原配置。固定路径起步限速解除采用
+连续 `10` 个稳定周期，保留原先约 `0.1 s` 的名义稳定时间；目标检查器的
+`position_stable_cycles` 配置同步为 `10`。默认固定路径仍沿用 Controller Server 的
+终点停车锁存、位置精度与停稳速度判定流程，不新增停车等待；起点航向达标当周期
+进入跟踪的 `alignment_stable_cycles: 1` 保持不变。
+本地仿真 `/odom` 和由其逐条转换的 `/motion_state` 同步为 `100 Hz`；直接规控入口的
+`/odometry`、`/motion_state` 由外部实车驱动发布，需要独立核对真实频率。
+
+RPP 原地转向与 CLOSED_LOOP 速度平滑采用连续速度斜坡，并用实测速度按时间校正。
+`RPP.rotate_to_heading_feedback_time` 和 `velocity_smoother.feedback_correction_time`
+默认均为 `0.1 s`，必须为有限正数；它们控制反馈校正速度，不改变原速度与加减速度上限。
+这避免底盘轻微跟踪误差与每周期增量叠加后，在升频时把可达到的速度压低。
+OPEN_LOOP、死区累积、超时停车、全零立即停车与碰撞检查仍保留各自原有语义。
+
 `nav2_regulated_modules` 不使用行为树，通过启动参数 `operation_mode` 在三种互斥模式中选择一种。
 模式只能在启动时确定，不支持运行中热切换。切换模式时必须先停止旧 Launch，再启动新模式，避免旧
 Action、速度命令或 Topic 发布者残留。
@@ -674,7 +690,7 @@ ros2 topic info /control_to_uart --verbose
 `byd_custom_msgs/msg/ChassisControl`，订阅 QoS 为 Keep Last 10、Reliable、Volatile。线速度、角速度和
 加速度均为 `float32`；`op` 负责方向，三个控制量只提供非负绝对值。
 
-该入口在收到有效 `ChassisControl` 后缓存目标命令，由默认 `50 Hz` 的
+该入口在收到有效 `ChassisControl` 后缓存目标命令，由默认 `100 Hz` 的
 `processControlCommand()` 定时器读取 `/motion_state` 反馈并执行 S 曲线加减速；命令超过
 `0.15 s` 未更新后进入停车过程。空闲且从未收到命令时，定时器不发布控制消息。该支路会检查
 `/control_to_uart` 发布者数量，发现多个发布者时停止自身输出；联调仍应核对所有发布源，
@@ -683,7 +699,7 @@ ros2 topic info /control_to_uart --verbose
 先在一个已加载工作空间的终端以 Sensor Data QoS 持续发布模拟反馈：
 
 ```bash
-ros2 topic pub -r 50 \
+ros2 topic pub -r 100 \
   --qos-history keep_last \
   --qos-depth 5 \
   --qos-reliability best_effort \
@@ -948,7 +964,7 @@ ros2 launch myagv_keyboard_control keyboard_control.launch.py
 ```bash
 ros2 run myagv_keyboard_control myagv_keyboard_control_node --ros-args \
   -p input_device:=/dev/tty \
-  -p publish_rate:=50.0 \
+  -p publish_rate:=100.0 \
   -p linear_speed:=0.15 \
   -p angular_speed:=0.4 \
   -p linear_accel_limit:=0.3 \
@@ -966,7 +982,7 @@ ros2 run myagv_keyboard_control myagv_keyboard_control_node --ros-args \
 | --- | ---: | --- |
 | `input_device` | `/dev/tty` | 键盘输入终端；Launch 通常覆盖为启动 Shell 的 `/dev/pts/*` |
 | `output_topic` | `/control_to_uart` | 最终底盘控制 Topic |
-| `publish_rate` | `50.0` | 周期发布频率，单位 Hz |
+| `publish_rate` | `100.0` | 周期发布频率，单位 Hz |
 | `linear_speed` | `0.2` | 前进和后退速度绝对值，单位 m/s |
 | `angular_speed` | `0.5` | 左右转角速度绝对值，单位 rad/s |
 | `linear_accel_limit` | `0.4` | 线速度加速限制，单位 m/s²，必须大于零 |
@@ -986,7 +1002,7 @@ ros2 run myagv_keyboard_control myagv_keyboard_control_node --ros-args \
 
 ### 6.4 参数调节方法
 
-默认 `50 Hz` 下：
+默认 `100 Hz` 下，加减速度的单位及限制保持不变：
 
 ```text
 线速度加速时间 = linear_speed / linear_accel_limit = 0.2 / 0.4 = 0.5 s
@@ -1009,7 +1025,7 @@ ros2 run myagv_keyboard_control myagv_keyboard_control_node --ros-args \
 # myagv_keyboard_control/config/keyboard_control.yaml
 myagv_keyboard_control:
   ros__parameters:
-    publish_rate: 50.0
+    publish_rate: 100.0
     linear_speed: 0.15
     angular_speed: 0.4
     linear_accel_limit: 0.3
@@ -1036,7 +1052,7 @@ ros2 topic info /control_to_uart --verbose
 ```text
 Topic: /control_to_uart
 Type:  byd_custom_msgs/msg/ControlRes
-Rate:  50 Hz
+Rate:  100 Hz
 ```
 
 `v_lift` 和 `w_rotation` 应始终为 `0.0`。切换方向或松键后，观察 `v`、`w` 是否按斜坡逐步过零，

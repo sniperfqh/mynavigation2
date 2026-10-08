@@ -44,7 +44,7 @@ void FixedPathController::configure(const rclcpp_lifecycle::LifecycleNode::WeakP
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".direct_tracking_lateral_tolerance", rclcpp::ParameterValue(0.20));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".start_offset_speed_limit", rclcpp::ParameterValue(0.30));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".start_speed_release_yaw_tolerance", rclcpp::ParameterValue(0.3490658503988659));
-  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".start_speed_release_stable_cycles", rclcpp::ParameterValue(5));
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".start_speed_release_stable_cycles", rclcpp::ParameterValue(10));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".direct_tracking_max_yaw_error", rclcpp::ParameterValue(0.2617993877991494));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".initial_yaw_tolerance", rclcpp::ParameterValue(0.05235987755982989));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".rotate_to_heading_angular_vel", rclcpp::ParameterValue(0.4));
@@ -70,7 +70,7 @@ void FixedPathController::configure(const rclcpp_lifecycle::LifecycleNode::WeakP
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_error_log_frequency", rclcpp::ParameterValue(1.0));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".alignment_stable_cycles", rclcpp::ParameterValue(1));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".transform_tolerance", rclcpp::ParameterValue(0.2));
-  double controller_frequency = 50.0;
+  double controller_frequency = 100.0;
   node->get_parameter(plugin_name_ + ".desired_linear_vel", base_linear_velocity_);
   node->get_parameter(plugin_name_ + ".lookahead_dist", lookahead_dist_);
   node->get_parameter(plugin_name_ + ".min_lookahead_dist", min_lookahead_dist_);

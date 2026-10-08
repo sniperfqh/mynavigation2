@@ -25,7 +25,7 @@ void FixedPathGoalChecker::initialize(const rclcpp_lifecycle::LifecycleNode::Wea
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".xy_goal_tolerance", rclcpp::ParameterValue(0.01));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".trans_stopped_velocity", rclcpp::ParameterValue(0.01));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".rot_stopped_velocity", rclcpp::ParameterValue(0.05));
-  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".position_stable_cycles", rclcpp::ParameterValue(5));
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".position_stable_cycles", rclcpp::ParameterValue(10));
   node->get_parameter(plugin_name_ + ".xy_goal_tolerance", xy_goal_tolerance_);
   node->get_parameter(plugin_name_ + ".trans_stopped_velocity", trans_stopped_velocity_);
   node->get_parameter(plugin_name_ + ".rot_stopped_velocity", rot_stopped_velocity_);

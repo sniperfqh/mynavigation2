@@ -170,6 +170,7 @@ regulated_navigator:
     velocity_log_frequency: 1.0
     speed_limit_topic: "speed_limit"
     chassis_output_topic: "/control_to_uart"
+    chassis_publish_rate: 100.0
     motion_state_timeout: 0.2
     chassis_default_linear_speed_max: 1.5
     chassis_linear_speed_max: 0.3
@@ -258,7 +259,7 @@ collision_monitor:
 controller_server:
   ros__parameters:
     use_sim_time: True
-    controller_frequency: 50.0
+    controller_frequency: 100.0
     odom_topic: "/odom"
     min_x_velocity_threshold: 0.001
     min_y_velocity_threshold: 0.5
@@ -292,7 +293,7 @@ controller_server:
       xy_goal_tolerance: 0.01
       trans_stopped_velocity: 0.01
       rot_stopped_velocity: 0.05
-      position_stable_cycles: 5
+      position_stable_cycles: 10
     # DWB critic-based sampling controller. Stable default for TurtleBot3.
     DWB:
       plugin: "dwb_core::DWBLocalPlanner"
@@ -339,6 +340,7 @@ controller_server:
     # Regulated Pure Pursuit controller. Lower tuning burden for following
     # kinematically feasible paths such as Smac Hybrid-A* output.
     RPP:
+      rotate_to_heading_feedback_time: 0.1
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
       desired_linear_vel: 1.5
       lookahead_dist: 0.45
@@ -377,7 +379,7 @@ controller_server:
       direct_tracking_lateral_tolerance: 0.20
       start_offset_speed_limit: 0.30
       start_speed_release_yaw_tolerance: 0.3490658503988659
-      start_speed_release_stable_cycles: 5
+      start_speed_release_stable_cycles: 10
       direct_tracking_max_yaw_error: 0.2617993877991494
       initial_yaw_tolerance: 0.05235987755982989
       rotate_to_heading_angular_vel: 0.4
@@ -841,10 +843,11 @@ waypoint_follower:
 velocity_smoother:
   ros__parameters:
     use_sim_time: True
-    smoothing_frequency: 50.0
+    smoothing_frequency: 100.0
     scale_velocities: False
     immediate_stop_on_zero_command: False
     feedback: "CLOSED_LOOP"
+    feedback_correction_time: 0.1
     max_velocity: [1.5, 0.0, 1.0]
     min_velocity: [-1.5, 0.0, -1.0]
     max_accel: [1.0, 0.0, 3.2]
@@ -859,7 +862,7 @@ chassis_control_to_twist:
     use_sim_time: True
     input_topic: "/downstream/chassis_control"
     output_topic: "/cmd_vel"
-    publish_frequency: 50.0
+    publish_frequency: 100.0
     command_timeout: 0.5
     max_linear_velocity: 0.3
     max_angular_velocity: 0.3

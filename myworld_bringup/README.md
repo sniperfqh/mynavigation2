@@ -41,6 +41,12 @@ ros2 launch myworld_bringup entry.launch.py \
   headless:=true
 ```
 
+自主和固定路径模式的 Controller Server、Velocity Smoother 默认均为 `100 Hz`；
+遥控网关默认以 `100 Hz` 输出 `/cmd_vel`。Gazebo OdometryPublisher 的里程计发布频率为
+`100 Hz`，经桥接得到 `/odom`；`odom_to_motion_state.py` 收到每条里程计后发布一条
+保留原时间戳的 `/motion_state`，不定时重复旧反馈。仿真控制器及速度平滑器仍从
+`/odom` 读取反馈，实际墙钟频率随仿真实时因子变化。
+
 遥控仿真使用独立的 `remote` 模式。该模式只启动 Gazebo、传感器桥接和
 `chassis_control_to_twist`，不启动 AMCL、Planner、Controller、Velocity Smoother、
 `regulated_navigator` 或 `controlpub`，保证 `/cmd_vel` 只有遥控网关一个控制源：
@@ -185,7 +191,7 @@ Gazebo 出生位姿与 AMCL 参数中的初始位姿保持一致，并设置
 若首次起点横向误差大于 `0.20 m`、且起点总距离仍在 `1.20 m` 容差内，
 `FixedPathController` 会将起步纵向速度指令幅值限制在 `0.30 m/s`；前进和倒车均适用，
 Action 另有更低限速时仍以更低值为准。车辆相对当前最近有效路径段的横向误差不超过
-`0.20 m`，且按前进车头或倒车反向轴计算的航向误差处于 `±20°` 内，连续满足 5 个控制周期
+`0.20 m`，且按前进车头或倒车反向轴计算的航向误差处于 `±20°` 内，连续满足 10 个控制周期
 后解除本条路径的起步限速，不因后续定位抖动再次进入。两套默认配置均提供
 `start_offset_speed_limit`、`start_speed_release_yaw_tolerance` 和
 `start_speed_release_stable_cycles` 参数；`0.30 m/s` 是控制器速度指令上限，

@@ -276,7 +276,7 @@ public:
   MyAgvKeyboardControl() : Node("myagv_keyboard_control") {
     const auto input_device = declare_parameter<std::string>("input_device", "/dev/tty");
     const auto output_topic = declare_parameter<std::string>("output_topic", "/control_to_uart");
-    publish_rate_ = declare_parameter<double>("publish_rate", 50.0);
+    publish_rate_ = declare_parameter<double>("publish_rate", 100.0);
     linear_speed_ = declare_parameter<double>("linear_speed", 0.2);
     angular_speed_ = declare_parameter<double>("angular_speed", 0.5);
     max_linear_speed_ = declare_parameter<double>("max_linear_speed", 0.3);
@@ -568,7 +568,7 @@ private:
   rclcpp::Publisher<byd_custom_msgs::msg::ControlRes>::SharedPtr publisher_;
   rclcpp::TimerBase::SharedPtr timer_;
 
-  double publish_rate_{50.0};
+  double publish_rate_{100.0};
   double linear_speed_{0.2};
   double angular_speed_{0.5};
   double max_linear_speed_ = 0.3;

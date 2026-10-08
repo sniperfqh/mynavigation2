@@ -74,6 +74,25 @@ public: BasicAPIRPP() : nav2_regulated_pure_pursuit_controller::RegulatedPurePur
     return rotateToHeading(linear_vel, angular_vel, angle_to_path, curr_speed);
   }
 
+  void configureRotationRamp(double frequency)
+  {
+    control_duration_ = 1.0 / frequency;
+    max_angular_accel_ = 3.2;
+    rotate_to_heading_angular_vel_ = 0.8;
+    rotation_feedback_time_ = 0.1;
+    rotation_active_ = false;
+  }
+
+  double stepRotationRamp(double feedback, double angle)
+  {
+    geometry_msgs::msg::Twist speed;
+    speed.angular.z = feedback;
+    double linear = 0.0;
+    double angular = 0.0;
+    computeRotationCommand(linear, angular, angle, speed);
+    return angular;
+  }
+
   void applyConstraintsWrapper(const double & curvature, const geometry_msgs::msg::Twist & curr_speed, const double & pose_cost, const nav_msgs::msg::Path & path, double & linear_vel, double & sign) {
     return applyConstraints(curvature, curr_speed, pose_cost, path, linear_vel, sign);
   }
@@ -86,6 +105,50 @@ public: BasicAPIRPP() : nav2_regulated_pure_pursuit_controller::RegulatedPurePur
     return transformGlobalPlan(pose);
   }
 };
+
+TEST(RegulatedPurePursuitTest, rotationRampIsRateInvariantWithTrackingError)
+{
+  for (const double frequency : {50.0, 100.0})
+  {
+    BasicAPIRPP controller;
+    controller.configureRotationRamp(frequency);
+    double command = 0.0;
+    for (int cycle = 0; cycle < static_cast<int>(frequency); ++cycle)
+    {
+      const double previous = command;
+      command = controller.stepRotationRamp(0.9 * previous, 2.0);
+      EXPECT_LE(std::abs(command - previous), 3.2 / frequency + 1e-9);
+      EXPECT_LE(std::abs(command), 0.8);
+    }
+    EXPECT_NEAR(command, 0.8, 1e-6);
+    for (int cycle = 0; cycle < static_cast<int>(frequency); ++cycle)
+    {
+      const double previous = command;
+      command = controller.stepRotationRamp(0.9 * previous, -2.0);
+      EXPECT_LE(std::abs(command - previous), 3.2 / frequency + 1e-9);
+    }
+    EXPECT_NEAR(command, -0.8, 1e-6);
+    EXPECT_LE(std::abs(controller.stepRotationRamp(0.9 * command, -0.001)), std::sqrt(2.0 * 3.2 * 0.001));
+    controller.setPlan(nav_msgs::msg::Path());
+    EXPECT_NEAR(controller.stepRotationRamp(0.0, 2.0), 3.2 / frequency, 1e-9);
+  }
+}
+
+TEST(RegulatedPurePursuitTest, stalledRotationFeedbackRemainsBoundedAtBothRates)
+{
+  for (const double frequency : {50.0, 100.0})
+  {
+    BasicAPIRPP controller;
+    controller.configureRotationRamp(frequency);
+    double command = 0.0;
+    for (int cycle = 0; cycle < static_cast<int>(2.0 * frequency); ++cycle)
+    {
+      command = controller.stepRotationRamp(0.0, 2.0);
+      EXPECT_LE(command, 3.2 * 0.1 + 1e-9);
+    }
+    EXPECT_NEAR(command, 0.32, 1e-6);
+  }
+}
 
 TEST(RegulatedPurePursuitTest, basicAPI) {
   auto node = std::make_shared<rclcpp_lifecycle::LifecycleNode>("testRPP");

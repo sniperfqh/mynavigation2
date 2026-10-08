@@ -280,7 +280,7 @@ regulated_navigator:
     # 底盘控制指令过期阈值，单位秒。
     chassis_command_timeout: 0.15
     # 底盘控制输出频率，单位 Hz。
-    chassis_publish_rate: 50.0
+    chassis_publish_rate: 100.0
     # 底盘未指定线速度时采用的速度上限，单位米每秒。
     chassis_default_linear_speed_max: 1.5
     # 底盘线速度硬上限，单位米每秒。
@@ -317,7 +317,7 @@ controller_server:
     # 是否使用仿真时钟；启动入口可覆盖此值。
     use_sim_time: false
     # 控制器循环频率，单位 Hz。
-    controller_frequency: 50.0
+    controller_frequency: 100.0
     # 控制器读取里程计的话题。
     odom_topic: "/odometry"
     # 小于此值的 x 向里程计速度视为零，单位米每秒。
@@ -381,7 +381,7 @@ controller_server:
       # 认定旋转停止的速度阈值，单位弧度每秒。
       rot_stopped_velocity: 0.05
       # 位置达标需连续保持的控制周期数。
-      position_stable_cycles: 5
+      position_stable_cycles: 10
 
     # 动态窗口轨迹控制器。
     DWB:
@@ -454,6 +454,8 @@ controller_server:
 
     # 受约束纯跟踪控制器。
     RPP:
+      # 原地转向的闭环速度校正时间常数，单位秒；不随控制频率改变。
+      rotate_to_heading_feedback_time: 0.1
       # 该实例加载的插件类名。
       plugin: "nav2_regulated_pure_pursuit_controller::RegulatedPurePursuitController"
       # 期望前进线速度，单位米每秒。
@@ -532,7 +534,7 @@ controller_server:
       # 当前最近路径段的运动方向航向误差需不超过 20 度，才能解除起步限速。
       start_speed_release_yaw_tolerance: 0.3490658503988659
       # 横向及航向误差连续达标的控制周期数；解除后本条路径不再重新限速。
-      start_speed_release_stable_cycles: 5
+      start_speed_release_stable_cycles: 10
       # 允许直接跟踪的起点航向误差，单位弧度。
       direct_tracking_max_yaw_error: 0.2617993877991494
       # 大横向偏差时结束原地对齐的航向容差，3 度，单位弧度。
@@ -885,13 +887,15 @@ velocity_smoother:
     # 是否使用仿真时钟；启动入口可覆盖此值。
     use_sim_time: false
     # 速度平滑器输出频率，单位 Hz。
-    smoothing_frequency: 50.0
+    smoothing_frequency: 100.0
     # 超限时是否按比例缩放速度各分量。
     scale_velocities: false
     # 收到全零速度命令时是否立即输出停车。
     immediate_stop_on_zero_command: false
     # 速度平滑反馈来源。
     feedback: "CLOSED_LOOP"
+    # 连续速度斜坡的闭环反馈校正时间常数，单位秒。
+    feedback_correction_time: 0.1
     # 速度各轴上限数组，依次为 x、y、角速度。
     max_velocity: [1.5, 0.0, 2.0]
     # 速度各轴下限数组，依次为 x、y、角速度。
@@ -1151,7 +1155,7 @@ myagv_keyboard_control:
     # 遥控控制命令输出话题。
     output_topic: /control_to_uart
     # 遥控命令发布频率，单位 Hz。
-    publish_rate: 50.0
+    publish_rate: 100.0
     # 遥控线速度，单位米每秒。
     linear_speed: 1.0
     # 遥控角速度，单位弧度每秒。

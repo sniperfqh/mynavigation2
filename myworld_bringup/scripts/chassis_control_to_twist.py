@@ -14,7 +14,7 @@ class ChassisControlToTwist(Node):
         super().__init__('chassis_control_to_twist')
         self.declare_parameter('input_topic', '/downstream/chassis_control')
         self.declare_parameter('output_topic', '/cmd_vel')
-        self.declare_parameter('publish_frequency', 50.0)
+        self.declare_parameter('publish_frequency', 100.0)
         self.declare_parameter('command_timeout', 0.5)
         self.declare_parameter('max_linear_velocity', 0.3)
         self.declare_parameter('max_angular_velocity', 0.3)

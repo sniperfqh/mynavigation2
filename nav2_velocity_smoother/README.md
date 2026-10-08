@@ -44,6 +44,12 @@ This will be used to determine the robot's current velocity and therefore achiev
 
 ## Parameters
 
+本仓库的 `CLOSED_LOOP` 使用连续速度斜坡，并用里程计速度按秒制时间常数校正状态。
+`feedback_correction_time` 默认 `0.1 s`，必须为有限正数，支持动态调整；它与
+`odom_duration` 的测量平均窗口分别控制反馈校正和噪声平滑。校正后的指令仍受原速度、
+单周期加减速度、死区和停车策略约束。重新激活时从实测速度建立斜坡，OPEN_LOOP 保持
+原有行为。持续有效零速反馈会约束斜坡增长，不等同于无反馈推进。
+
 See inline description of parameters in the `VelocitySmoother`.
 
 ```

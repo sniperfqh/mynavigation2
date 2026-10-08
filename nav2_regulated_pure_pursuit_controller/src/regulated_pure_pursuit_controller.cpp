@@ -66,6 +66,7 @@ void RegulatedPurePursuitController::configure(const rclcpp_lifecycle::Lifecycle
   declare_parameter_if_not_declared(node, plugin_name_ + ".max_horizontal_error", rclcpp::ParameterValue(0.5));
   declare_parameter_if_not_declared(node, plugin_name_ + ".lookahead_time", rclcpp::ParameterValue(1.5));
   declare_parameter_if_not_declared(node, plugin_name_ + ".rotate_to_heading_angular_vel", rclcpp::ParameterValue(1.8));
+  declare_parameter_if_not_declared(node, plugin_name_ + ".rotate_to_heading_feedback_time", rclcpp::ParameterValue(0.1));
   declare_parameter_if_not_declared(node, plugin_name_ + ".transform_tolerance", rclcpp::ParameterValue(0.1));
   declare_parameter_if_not_declared(node, plugin_name_ + ".use_velocity_scaled_lookahead_dist", rclcpp::ParameterValue(false));
   declare_parameter_if_not_declared(node, plugin_name_ + ".min_approach_linear_velocity", rclcpp::ParameterValue(0.05));
@@ -95,6 +96,12 @@ void RegulatedPurePursuitController::configure(const rclcpp_lifecycle::Lifecycle
   node->get_parameter(plugin_name_ + ".max_horizontal_error", max_horizontal_error_);
   node->get_parameter(plugin_name_ + ".lookahead_time", lookahead_time_);
   node->get_parameter(plugin_name_ + ".rotate_to_heading_angular_vel", rotate_to_heading_angular_vel_);
+  node->get_parameter(plugin_name_ + ".rotate_to_heading_feedback_time", rotation_feedback_time_);
+  if (!std::isfinite(rotation_feedback_time_) || rotation_feedback_time_ <= 0.0)
+  {
+    throw nav2_core::PlannerException("rotate_to_heading_feedback_time must be finite and greater than zero");
+  }
+  rotation_active_ = false;
   node->get_parameter(plugin_name_ + ".transform_tolerance", transform_tolerance);
   node->get_parameter(plugin_name_ + ".use_velocity_scaled_lookahead_dist", use_velocity_scaled_lookahead_dist_);
   node->get_parameter(plugin_name_ + ".min_approach_linear_velocity", min_approach_linear_velocity_);
@@ -162,6 +169,7 @@ void RegulatedPurePursuitController::activate() {
 }
 
 void RegulatedPurePursuitController::deactivate() {
+  rotation_active_ = false;
   RCLCPP_INFO(logger_, "Deactivating controller: %s of type " "regulated_pure_pursuit_controller::RegulatedPurePursuitController", plugin_name_.c_str());
   global_path_pub_->on_deactivate();
   carrot_pub_->on_deactivate();
@@ -282,16 +290,18 @@ geometry_msgs::msg::TwistStamped RegulatedPurePursuitController::computeVelocity
   const double angle_to_goal = tf2::getYaw(transformed_plan.poses.back().pose.orientation);
   if (!use_rotate_to_heading_ && distance_to_goal <= goal_dist_tol_) {
     if (fabs(angle_to_goal) > goal_yaw_tol_) {
-      rotateToHeading(linear_vel, angular_vel, angle_to_goal, speed);
+      computeRotationCommand(linear_vel, angular_vel, angle_to_goal, speed);
     } else {
       linear_vel = 0.0;
       angular_vel = 0.0;
+      rotation_active_ = false;
     }
   } else if (shouldRotateToGoalHeading(carrot_pose)) {
-    rotateToHeading(linear_vel, angular_vel, angle_to_goal, speed);
+    computeRotationCommand(linear_vel, angular_vel, angle_to_goal, speed);
   } else if (speed_limit_sign_ > 0.0 && shouldRotateToPath(carrot_pose, angle_to_heading)) {
-    rotateToHeading(linear_vel, angular_vel, angle_to_heading, speed);
+    computeRotationCommand(linear_vel, angular_vel, angle_to_heading, speed);
   } else {
+    rotation_active_ = false;
     applyConstraints(curvature, speed, costAtPose(pose.pose.position.x, pose.pose.position.y), transformed_plan, linear_vel, sign);
 
     // Apply curvature to angular velocity after constraining linear velocity
@@ -301,6 +311,7 @@ geometry_msgs::msg::TwistStamped RegulatedPurePursuitController::computeVelocity
   // Collision checking on this velocity heading
   const double & carrot_dist = hypot(carrot_pose.pose.position.x, carrot_pose.pose.position.y);
   if (use_collision_detection_ && isCollisionImminent(pose, linear_vel, angular_vel, carrot_dist)) {
+    rotation_active_ = false;
     throw nav2_core::PlannerException("RegulatedPurePursuitController detected collision ahead!");
   }
 
@@ -322,6 +333,27 @@ bool RegulatedPurePursuitController::shouldRotateToGoalHeading(const geometry_ms
   // Whether we should rotate robot to goal heading
   double dist_to_goal = std::hypot(carrot_pose.pose.position.x, carrot_pose.pose.position.y);
   return use_rotate_to_heading_ && dist_to_goal < goal_dist_tol_;
+}
+
+void RegulatedPurePursuitController::computeRotationCommand(double & linear_vel, double & angular_vel, const double & angle_to_path, const geometry_msgs::msg::Twist & curr_speed)
+{
+  auto reference = curr_speed;
+  if (rotation_active_)
+  {
+    const double weight = std::clamp(control_duration_ / rotation_feedback_time_, 0.0, 1.0);
+    reference.angular.z = last_rotation_velocity_ + weight * (curr_speed.angular.z - last_rotation_velocity_);
+  }
+  rotateToHeading(linear_vel, angular_vel, angle_to_path, reference);
+  if (rotation_active_)
+  {
+    const double max_delta = max_angular_accel_ * control_duration_;
+    angular_vel = std::clamp(angular_vel, last_rotation_velocity_ - max_delta, last_rotation_velocity_ + max_delta);
+    // 终点制动包络优先，保留原先避免过冲的角速度上限。
+    const double stopping_velocity = std::sqrt(2.0 * max_angular_accel_ * std::abs(angle_to_path));
+    angular_vel = std::clamp(angular_vel, -stopping_velocity, stopping_velocity);
+  }
+  last_rotation_velocity_ = angular_vel;
+  rotation_active_ = true;
 }
 
 void RegulatedPurePursuitController::rotateToHeading(double & linear_vel, double & angular_vel, const double & angle_to_path, const geometry_msgs::msg::Twist & curr_speed) {
@@ -560,6 +592,7 @@ void RegulatedPurePursuitController::applyConstraints(const double & curvature, 
 }
 
 void RegulatedPurePursuitController::setPlan(const nav_msgs::msg::Path & path) {
+  rotation_active_ = false;
   is_first_pursuit_ = true;
   global_plan_ = path;
 }
@@ -674,6 +707,16 @@ rcl_interfaces::msg::SetParametersResult RegulatedPurePursuitController::dynamic
   rcl_interfaces::msg::SetParametersResult result;
   std::lock_guard<std::mutex> lock_reinit(mutex_);
 
+  for (const auto & parameter : parameters)
+  {
+    if (parameter.get_name() == plugin_name_ + ".rotate_to_heading_feedback_time" && parameter.get_type() == ParameterType::PARAMETER_DOUBLE && (!std::isfinite(parameter.as_double()) || parameter.as_double() <= 0.0))
+    {
+      result.successful = false;
+      result.reason = "rotate_to_heading_feedback_time must be finite and greater than zero";
+      return result;
+    }
+  }
+
   for (auto parameter : parameters) {
     const auto & type = parameter.get_type();
     const auto & name = parameter.get_name();
@@ -715,6 +758,8 @@ rcl_interfaces::msg::SetParametersResult RegulatedPurePursuitController::dynamic
         regulated_linear_scaling_min_speed_ = parameter.as_double();
       } else if (name == plugin_name_ + ".max_angular_accel") {
         max_angular_accel_ = parameter.as_double();
+      } else if (name == plugin_name_ + ".rotate_to_heading_feedback_time") {
+        rotation_feedback_time_ = parameter.as_double();
       } else if (name == plugin_name_ + ".rotate_to_heading_min_angle") {
         rotate_to_heading_min_angle_ = parameter.as_double();
       }

@@ -67,7 +67,7 @@ RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : na
   declare_parameter<std::string>("chassis_output_topic", "/control_to_uart");
   declare_parameter("chassis_motion_state_timeout", 0.2);
   declare_parameter("chassis_command_timeout", 0.15);
-  declare_parameter("chassis_publish_rate", 50.0);
+  declare_parameter("chassis_publish_rate", 100.0);
   declare_parameter("chassis_default_linear_speed_max", 1.5);
   declare_parameter("chassis_linear_speed_max", 0.3);
   declare_parameter("chassis_default_angular_speed_max", 0.5);

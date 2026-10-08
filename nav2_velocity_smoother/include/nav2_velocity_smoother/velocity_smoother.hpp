@@ -114,6 +114,9 @@ protected:
    */
   void smootherTimer();
 
+  // 用秒制时间常数校正连续速度斜坡，避免反馈误差形成与频率相关的速度上限。
+  geometry_msgs::msg::Twist feedbackReference(const geometry_msgs::msg::Twist & feedback) const;
+
   /**
   * @brief Callback for speed limiting messages
   * @param msg Shared pointer to nav2_msgs::msg::SpeedLimit
@@ -139,6 +142,8 @@ protected:
   // Parameters
   double smoothing_frequency_;
   double odom_duration_;
+  double feedback_correction_time_ = 0.1;
+  bool feedback_initialized_ = false;
   std::string odom_topic_;
   bool open_loop_;
   bool stopped_{true};

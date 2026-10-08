@@ -2,7 +2,7 @@ myagv_keyboard_control:
   ros__parameters:
     input_device: /dev/tty
     output_topic: /control_to_uart
-    publish_rate: 50.0
+    publish_rate: 100.0
     linear_speed: 1.0
     angular_speed: 0.5
     max_linear_speed: 0.3  # 遥控线速度上限，单位 m/s。
