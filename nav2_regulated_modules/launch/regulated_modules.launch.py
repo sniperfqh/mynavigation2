@@ -107,7 +107,7 @@ def generate_launch_description():
     declare_use_namespace_cmd = DeclareLaunchArgument('use_namespace', default_value='False', description='Whether to apply a namespace to the navigation stack')
 
     # 指定地图文件；默认读取包内地图资源。
-    declare_map_yaml_cmd = DeclareLaunchArgument('map', default_value=os.path.join(bringup_dir, 'maps', 'out.yaml'),description='Full path to map yaml file to load')
+    declare_map_yaml_cmd = DeclareLaunchArgument('map', default_value=os.path.join('/userdata/map/pbstream', 'out.yaml'),description='Full path to map yaml file to load')
 
     # 决定是否使用仿真时钟，影响 TF 和超时判定。
     declare_use_sim_time_cmd = DeclareLaunchArgument(
