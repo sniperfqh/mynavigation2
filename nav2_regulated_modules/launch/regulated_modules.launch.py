@@ -137,7 +137,7 @@ def generate_launch_description():
     # 决定是否让速度经过 Collision Monitor；同时影响速度话题路由。
     declare_use_collision_monitor_cmd = DeclareLaunchArgument(
         'use_collision_monitor',
-        default_value='true',#'false', #ooii
+        default_value='false',#'false true', #ooii
         description='Whether to start Collision Monitor and insert it into the velocity chain')
 
     # 默认启动碰撞区域 Marker 可视化，仍可通过启动参数关闭。
