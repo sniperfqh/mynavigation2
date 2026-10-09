@@ -96,6 +96,9 @@ colcon build --symlink-install \
 source install/setup.bash
 ```
 
+为了与实车配置一致，地图从/userdata/map/pbstream 下读取
+实车配置out.yaml 和 out.pgm 文件可以在nav2_regulated_modules/maps选取
+
 ## 1. Nav2 数据流
 
 本节对应保留的 `myagv_test_bringup` 标准 BT 入口；推荐的无 BT 三模式入口见第 4 节。当前默认 BT 将规划结果直接交给 FollowPath，没有自动调用 SmoothPath；`smoother_server` 虽已启动，是否执行路径平滑仍由实际 BT 决定。
@@ -103,8 +106,8 @@ source install/setup.bash
 标准 BT 默认运行链路：
 
 ```text
-1. 地图
-   maps/out.yaml
+1. 实车地图
+   /userdata/map/pbstream/out.yaml
      -> map_server
      -> /map
 
