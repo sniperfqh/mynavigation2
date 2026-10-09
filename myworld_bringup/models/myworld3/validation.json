@@ -1,0 +1,329 @@
+{
+  "passed": false,
+  "positions": 6,
+  "headings": 18,
+  "cases": [
+    {
+      "point": [
+        -2.8095554344625704,
+        -1.6665215485244964
+      ],
+      "stage": 0,
+      "scans": 2,
+      "eligible_beams": 1096,
+      "matched_beams": 1086,
+      "no_hit_fraction": 0.009124087591240875,
+      "endpoint_median_m": 0.0,
+      "endpoint_p95_m": 0.019999999552965164,
+      "endpoint_out_of_bounds": 0,
+      "median_m": 0.02498149825260043,
+      "p95_m": 0.17226218804717064,
+      "passed": false
+    },
+    {
+      "point": [
+        -2.8095554344625704,
+        -1.6665215485244964
+      ],
+      "stage": 1,
+      "scans": 2,
+      "eligible_beams": 1148,
+      "matched_beams": 1130,
+      "no_hit_fraction": 0.0156794425087108,
+      "endpoint_median_m": 0.0,
+      "endpoint_p95_m": 0.02236067927519776,
+      "endpoint_out_of_bounds": 0,
+      "median_m": 0.025257945992052555,
+      "p95_m": 0.25352263841777983,
+      "passed": false
+    },
+    {
+      "point": [
+        -2.8095554344625704,
+        -1.6665215485244964
+      ],
+      "stage": 2,
+      "scans": 3,
+      "eligible_beams": 1735,
+      "matched_beams": 1714,
+      "no_hit_fraction": 0.012103746397694525,
+      "endpoint_median_m": 0.0,
+      "endpoint_p95_m": 0.02236067927519776,
+      "endpoint_out_of_bounds": 0,
+      "median_m": 0.024611128959804773,
+      "p95_m": 0.2559625791385769,
+      "passed": false
+    },
+    {
+      "point": [
+        0.29044449624703006,
+        -2.7665215239375804
+      ],
+      "stage": 0,
+      "scans": 2,
+      "eligible_beams": 1302,
+      "matched_beams": 1302,
+      "no_hit_fraction": 0.0,
+      "endpoint_median_m": 0.0,
+      "endpoint_p95_m": 0.029999999329447746,
+      "endpoint_out_of_bounds": 0,
+      "median_m": 0.024463055189698935,
+      "p95_m": 2.6470986882224703,
+      "passed": false
+    },
+    {
+      "point": [
+        0.29044449624703006,
+        -2.7665215239375804
+      ],
+      "stage": 1,
+      "scans": 2,
+      "eligible_beams": 1287,
+      "matched_beams": 1287,
+      "no_hit_fraction": 0.0,
+      "endpoint_median_m": 0.0,
+      "endpoint_p95_m": 0.02236067927519776,
+      "endpoint_out_of_bounds": 0,
+      "median_m": 0.025326085276901722,
+      "p95_m": 2.219950976409019,
+      "passed": false
+    },
+    {
+      "point": [
+        0.29044449624703006,
+        -2.7665215239375804
+      ],
+      "stage": 2,
+      "scans": 2,
+      "eligible_beams": 1306,
+      "matched_beams": 1305,
+      "no_hit_fraction": 0.0007656967840735069,
+      "endpoint_median_m": 0.0,
+      "endpoint_p95_m": 0.02236067927519776,
+      "endpoint_out_of_bounds": 0,
+      "median_m": 0.02368674986064434,
+      "p95_m": 1.4806258318945673,
+      "passed": false
+    },
+    {
+      "point": [
+        1.49044446942494,
+        -5.966521452412007
+      ],
+      "stage": 0,
+      "scans": 3,
+      "eligible_beams": 1864,
+      "matched_beams": 1864,
+      "no_hit_fraction": 0.0,
+      "endpoint_median_m": 0.0,
+      "endpoint_p95_m": 0.029999999329447746,
+      "endpoint_out_of_bounds": 0,
+      "median_m": 0.030596010386943817,
+      "p95_m": 2.4984426794573635,
+      "passed": false
+    },
+    {
+      "point": [
+        1.49044446942494,
+        -5.966521452412007
+      ],
+      "stage": 1,
+      "scans": 3,
+      "eligible_beams": 1881,
+      "matched_beams": 1878,
+      "no_hit_fraction": 0.001594896331738437,
+      "endpoint_median_m": 0.0,
+      "endpoint_p95_m": 0.02236067927519776,
+      "endpoint_out_of_bounds": 0,
+      "median_m": 0.02872633095830679,
+      "p95_m": 2.338533323490992,
+      "passed": false
+    },
+    {
+      "point": [
+        1.49044446942494,
+        -5.966521452412007
+      ],
+      "stage": 2,
+      "scans": 3,
+      "eligible_beams": 1863,
+      "matched_beams": 1860,
+      "no_hit_fraction": 0.001610305958132045,
+      "endpoint_median_m": 0.0,
+      "endpoint_p95_m": 0.02236067927519776,
+      "endpoint_out_of_bounds": 0,
+      "median_m": 0.029652235563844442,
+      "p95_m": 2.3191568236332363,
+      "passed": false
+    },
+    {
+      "point": [
+        -4.209555403170132,
+        1.5334783799499299
+      ],
+      "stage": 0,
+      "scans": 3,
+      "eligible_beams": 1710,
+      "matched_beams": 1680,
+      "no_hit_fraction": 0.017543859649122806,
+      "endpoint_median_m": 0.0,
+      "endpoint_p95_m": 0.02236067927519776,
+      "endpoint_out_of_bounds": 0,
+      "median_m": 0.01861801976338029,
+      "p95_m": 0.11441103676334022,
+      "passed": true
+    },
+    {
+      "point": [
+        -4.209555403170132,
+        1.5334783799499299
+      ],
+      "stage": 1,
+      "scans": 2,
+      "eligible_beams": 1084,
+      "matched_beams": 1072,
+      "no_hit_fraction": 0.01107011070110701,
+      "endpoint_median_m": 0.0,
+      "endpoint_p95_m": 0.019999999552965164,
+      "endpoint_out_of_bounds": 0,
+      "median_m": 0.018442893866449594,
+      "p95_m": 0.1023460865952074,
+      "passed": true
+    },
+    {
+      "point": [
+        -4.209555403170132,
+        1.5334783799499299
+      ],
+      "stage": 2,
+      "scans": 2,
+      "eligible_beams": 1114,
+      "matched_beams": 1108,
+      "no_hit_fraction": 0.005385996409335727,
+      "endpoint_median_m": 0.0,
+      "endpoint_p95_m": 0.02236067927519776,
+      "endpoint_out_of_bounds": 0,
+      "median_m": 0.019177387934178114,
+      "p95_m": 0.09614218254573606,
+      "passed": true
+    },
+    {
+      "point": [
+        -4.809555389759087,
+        4.833478306189182
+      ],
+      "stage": 0,
+      "scans": 3,
+      "eligible_beams": 1887,
+      "matched_beams": 1884,
+      "no_hit_fraction": 0.001589825119236884,
+      "endpoint_median_m": 0.0,
+      "endpoint_p95_m": 0.02236067927519776,
+      "endpoint_out_of_bounds": 0,
+      "median_m": 0.01948461076244712,
+      "p95_m": 0.09308464662171899,
+      "passed": true
+    },
+    {
+      "point": [
+        -4.809555389759087,
+        4.833478306189182
+      ],
+      "stage": 1,
+      "scans": 3,
+      "eligible_beams": 1905,
+      "matched_beams": 1905,
+      "no_hit_fraction": 0.0,
+      "endpoint_median_m": 0.0,
+      "endpoint_p95_m": 0.02236067927519776,
+      "endpoint_out_of_bounds": 0,
+      "median_m": 0.019667305052280426,
+      "p95_m": 0.1007917502894997,
+      "passed": true
+    },
+    {
+      "point": [
+        -4.809555389759087,
+        4.833478306189182
+      ],
+      "stage": 2,
+      "scans": 2,
+      "eligible_beams": 1260,
+      "matched_beams": 1260,
+      "no_hit_fraction": 0.0,
+      "endpoint_median_m": 0.0,
+      "endpoint_p95_m": 0.02236067927519776,
+      "endpoint_out_of_bounds": 0,
+      "median_m": 0.019486831035465002,
+      "p95_m": 0.09164600321091709,
+      "passed": true
+    },
+    {
+      "point": [
+        0.4904444917766817,
+        5.733478286072614
+      ],
+      "stage": 0,
+      "scans": 2,
+      "eligible_beams": 1274,
+      "matched_beams": 1268,
+      "no_hit_fraction": 0.004709576138147566,
+      "endpoint_median_m": 0.0,
+      "endpoint_p95_m": 0.029999999329447746,
+      "endpoint_out_of_bounds": 0,
+      "median_m": 0.01815414149314165,
+      "p95_m": 0.10382304545491933,
+      "passed": true
+    },
+    {
+      "point": [
+        0.4904444917766817,
+        5.733478286072614
+      ],
+      "stage": 1,
+      "scans": 1,
+      "eligible_beams": 635,
+      "matched_beams": 633,
+      "no_hit_fraction": 0.0031496062992125984,
+      "endpoint_median_m": 0.0,
+      "endpoint_p95_m": 0.029999999329447746,
+      "endpoint_out_of_bounds": 0,
+      "median_m": 0.018285010941326618,
+      "p95_m": 0.08307456523180005,
+      "passed": true
+    },
+    {
+      "point": [
+        0.4904444917766817,
+        5.733478286072614
+      ],
+      "stage": 2,
+      "scans": 3,
+      "eligible_beams": 1890,
+      "matched_beams": 1881,
+      "no_hit_fraction": 0.004761904761904762,
+      "endpoint_median_m": 0.0,
+      "endpoint_p95_m": 0.029999999329447746,
+      "endpoint_out_of_bounds": 0,
+      "median_m": 0.017424549907445908,
+      "p95_m": 0.10183030366897583,
+      "passed": true
+    }
+  ],
+  "median_m": 0.022604812867939472,
+  "p95_m": 0.2607472384348481,
+  "known_area_m2": 245.68618901697113,
+  "fixed_world_to_map": {
+    "yaw": 1.2434497875801753e-14,
+    "translation": [
+      2.3150370509483764e-12,
+      -2.049027614248189e-12
+    ]
+  },
+  "map_yaml_sha256": "684c6d4dbc4d86126294764340a1c984543ce158482bc4825cf0c939b8411620",
+  "map_image_sha256": "56e8cbb8c6e2a609a61165cb8d977ec07ac56f58f58f6f415f4b81fd31b112af",
+  "mapping_dir": "/tmp/myworld3-20261009/explore_v10",
+  "validation_dir": "/tmp/myworld3-20261009/validation_v5",
+  "status": "CANDIDATE_PENDING_ACCEPTANCE_DECISION",
+  "geometry_audit_note": "PGM is byte-identical to the independent scan audit input; free_thresh corrected to preserve unknown cells"
+}

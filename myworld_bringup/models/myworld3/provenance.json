@@ -1,0 +1,34 @@
+{
+  "map_source": "Gazebo GPU lidar, SLAM Toolbox pose graph; no geometry-generated map",
+  "evidence_root": "/tmp/myworld3-20261009",
+  "files": {
+    "/tmp/myworld3-20261009/export_v2/myworld3.yaml": {
+      "sha256": "906838e2bde4ddafe1a5f807d912cc730dd0c95dc23d02b9fd0c785616c9b7c1",
+      "bytes": 174
+    },
+    "/tmp/myworld3-20261009/export_v2/myworld3.pgm": {
+      "sha256": "56e8cbb8c6e2a609a61165cb8d977ec07ac56f58f58f6f415f4b81fd31b112af",
+      "bytes": 2898161
+    },
+    "/tmp/myworld3-20261009/explore_v10/myworld3.posegraph": {
+      "sha256": "583a187c54421a1775d76660b6b0bcca0abb35bee1892e755431c448572c7b35",
+      "bytes": 40939243
+    },
+    "/tmp/myworld3-20261009/explore_v10/myworld3.data": {
+      "sha256": "880198c6a9dfa6cf512d1b8486b928dfd96673678b81becc25aac8659a0f4d17",
+      "bytes": 31020923
+    },
+    "/tmp/myworld3-20261009/audit_v5_final/audit.json": {
+      "sha256": "1c66a5b6497a8020a371f311bad51f3c73446cd915df0256ca5de3b64379a579",
+      "bytes": 8547
+    },
+    "nav2_ws/src/navigation2/myworld_bringup/models/myworld2/world_only.sdf": {
+      "sha256": "2b9fd6a1402f53977cbdd148b7c8e03ff61898d03c256c7cc8f806020ba4bc55",
+      "bytes": 15302
+    }
+  },
+  "candidate_status": "fixed_path default switched by explicit user request; strict ray and parking acceptance failures retained",
+  "unknown_preserved_free_thresh": 0.196,
+  "map_yaml_sha256": "684c6d4dbc4d86126294764340a1c984543ce158482bc4825cf0c939b8411620",
+  "map_image_sha256": "56e8cbb8c6e2a609a61165cb8d977ec07ac56f58f58f6f415f4b81fd31b112af"
+}

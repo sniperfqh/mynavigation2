@@ -10,6 +10,9 @@ install(DIRECTORY models DESTINATION share/${PROJECT_NAME})
 install(DIRECTORY urdf DESTINATION share/${PROJECT_NAME})
 
 install(PROGRAMS
+  scripts/map_warehouse.py
+  scripts/audit_warehouse_map.py
+  scripts/export_slam_map.py
   scripts/chassis_control_to_twist.py
   scripts/cpu_lidar.py
   scripts/odom_to_motion_state.py

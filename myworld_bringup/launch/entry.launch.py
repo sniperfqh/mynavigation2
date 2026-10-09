@@ -58,8 +58,12 @@ def generate_launch_description():
     bringup_dir = get_package_share_directory('myworld_bringup')
     launch_file_dir = os.path.dirname(__file__)
     myworld_dir = os.path.join(bringup_dir, 'models', 'myworld2')
-    map_file = os.path.join(myworld_dir, 'myworld2.yaml')
-    params_file = os.path.join(bringup_dir, 'params', 'myworld2.yaml')
+    default_map = PythonExpression([
+        "'", os.path.join(bringup_dir, 'models', 'myworld3', 'myworld3.yaml'),
+        "' if '", operation_mode, "' == 'fixed_path' else '",
+        os.path.join(myworld_dir, 'myworld2.yaml'), "'"])
+    map_file = LaunchConfiguration('map', default=default_map)
+    params_file = LaunchConfiguration('params_file', default=os.path.join(bringup_dir, 'params', 'myworld2.yaml'))
     rviz_config_file = os.path.join(bringup_dir, 'rviz', 'nav2_default_view.rviz')
     robot_description_file = os.path.join(bringup_dir, 'urdf', 'diffbot.urdf')
     with open(robot_description_file, 'r', encoding='utf-8') as urdf_file:
@@ -70,7 +74,7 @@ def generate_launch_description():
     ign_resource_path = SetEnvironmentVariable(name='IGN_GAZEBO_RESOURCE_PATH', value=resource_path)
     ign_partition = SetEnvironmentVariable(name='IGN_PARTITION', value=ign_partition_name)
 
-    world_only = os.path.join(myworld_dir, 'world_only.sdf')
+    world_only = LaunchConfiguration('world_file', default=os.path.join(myworld_dir, 'world_only.sdf'))
     ignition_sim = ExecuteProcess(condition=IfCondition(is_autonomous_gui), cmd=['ign', 'gazebo', '-r', '-v', '3', world_only], output='screen')
     ignition_server = ExecuteProcess(condition=IfCondition(is_autonomous_headless), cmd=['ign', 'gazebo', '-r', '-s', '--headless-rendering', '-v', '3', world_only], output='screen')
     fixed_path_ignition_sim = ExecuteProcess(condition=IfCondition(is_fixed_path_gui), cmd=['ign', 'gazebo', '-g', '-v', '3', world_only], output='screen')
@@ -137,6 +141,9 @@ def generate_launch_description():
                 'robot_description': robot_description}]),
 
         DeclareLaunchArgument('use_sim_time', default_value=use_sim_time, description='If true, use simulated clock'),
+        DeclareLaunchArgument('map', default_value=default_map, description='Map YAML: myworld3 for fixed_path, myworld2 for other modes; explicit map overrides the default'),
+        DeclareLaunchArgument('params_file', default_value=os.path.join(bringup_dir, 'params', 'myworld2.yaml'), description='Explicit simulation parameter file for isolated experiments'),
+        DeclareLaunchArgument('world_file', default_value=os.path.join(myworld_dir, 'world_only.sdf'), description='Explicit simulation SDF for isolated experiments'),
         DeclareLaunchArgument('ign_partition', default_value=default_ign_partition, description='Unique Ignition transport partition for this launch'),
         DeclareLaunchArgument('use_rviz', default_value='true', description='Whether to start RViz'),
         DeclareLaunchArgument('use_collision_monitor', default_value='false', description='Enable Collision Monitor in autonomous and fixed-path simulation'),
