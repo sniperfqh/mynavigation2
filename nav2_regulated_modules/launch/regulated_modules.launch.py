@@ -9,7 +9,7 @@ from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription, SetEnvironmentVariable
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration, PythonExpression
+from launch.substitutions import EnvironmentVariable, LaunchConfiguration, PythonExpression
 from launch_ros.actions import LoadComposableNodes, Node
 from launch_ros.descriptions import ComposableNode, ParameterFile
 from launch_ros.parameter_descriptions import ParameterValue
@@ -92,11 +92,11 @@ def generate_launch_description():
 
     stdout_linebuf_envvar = SetEnvironmentVariable('RCUTILS_LOGGING_BUFFERED_STREAM', '1')
 
-    spdlog_log_dir_envvar = SetEnvironmentVariable('SPDLOG_WRAPPER_LOG_DIR', '/tmp/nav2_logs')
+    spdlog_log_dir_envvar = SetEnvironmentVariable('SPDLOG_WRAPPER_LOG_DIR', EnvironmentVariable('SPDLOG_WRAPPER_LOG_DIR', default_value='/tmp/nav2_logs'))
 
     spdlog_console_level_envvar = SetEnvironmentVariable('SPDLOG_WRAPPER_CONSOLE_LEVEL', 'info')
 
-    spdlog_file_level_envvar = SetEnvironmentVariable('SPDLOG_WRAPPER_FILE_LEVEL', 'trace')
+    spdlog_file_level_envvar = SetEnvironmentVariable('SPDLOG_WRAPPER_FILE_LEVEL', EnvironmentVariable('SPDLOG_WRAPPER_FILE_LEVEL', default_value='trace'))
 
     spdlog_flush_interval_envvar = SetEnvironmentVariable('SPDLOG_WRAPPER_FLUSH_INTERVAL_SECONDS', '1')
 

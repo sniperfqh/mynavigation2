@@ -123,6 +123,7 @@ private:
   double approach_velocity_scaling_dist_ { 0.8 };
   double goal_linear_deceleration_ { 0.25 };
   double goal_final_approach_velocity_ { 0.01 };
+  double goal_stop_entry_tolerance_ { 0.0 };
   double goal_braking_reaction_time_ { 0.1 };
   double goal_braking_distance_margin_ { 0.1 };
   // 新制动策略默认关闭，避免未经验证的速度曲线直接进入实车速度链。

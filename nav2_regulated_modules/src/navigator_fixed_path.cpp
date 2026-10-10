@@ -1,6 +1,7 @@
 // 固定路径准备与可视化。将任务路径转换为可跟踪轨迹，并计算弧长、前视及路径边界。
 
 #include "nav2_regulated_modules/regulated_navigator.hpp"
+#include "nav2_regulated_modules/detail/path_sample.hpp"
 
 #include <algorithm>
 #include <chrono>
@@ -484,13 +485,13 @@ void RegulatedNavigator::generateBezierUniformPoints(const nav_msgs::msg::Path &
   for (int index = 0; index < sample_count; ++index)
   {
     const double target_length = std::min(static_cast<double>(index) * interval, total_length);
-    output_path.poses.push_back(bezier3(input_path, findTfromArcLength(arc_lengths, parameters, target_length), true));
+    detail::appendPathSample(output_path.poses, bezier3(input_path, findTfromArcLength(arc_lengths, parameters, target_length), true));
   }
   const auto & last_position = output_path.poses.back().pose.position;
   const auto & end_position = input_path.poses.back().pose.position;
   if (last_position.x != end_position.x || last_position.y != end_position.y)
   {
-    output_path.poses.push_back(bezier3(input_path, 1.0, true));
+    detail::appendPathSample(output_path.poses, bezier3(input_path, 1.0, true));
   }
 }
 

@@ -42,6 +42,9 @@ extern "C" {
  *************************************************************************/
 
 // Gaussian PDF info
+// Explicit seed for repeatable experiments; negative keeps legacy PDF seeding.
+void pf_pdf_set_seed(long seed);
+
 typedef struct
 {
   // Mean, covariance and inverse covariance

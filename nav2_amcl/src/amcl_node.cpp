@@ -32,6 +32,7 @@
 #include "nav2_amcl/angleutils.hpp"
 #include "nav2_util/geometry_utils.hpp"
 #include "nav2_amcl/pf/pf.hpp"
+#include "nav2_amcl/pf/pf_pdf.hpp"
 #include "nav2_util/string_utils.hpp"
 #include "nav2_amcl/sensors/laser/laser.hpp"
 #include "tf2/convert.h"
@@ -63,6 +64,11 @@ AmclNode::AmclNode(const rclcpp::NodeOptions & options)
 : nav2_util::LifecycleNode("amcl", "", options)
 {
   RCLCPP_INFO(get_logger(), "Creating");
+
+  rcl_interfaces::msg::ParameterDescriptor seed_descriptor;
+  seed_descriptor.description = "Particle filter seed; negative preserves legacy seeding. Configure at startup.";
+  seed_descriptor.read_only = true;
+  declare_parameter("random_seed", rclcpp::ParameterValue(-1), seed_descriptor);
 
   add_parameter(
     "alpha1", rclcpp::ParameterValue(0.2),
@@ -1089,6 +1095,7 @@ AmclNode::initParameters()
   get_parameter("first_map_only", first_map_only_);
   get_parameter("always_reset_initial_pose", always_reset_initial_pose_);
   get_parameter("scan_topic", scan_topic_);
+  get_parameter("random_seed", random_seed_);
   get_parameter("map_topic", map_topic_);
 
   save_pose_period_ = tf2::durationFromSec(1.0 / save_pose_rate);
@@ -1591,6 +1598,8 @@ AmclNode::initParticleFilter()
   pf_ = pf_alloc(
     min_particles_, max_particles_, alpha_slow_, alpha_fast_,
     (pf_init_model_fn_t)AmclNode::uniformPoseGenerator);
+  // 借鉴上游 random_seed 接口；Gaussian PDF 不再覆盖显式实验种子。
+  pf_pdf_set_seed(static_cast<long>(random_seed_));
   pf_->pop_err = pf_err_;
   pf_->pop_z = pf_z_;
 

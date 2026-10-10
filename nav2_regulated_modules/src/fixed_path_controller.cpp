@@ -1,6 +1,7 @@
 // 固定路径控制器实现。按运动方向计算起点对齐、前视跟踪和终点停车指令。
 
 #include "nav2_regulated_modules/fixed_path_controller.hpp"
+#include "nav2_regulated_modules/detail/terminal_position.hpp"
 #include "nav2_regulated_modules/fixed_path_speed_profile.hpp"
 
 #include <algorithm>
@@ -54,6 +55,7 @@ void FixedPathController::configure(const rclcpp_lifecycle::LifecycleNode::WeakP
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".approach_velocity_scaling_dist", rclcpp::ParameterValue(0.8));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_linear_deceleration", rclcpp::ParameterValue(0.25));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_final_approach_velocity", rclcpp::ParameterValue(0.01));
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_stop_entry_tolerance", rclcpp::ParameterValue(0.0));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_braking_reaction_time", rclcpp::ParameterValue(0.1));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_braking_distance_margin", rclcpp::ParameterValue(0.1));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".adaptive_goal_braking_enabled", rclcpp::ParameterValue(false));
@@ -90,6 +92,7 @@ void FixedPathController::configure(const rclcpp_lifecycle::LifecycleNode::WeakP
   node->get_parameter(plugin_name_ + ".approach_velocity_scaling_dist", approach_velocity_scaling_dist_);
   node->get_parameter(plugin_name_ + ".goal_linear_deceleration", goal_linear_deceleration_);
   node->get_parameter(plugin_name_ + ".goal_final_approach_velocity", goal_final_approach_velocity_);
+  node->get_parameter(plugin_name_ + ".goal_stop_entry_tolerance", goal_stop_entry_tolerance_);
   node->get_parameter(plugin_name_ + ".goal_braking_reaction_time", goal_braking_reaction_time_);
   node->get_parameter(plugin_name_ + ".goal_braking_distance_margin", goal_braking_distance_margin_);
   node->get_parameter(plugin_name_ + ".adaptive_goal_braking_enabled", adaptive_goal_braking_enabled_);
@@ -117,6 +120,10 @@ void FixedPathController::configure(const rclcpp_lifecycle::LifecycleNode::WeakP
     throw nav2_core::PlannerException("FixedPathController start speed guard parameters are invalid");
   }
   speed_limit_ = base_linear_velocity_;
+  if (!std::isfinite(goal_stop_entry_tolerance_) || goal_stop_entry_tolerance_ < 0.0)
+  {
+    throw nav2_core::PlannerException("FixedPathController stop entry tolerance must be finite and nonnegative");
+  }
   control_duration_ = 1.0 / controller_frequency;
   // 仅在显式启用新制动路径时校验专属参数；关闭时不改变旧配置的接受条件。
   if (adaptive_goal_braking_enabled_ && (!std::isfinite(adaptive_goal_max_deceleration_) || adaptive_goal_max_deceleration_ <= 0.0 || adaptive_goal_max_deceleration_ > 1.0 || !std::isfinite(adaptive_goal_jerk_limit_) || adaptive_goal_jerk_limit_ <= 0.0 || !std::isfinite(adaptive_goal_approach_speed_) || adaptive_goal_approach_speed_ <= 0.0 || !std::isfinite(adaptive_goal_response_time_) || adaptive_goal_response_time_ < 0.0 || !std::isfinite(adaptive_goal_distance_margin_) || adaptive_goal_distance_margin_ < 0.0))
@@ -267,6 +274,11 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
   const double goal_xy_tolerance = pose_tolerance.position.x;
   const double linear_stopped_velocity = velocity_tolerance.linear.x;
   const double angular_stopped_velocity = velocity_tolerance.angular.z;
+  if (goal_stop_entry_tolerance_ > goal_xy_tolerance)
+  {
+    throw nav2_core::PlannerException("FixedPathController stop entry tolerance exceeds goal tolerance");
+  }
+  const double stop_tolerance = goal_stop_entry_tolerance_ > 0.0 ? goal_stop_entry_tolerance_ : goal_xy_tolerance;
   // 拒绝非有限或负容差，避免后续停车锁存和停稳判定失去边界。
   if (!std::isfinite(goal_xy_tolerance) || !std::isfinite(linear_stopped_velocity) || !std::isfinite(angular_stopped_velocity) || goal_xy_tolerance <= 0.0 || linear_stopped_velocity < 0.0 || angular_stopped_velocity < 0.0)
   {
@@ -376,17 +388,18 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
   // 只有已跟踪到末段且沿末段切线越过终点平面，才视为纵向越界。
   const bool goal_plane_crossed = nearest_index_ >= goal_tangent_index_ && terminal_projection >= 0.0;
   const double remaining = remainingDistance(nearest_index_, robot_pose);
-  const double effective_remaining = std::max(remaining - goal_xy_tolerance, 0.0);
+  const double effective_remaining = std::max(remaining - stop_tolerance, 0.0);
   // 旧模式只取运动方向上的正速度；新模式取绝对值，避免反向残余速度低估停车距离。
   const double current_linear_velocity = adaptive_goal_braking_enabled_ ? std::abs(velocity.linear.x) : std::max(0.0, static_cast<double>(direction_sign_) * velocity.linear.x);
   // 自适应关闭时不调用新包络；旧模式仍以固定减速度计算制动距离。
-  const auto speed_profile = adaptive_goal_braking_enabled_ ? calculateFixedPathSpeedProfile(current_linear_velocity, remaining, effective_linear_limit, adaptive_goal_max_deceleration_, adaptive_goal_jerk_limit_, adaptive_goal_response_time_, adaptive_goal_distance_margin_, goal_xy_tolerance, adaptive_goal_approach_speed_) : FixedPathSpeedProfile{0.0, 0.0, 0.0};
+  const auto speed_profile = adaptive_goal_braking_enabled_ ? calculateFixedPathSpeedProfile(current_linear_velocity, remaining, effective_linear_limit, adaptive_goal_max_deceleration_, adaptive_goal_jerk_limit_, adaptive_goal_response_time_, adaptive_goal_distance_margin_, stop_tolerance, adaptive_goal_approach_speed_) : FixedPathSpeedProfile{0.0, 0.0, 0.0};
   const double stopping_distance = adaptive_goal_braking_enabled_ ? speed_profile.stopping_distance : current_linear_velocity * current_linear_velocity / (2.0 * goal_linear_deceleration_);
   const double expected_linear_velocity = std::max(0.0, effective_linear_limit);
   // 末段前视随有效速度变化，但始终限制在配置的最小和最大距离之间。
   const double dynamic_terminal_lookahead_distance = std::clamp(goal_terminal_lookahead_dist_ + goal_terminal_lookahead_speed_gain_ * (expected_linear_velocity - goal_terminal_lookahead_reference_speed_), goal_terminal_lookahead_min_dist_, goal_terminal_lookahead_max_dist_);
   // 进入 XY 容差或越过终点平面都会触发零速锁存，避免继续向前驶离终点。
-  const bool terminal_condition_reached = goal_distance <= goal_xy_tolerance || goal_plane_crossed;
+  const auto terminal_position = detail::terminalPosition(goal_distance, goal_xy_tolerance, goal_stop_entry_tolerance_, goal_plane_crossed, terminal_stop_latched_, terminal_position_accurate_);
+  const bool terminal_condition_reached = terminal_position.stopped;
   // 首次触发终点条件时锁存停车；位置是否准确单独记录，不把越界误报为到点成功。
   if (!terminal_stop_latched_ && terminal_condition_reached)
   {
@@ -396,12 +409,17 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
       LOG_WARN("固定路径终点在非低速状态下触发安全停车，实测线速度={:.4f}m/s", current_linear_velocity);
     }
     terminal_stop_latched_ = true;
-    terminal_position_accurate_ = goal_distance <= goal_xy_tolerance;
+    terminal_position_accurate_ = terminal_position.accurate;
     terminal_tracking_yaw_error_ = goal_yaw_error;
     phase_ = Phase::STOPPED;
-    LOG_INFO("固定路径终点停车已锁存，原因={}，位置误差={:.4f}m，终点纵向投影={:.4f}m，锁存跟踪航向误差={:.3f}rad（{:.2f}deg），停车后不再旋转", goal_distance <= goal_xy_tolerance ? "within_tolerance" : "goal_plane_crossed", goal_distance, terminal_projection, terminal_tracking_yaw_error_, terminal_tracking_yaw_error_ * 180.0 / M_PI);
+    LOG_INFO("固定路径终点停车已锁存，原因={}，位置误差={:.4f}m，终点纵向投影={:.4f}m，锁存跟踪航向误差={:.3f}rad（{:.2f}deg），停车后不再旋转", goal_distance <= stop_tolerance ? "within_tolerance" : "goal_plane_crossed", goal_distance, terminal_projection, terminal_tracking_yaw_error_, terminal_tracking_yaw_error_ * 180.0 / M_PI);
   }
   // 旧模式允许停车后再次进入位置容差时单向锁存精度，兼容已有成功判定。
+  else if (terminal_stop_latched_ && goal_stop_entry_tolerance_ > 0.0)
+  {
+    // 实验入口启用时逐周期复核当前验收半径，不保留历史准确状态。
+    terminal_position_accurate_ = terminal_position.accurate;
+  }
   else if (terminal_stop_latched_ && !terminal_position_accurate_ && goal_distance <= goal_xy_tolerance)
   {
     terminal_position_accurate_ = true;
@@ -510,7 +528,7 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
       const double braking_distance_remaining = std::max(effective_remaining - braking_reaction_distance, 0.0);
       double braking_target = std::min(linear_magnitude, std::sqrt(2.0 * goal_linear_deceleration_ * braking_distance_remaining));
       // 尚未进入位置容差时保留配置的微量接近速度，避免提前完全停住。
-      if (goal_distance > goal_xy_tolerance)
+      if (goal_distance > stop_tolerance)
       {
         braking_target = std::min(linear_magnitude, std::max(braking_target, goal_final_approach_velocity_));
       }

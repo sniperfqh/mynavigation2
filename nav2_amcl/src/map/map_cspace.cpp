@@ -35,6 +35,7 @@ public:
   map_t * map_;
   unsigned int i_, j_;
   unsigned int src_i_, src_j_;
+  double occ_dist_;
 };
 
 /*
@@ -83,9 +84,7 @@ public:
  */
 bool operator<(const CellData & a, const CellData & b)
 {
-  return a.map_->cells[MAP_INDEX(
-             a.map_, a.i_,
-             a.j_)].occ_dist > a.map_->cells[MAP_INDEX(b.map_, b.i_, b.j_)].occ_dist;
+  return a.occ_dist_ > b.occ_dist_;
 }
 
 /*
@@ -119,7 +118,9 @@ void enqueue(
   CachedDistanceMap * cdm,
   unsigned char * marked)
 {
-  if (marked[MAP_INDEX(map, i, j)]) {
+  const int index = MAP_INDEX(map, i, j);
+  if (marked[index])
+  {
     return;
   }
 
@@ -131,7 +132,7 @@ void enqueue(
     return;
   }
 
-  map->cells[MAP_INDEX(map, i, j)].occ_dist = distance * map->scale;
+  map->cells[index].occ_dist = distance * map->scale;
 
   CellData cell;
   cell.map_ = map;
@@ -139,10 +140,11 @@ void enqueue(
   cell.j_ = j;
   cell.src_i_ = src_i;
   cell.src_j_ = src_j;
+  cell.occ_dist_ = map->cells[index].occ_dist;
 
   Q.push(cell);
 
-  marked[MAP_INDEX(map, i, j)] = 1;
+  marked[index] = 1;
 }
 
 /*
@@ -165,6 +167,7 @@ void map_update_cspace(map_t * map, double max_occ_dist)
   // Enqueue all the obstacle cells
   CellData cell;
   cell.map_ = map;
+  cell.occ_dist_ = 0.0;
   for (int i = 0; i < map->size_x; i++) {
     cell.src_i_ = cell.i_ = i;
     for (int j = 0; j < map->size_y; j++) {

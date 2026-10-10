@@ -35,7 +35,10 @@ LikelihoodFieldModel::LikelihoodFieldModel(
   z_hit_ = z_hit;
   z_rand_ = z_rand;
   sigma_hit_ = sigma_hit;
-  map_update_cspace(map, max_occ_dist);
+  if (map->max_occ_dist != max_occ_dist)
+  {
+    map_update_cspace(map, max_occ_dist);
+  }
 }
 
 double

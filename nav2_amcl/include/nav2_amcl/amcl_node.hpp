@@ -378,6 +378,7 @@ protected:
   double alpha_fast_;
   double alpha_slow_;
   int resample_interval_;
+  int64_t random_seed_{-1};
   std::string robot_model_type_;
   tf2::Duration save_pose_period_;
   double sigma_hit_;

@@ -1,6 +1,6 @@
 # `fixed_path` 固定路径模式架构与调用链
 
-核对日期：2026-10-08，控制代码基线为 `e3154683`。控制器与速度平滑器默认 `100 Hz`；当前使用停车／位置锁存判定及原恢复流程，不包含已撤销的连续 1 秒精度窗口、3 秒终点超时或固定路径失败不重试改动。
+核对日期：2026-10-09，默认控制语义沿用 `e3154683`。控制器与速度平滑器默认 `100 Hz`；当前使用停车／位置锁存判定及原恢复流程，不包含已撤销的连续 1 秒精度窗口、3 秒终点超时或固定路径失败不重试改动。新一轮效率实验的停后 1 秒窗口由独立工具验收，未写入生产成功分支。
 
 本文对应以下**默认**启动命令，以当前工作空间源码和 [启动文件](../launch/regulated_modules.launch.py)、[参数文件](../params/regulated_modules.yaml) 为准：
 
@@ -76,7 +76,7 @@ flowchart LR
 
 1. `handleNavigationServiceGoal()` 先检查模式、Lifecycle 活跃状态、分段非空；每段 `motion_direction` 只能为 `1` 前进或 `2` 后退，整条 Action 方向必须一致，`max_speed` 必须是有限正数。未通过时直接拒绝 Goal。
 2. 接受后 `prepareFixedPath()` 再检查全部几何点为有限值、每段首尾不重合、相邻段端点在 `0.001 m` 内连续、段类型受支持。此阶段失败则 Goal 已接受但返回 `ABORTED/finish=false`。
-3. `segment_type=1` 时把直线两端转换为共线的四个三次贝塞尔控制点；`segment_type=2` 时直接使用 `node1 → control_pos1 → control_pos2 → node2`。每段先密集估算弧长，再按 `fixed_path_step=0.1 m` 近似等距采样，保留终点；拼接时移除上一段末点。当前以末点 `x/y` 是否与目标坐标精确相等决定是否再追加终点，不包含试验中的极近重复点合并；用于计算航向的切线向量长度不超过 `1e-9 m` 时，路径会被拒绝。
+3. `segment_type=1` 时把直线两端转换为共线的四个三次贝塞尔控制点；`segment_type=2` 时直接使用 `node1 → control_pos1 → control_pos2 → node2`。每段先密集估算弧长，再按 `fixed_path_step=0.1 m` 近似等距采样，保留终点；拼接时移除上一段末点。追加采样时，相邻点距离不超过 `1e-9 m` 则用新点替换上一点，保留精确业务终点，避免浮点尾点产生无效切线。用于计算航向的切线向量长度不超过 `1e-9 m` 时，路径仍会被拒绝。
 4. 每个 Pose 都写入 `global_frame=map`，`z=0`；用相邻采样点求路径切线。前进时 Pose 航向沿切线，后退时加 `π`，编码**车辆朝向**和运动方向。插值只处理几何密度，不检查业务路径的可行性和全程避障。
 5. `handleNavigationServiceAccepted()` 等待 `FollowPath` 服务可用，先结束旧任务，再保存路径、总长度、方向、起终点航向和任务代次。当前车体位置不会被重置到 `node1`。`publishFixedPath()` 发布中心线及左右 `0.40 m` 的显示边界。
 6. 多段请求速度取最小值，再执行 $v_{\mathrm{effective}}=\min(\min_i v_{\mathrm{segment},i},v_{\mathrm{fixed\_path\_max}})$；默认全局上限为 `1.5 m/s`。`publishSpeedLimit()` 以 `percentage=false` 发布绝对速度值，Controller Server 和 Velocity Smoother 都订阅该话题。
@@ -149,6 +149,8 @@ stateDiagram-v2
 进入 `fixed_path_goal_checker.xy_goal_tolerance=0.01 m` 或到达末段且越过终点切线的法向平面时，控制器进入 `STOPPED` 并锁存零速，不再追点或原地转向。终点切线航向误差会记录到日志，但**不参与成功条件**。越界锁存也不自动等于位置准确：控制器分别维护停车锁存和位置精度状态。
 
 默认非自适应分支在首次停车时记录 `terminal_position_accurate_`。停车后若原先不准确、后续位姿进入容差，会把该标志单向置为准确；已准确后不会因当前位姿又离开容差而撤回。因此该标志是位置准确锁存，不是停后持续误差检验。
+
+显式设置 `FixedPathController.goal_stop_entry_tolerance>0` 时，采用更小的停车入口半径，并按 GoalChecker 的验收半径逐周期复核当前精度；入口半径不得超过验收半径。实验采用入口 `0.005 m`、验收 `0.01 m`，越过终点平面仍锁存零速。该参数默认 `0.0`，保留上述原逻辑；它不在生产成功分支增加连续 1 秒窗口，该窗口由独立实验工具验证。
 
 当前 [`ControllerServer::isGoalReached()`](../../nav2_controller/src/controller_server.cpp) 对 `TerminalAwareController` 走专用分支：要求已停车锁存、位置准确标志为真，以及 `/odometry` 的阈值处理后平面线速度幅值不超过 `0.01 m/s`、角速度绝对值不超过 `0.05 rad/s`。虽然 [`FixedPathGoalChecker`](../src/fixed_path_goal_checker.cpp) 配有 `position_stable_cycles=10` 并实现 `isGoalReached()`，当前专用成功分支只读取它的停稳容差，不调用该稳定计数方法。不能把 10 周期写成实际终点完成门槛，更不能解释成连续 1 秒精度验收。通过后 `FollowPath` 成功，外层 Action 返回 `finish=true`；航向误差仍只作诊断。
 

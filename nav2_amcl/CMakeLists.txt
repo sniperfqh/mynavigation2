@@ -100,6 +100,17 @@ install(DIRECTORY include/
 )
 
 if(BUILD_TESTING)
+  add_executable(cspace_cache_test test/cspace_cache_test.cpp)
+  target_link_libraries(cspace_cache_test map_lib sensors_lib pf_lib)
+  ament_target_dependencies(cspace_cache_test rclcpp nav2_util)
+  add_test(NAME cspace_cache_test COMMAND cspace_cache_test)
+  add_executable(particle_seed_test test/particle_seed_test.cpp)
+  target_link_libraries(particle_seed_test pf_lib)
+  add_test(NAME particle_seed_test COMMAND particle_seed_test)
+  add_executable(small_translation_test test/small_translation_test.cpp)
+  target_link_libraries(small_translation_test motions_lib pf_lib)
+  ament_target_dependencies(small_translation_test pluginlib nav2_util)
+  add_test(NAME small_translation_test COMMAND small_translation_test)
   find_package(ament_lint_auto REQUIRED)
   # the following line skips the linter which checks for copyrights
   set(ament_cmake_copyright_FOUND TRUE)

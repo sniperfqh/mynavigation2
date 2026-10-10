@@ -48,25 +48,29 @@ DifferentialMotionModel::odometryUpdate(
   pf_vector_t old_pose = pf_vector_sub(pose, delta);
 
   // Implement sample_motion_odometry (Prob Rob p 136)
-  double delta_rot1, delta_trans, delta_rot2;
+  double delta_rot1, delta_rot2;
+  double delta_trans = std::hypot(delta.v[0], delta.v[1]);
   double delta_rot1_hat, delta_trans_hat, delta_rot2_hat;
   double delta_rot1_noise, delta_rot2_noise;
 
   // Avoid computing a bearing from two poses that are extremely near each
   // other (happens on in-place rotation).
-  if (sqrt(
-      delta.v[1] * delta.v[1] +
-      delta.v[0] * delta.v[0]) < 0.01)
+  if (delta_trans < 0.01)
   {
     delta_rot1 = 0.0;
-  } else {
+    // 小位移不估计不稳定的方位角，但必须保留倒车方向。
+    const double longitudinal_delta = delta.v[0] * std::cos(old_pose.v[2]) + delta.v[1] * std::sin(old_pose.v[2]);
+    if (longitudinal_delta < 0.0)
+    {
+      delta_trans = -delta_trans;
+    }
+  }
+  else
+  {
     delta_rot1 = angleutils::angle_diff(
       atan2(delta.v[1], delta.v[0]),
       old_pose.v[2]);
   }
-  delta_trans = sqrt(
-    delta.v[0] * delta.v[0] +
-    delta.v[1] * delta.v[1]);
   delta_rot2 = angleutils::angle_diff(delta.v[2], delta_rot1);
 
   // We want to treat backward and forward motion symmetrically for the

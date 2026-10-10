@@ -491,6 +491,10 @@ Gazebo 里程计发布、控制器和速度平滑器配置均为 100 Hz。仿真
 隔离实验可显式传入 `params_file`、`map`、`world_file`；省略时使用原仓库参数与场景；fixed_path 默认使用新图，其他模式使用原图。
 
 当前真实激光候选图已保存在 [myworld3](./myworld_bringup/models/myworld3/README.md)，按用户要求，`entry.launch.py operation_mode:=fixed_path` 默认地图已切换到 `myworld3/myworld3.yaml`，其他模式仍使用原图；显式 `map:=...` 优先。六处、十八个朝向的端点匹配诊断 P95 最大 30 mm，但原严格射线验收未通过；正确保留未知单元后的 0.2 m/s 停车回归为 1/2，倒车停后定位误差最大 12.31 mm。本次先切换固定路径地图，不将切换或 Action 成功写成全部验收通过。
+停车效率工具及验收边界见 [fixed_path 实验说明](./nav2_regulated_modules/tools/README.md)。实验采用的
+定位更新门限、内部停车容差、前视和制动参数不等于生产默认已推广。AMCL 差分运动模型已修复
+小于 1 cm 位移时丢失倒车符号的问题，避免密集定位更新将倒车预测成前进；真实激光链保持不变。
+
 终端一启动 Gazebo、AMCL、固定路径规控栈和 RViz：
 
 ```bash
