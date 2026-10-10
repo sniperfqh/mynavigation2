@@ -48,6 +48,8 @@
   <exec_depend>controlpub</exec_depend>
   <exec_depend>myagv_keyboard_control</exec_depend>
 
+  <exec_depend>python3-yaml</exec_depend>
+
   <export>
     <build_type>ament_cmake</build_type>
     <nav2_core plugin="${prefix}/fixed_path_controller_plugin.xml" />

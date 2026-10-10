@@ -1,12 +1,13 @@
 # 规控包主启动入口。按运行模式装配 Nav2、Collision Monitor、遥控与可视化节点，并统一参数、命名空间和生命周期。
 
 import os
+import yaml
 import sys
 
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription, SetEnvironmentVariable
+from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription, OpaqueFunction, SetEnvironmentVariable, SetLaunchConfiguration
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import EnvironmentVariable, LaunchConfiguration, PythonExpression
@@ -17,6 +18,59 @@ from nav2_common.launch import RewrittenYaml
 
 
 # 装配三种运行模式的 Launch 描述；返回值仅描述启动动作，不会立即启动节点。
+def resolve_braking_margin_arguments(context):
+    with open(LaunchConfiguration('params_file').perform(context), encoding='utf-8') as stream:
+        config = yaml.safe_load(stream) or {}
+    values = config.get('controller_server', {}).get('ros__parameters', {}).get('FixedPathController', {})
+    defaults = {
+        'goal_braking_distance_margin': 0.1,
+        'dynamic_goal_braking_margin_enabled': False,
+        'goal_braking_min_distance_margin': 0.03,
+        'goal_braking_margin_transition_speed': 0.3,
+    }
+    actions = []
+    for key, default in defaults.items():
+        explicit = LaunchConfiguration('fixed_path_' + key).perform(context).strip()
+        value = explicit if explicit else values.get(key, default)
+        if isinstance(default, bool):
+            value = str(value).lower()
+            if value not in ('true', 'false'):
+                raise ValueError('Invalid boolean fixed_path_' + key)
+        else:
+            value = str(float(value))
+        actions.append(SetLaunchConfiguration('resolved_fixed_path_' + key, value))
+    return actions
+
+
+def start_velocity_diagnostics(context):
+    if LaunchConfiguration('enable_velocity_diagnostics').perform(context).lower() != 'true':
+        return []
+    # 从同一参数文件解析实际反馈来源，不把控制器反馈误当作平滑器反馈。
+    with open(LaunchConfiguration('params_file').perform(context), encoding='utf-8') as stream:
+        config = yaml.safe_load(stream) or {}
+    namespace = LaunchConfiguration('namespace').perform(context)
+    config = config.get(namespace, config) if namespace else config
+    smoother = config.get('velocity_smoother', {}).get('ros__parameters', {})
+    navigator = config.get('regulated_navigator', {}).get('ros__parameters', {})
+    controller = config.get('controller_server', {}).get('ros__parameters', {})
+    collision = LaunchConfiguration('use_collision_monitor').perform(context).lower() == 'true'
+    return [Node(package='nav2_regulated_modules', executable='velocity_diagnostics_node',
+                 name='velocity_diagnostics', output='both', parameters=[{
+                     'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool),
+                     'operation_mode': LaunchConfiguration('operation_mode'),
+                     'log_dir': LaunchConfiguration('log_dir'),
+                     'velocity_file_log_frequency': ParameterValue(LaunchConfiguration('velocity_file_log_frequency'), value_type=float),
+                     'velocity_console_log_frequency': ParameterValue(LaunchConfiguration('velocity_console_log_frequency'), value_type=float),
+                     'use_collision_monitor': collision,
+                     'smoother_output_topic': 'cmd_vel_collision_in' if collision else 'cmd_vel',
+                     'smoother_feedback_topic': smoother.get('odom_topic', 'odom'),
+                     'smoother_feedback_mode': smoother.get('feedback', 'OPEN_LOOP'),
+                     'chassis_output_topic': navigator.get('chassis_output_topic', '/control_to_uart'),
+                     'chassis_input_topic': navigator.get('chassis_input_topic', '/downstream/chassis_control'),
+                     'controller_feedback_topic': controller.get('odom_topic', 'odom'),
+                 }])]
+
+
 def generate_launch_description():
     bringup_dir = get_package_share_directory('nav2_regulated_modules')
     launch_dir = os.path.dirname(__file__)
@@ -79,6 +133,10 @@ def generate_launch_description():
         'autostart': autostart,
         'yaml_filename': map_yaml_file,
         'controller_server.ros__parameters.FixedPathController.adaptive_goal_braking_enabled': adaptive_goal_braking_enabled,
+        **{'controller_server.ros__parameters.FixedPathController.' + key:
+           LaunchConfiguration('resolved_fixed_path_' + key) for key in
+           ['goal_braking_distance_margin', 'dynamic_goal_braking_margin_enabled',
+            'goal_braking_min_distance_margin', 'goal_braking_margin_transition_speed']},
     }
 
     # 用启动实参重写 YAML 中的时钟、自动激活和地图路径，并保留 ROS 参数类型。
@@ -92,7 +150,7 @@ def generate_launch_description():
 
     stdout_linebuf_envvar = SetEnvironmentVariable('RCUTILS_LOGGING_BUFFERED_STREAM', '1')
 
-    spdlog_log_dir_envvar = SetEnvironmentVariable('SPDLOG_WRAPPER_LOG_DIR', EnvironmentVariable('SPDLOG_WRAPPER_LOG_DIR', default_value='/tmp/nav2_logs'))
+    spdlog_log_dir_envvar = SetEnvironmentVariable('SPDLOG_WRAPPER_LOG_DIR', LaunchConfiguration('log_dir'))
 
     spdlog_console_level_envvar = SetEnvironmentVariable('SPDLOG_WRAPPER_CONSOLE_LEVEL', 'info')
 
@@ -220,7 +278,7 @@ def generate_launch_description():
         package='nav2_map_server',
         executable='map_server',
         name='map_server',
-        output='screen',
+        output='both',
         respawn=use_respawn,
         respawn_delay=2.0,
         parameters=[configured_params],
@@ -232,7 +290,7 @@ def generate_launch_description():
         package='nav2_lifecycle_manager',
         executable='lifecycle_manager',
         name='lifecycle_manager_localization',
-        output='screen',
+        output='both',
         arguments=['--ros-args', '--log-level', log_level],
         parameters=[{'use_sim_time': use_sim_time},
                     {'autostart': autostart},
@@ -246,7 +304,7 @@ def generate_launch_description():
                 package='nav2_planner',
                 executable='planner_server',
                 name='planner_server',
-                output='screen',
+                output='both',
                 respawn=use_respawn,
                 respawn_delay=2.0,
                 parameters=[configured_params],
@@ -256,7 +314,7 @@ def generate_launch_description():
                 package='nav2_controller',
                 executable='controller_server',
                 name='controller_server',
-                output='screen',
+                output='both',
                 respawn=use_respawn,
                 respawn_delay=2.0,
                 parameters=[
@@ -269,7 +327,7 @@ def generate_launch_description():
                 package='nav2_smoother',
                 executable='smoother_server',
                 name='smoother_server',
-                output='screen',
+                output='both',
                 respawn=use_respawn,
                 respawn_delay=2.0,
                 parameters=[configured_params],
@@ -280,7 +338,7 @@ def generate_launch_description():
                 package='nav2_velocity_smoother',
                 executable='velocity_smoother',
                 name='velocity_smoother',
-                output='screen',
+                output='both',
                 respawn=use_respawn,
                 respawn_delay=2.0,
                 parameters=[configured_params],
@@ -293,7 +351,7 @@ def generate_launch_description():
                 package='nav2_velocity_smoother',
                 executable='velocity_smoother',
                 name='velocity_smoother',
-                output='screen',
+                output='both',
                 respawn=use_respawn,
                 respawn_delay=2.0,
                 parameters=[configured_params, fixed_path_smoother_params],
@@ -306,7 +364,7 @@ def generate_launch_description():
                 package='nav2_collision_monitor',
                 executable='collision_monitor',
                 name='collision_monitor',
-                output='screen',
+                output='both',
                 respawn=use_respawn,
                 respawn_delay=2.0,
                 parameters=[
@@ -322,7 +380,7 @@ def generate_launch_description():
                 package='nav2_regulated_modules',
                 executable='regulated_navigator_node',
                 name='regulated_navigator',
-                output='screen',
+                output='both',
                 respawn=use_respawn,
                 respawn_delay=2.0,
                 parameters=[
@@ -341,14 +399,14 @@ def generate_launch_description():
                 package='controlpub',
                 executable='controlpub_node',
                 name='controlpub',
-                output='screen',
+                output='both',
                 parameters=[{'input_topic': '/cmd_vel'},
                             {'output_topic': '/control_to_uart'}]),
             Node(
                 package='nav2_lifecycle_manager',
                 executable='lifecycle_manager',
                 name='lifecycle_manager_regulated_modules',
-                output='screen',
+                output='both',
                 arguments=['--ros-args', '--log-level', log_level],
                 parameters=[{'use_sim_time': use_sim_time},
                             {'autostart': autostart},
@@ -358,7 +416,7 @@ def generate_launch_description():
                 package='nav2_lifecycle_manager',
                 executable='lifecycle_manager',
                 name='lifecycle_manager_collision_monitor',
-                output='screen',
+                output='both',
                 arguments=['--ros-args', '--log-level', log_level],
                 parameters=[{'use_sim_time': use_sim_time},
                             {'autostart': autostart},
@@ -450,7 +508,7 @@ def generate_launch_description():
         package='nav2_regulated_modules',
         executable='regulated_navigator_node',
         name='regulated_navigator',
-        output='screen',
+        output='both',
         parameters=[
             configured_params,
             {
@@ -470,7 +528,7 @@ def generate_launch_description():
         package='controlpub',
         executable='controlpub_node',
         name='controlpub',
-        output='screen',
+        output='both',
         parameters=[{'input_topic': '/cmd_vel'},
                     {'output_topic': '/control_to_uart'}])
 
@@ -481,7 +539,7 @@ def generate_launch_description():
         package='nav2_regulated_modules',
         executable='collision_boundary_visualizer_node',
         name='collision_boundary_visualizer',
-        output='screen',
+        output='both',
         parameters=[{'polygon_topics': [
             'collision_stop_zone',
             'collision_slowdown_zone',
@@ -494,7 +552,7 @@ def generate_launch_description():
         package='myagv_keyboard_control',
         executable='myagv_keyboard_control_node',
         name='myagv_keyboard_control',
-        output='screen',
+        output='both',
         emulate_tty=True,
         parameters=[configured_params, {'input_device': keyboard_input_device,
                      'output_topic': '/control_to_uart'}])
@@ -516,6 +574,10 @@ def generate_launch_description():
 
     ld = LaunchDescription()
 
+    ld.add_action(DeclareLaunchArgument('enable_velocity_diagnostics', default_value='true'))
+    ld.add_action(DeclareLaunchArgument('log_dir', default_value=EnvironmentVariable('SPDLOG_WRAPPER_LOG_DIR', default_value='/tmp/nav2_logs')))
+    ld.add_action(DeclareLaunchArgument('velocity_file_log_frequency', default_value='100.0'))
+    ld.add_action(DeclareLaunchArgument('velocity_console_log_frequency', default_value='1.0'))
     ld.add_action(stdout_linebuf_envvar)
     ld.add_action(spdlog_log_dir_envvar)
     ld.add_action(spdlog_console_level_envvar)
@@ -526,6 +588,11 @@ def generate_launch_description():
     ld.add_action(declare_map_yaml_cmd)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_params_file_cmd)
+    for key in ['goal_braking_distance_margin', 'dynamic_goal_braking_margin_enabled',
+                'goal_braking_min_distance_margin', 'goal_braking_margin_transition_speed']:
+        ld.add_action(DeclareLaunchArgument('fixed_path_' + key, default_value='',
+                                           description='Explicit FixedPathController override; empty uses parameter YAML'))
+    ld.add_action(OpaqueFunction(function=resolve_braking_margin_arguments))
     ld.add_action(declare_rviz_config_file_cmd)
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_collision_monitor_cmd)
@@ -540,6 +607,7 @@ def generate_launch_description():
     ld.add_action(declare_enable_localization_jump_detection_cmd)
     ld.add_action(declare_fixed_path_progress_timeout_cmd)
     ld.add_action(declare_keyboard_input_device_cmd)
+    ld.add_action(OpaqueFunction(function=start_velocity_diagnostics))
     ld.add_action(remote_control_cmd)
     ld.add_action(navigation_group)
 

@@ -391,6 +391,9 @@ controller_server:
       goal_final_approach_velocity: 0.01
       goal_braking_reaction_time: 0.1
       goal_braking_distance_margin: 0.1
+      dynamic_goal_braking_margin_enabled: false
+      goal_braking_min_distance_margin: 0.03
+      goal_braking_margin_transition_speed: 0.3
       adaptive_goal_braking_enabled: false
       adaptive_goal_max_deceleration: 1.0
       adaptive_goal_jerk_limit: 2.0
@@ -844,6 +847,10 @@ velocity_smoother:
   ros__parameters:
     use_sim_time: True
     smoothing_frequency: 100.0
+    # S 曲线已通过短时约束与低速停车检查，普通零指令平滑制动。
+    jerk_limited_smoothing: true
+    max_accel_jerk: [6.0, 0.0, 4.0]
+    max_decel_jerk: [8.0, 0.0, 6.0]
     scale_velocities: False
     immediate_stop_on_zero_command: False
     feedback: "CLOSED_LOOP"

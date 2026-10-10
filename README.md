@@ -1181,3 +1181,13 @@ ros2 launch nav2_regulated_modules regulated_modules.launch.py \
 nav2_regulated_modules 提供 remote、autonomous 和 fixed_path 三种互斥运行模式。remote 只启动键盘遥控并向底盘输出速度；autonomous 运行标准规划、控制、平滑和速度限制链；fixed_path 通过 NavigationService Action 接收直线或贝塞尔分段，并复用 Nav2 Controller Server 执行。每种模式的 Launch 参数、输入 Topic、输出 Topic、前提条件和停止方式在原文对应章节中列出。
 
 贡献流程包括 Fork、克隆个人仓库、添加上游远端、创建开发分支、修改和验证、提交、推送以及创建 Pull Request。导航系统的安全边界是保持单一最终速度发布者、切换时先停止旧任务、校验 Path 和 TF，并在设备退出时恢复终端属性。原文代码、命令、参数和接口名称保持不变。
+
+### 固定路径连续制动裕量实验
+
+默认关闭。固定路径可显式传入 `fixed_path_dynamic_goal_braking_margin_enabled:=true`、`fixed_path_goal_braking_min_distance_margin:=0.03`、`fixed_path_goal_braking_margin_transition_speed:=0.3`；高速裕量由 `fixed_path_goal_braking_distance_margin` 或原YAML配置给出。未传启动参数时读取YAML，原0.1 m高速裕量、0.01 m/s接近速度及10 mm位置门限不变。连续裕量只作用于旧固定路径制动分支，不叠加已有adaptive策略。配置参数和启用边界见 [固定路径架构](./nav2_regulated_modules/doc/fixed_path_architecture.md)。本轮A/B共60次有效测量，0.03 m候选终段改善约54%～57%，但精度仅16/20通过；0.05 m候选精度15/20。两组均未过门限，默认保持关闭，尚未进入全速度验收。
+
+## 速度日志
+
+规控主入口及 `myworld_bringup entry.launch.py` 默认启用独立速度诊断：文件 100 Hz、终端 1 Hz，终端摘要同时写文件。默认路径 `/tmp/nav2_logs/nav2_regulated_modules/velocity_diagnostics.log`；使用 `log_dir:=/tmp/my_run_logs` 指定目录，`enable_velocity_diagnostics:=false` 关闭新增诊断。日志包含各速度阶段的实际话题、速度、接收计数和缺失／过期状态；启动终端输出另由 ROS launch 留存。详见 [速度链日志](nav2_regulated_modules/doc/velocity_logging.md)。
+
+规控及仿真速度平滑默认启用 S 曲线（`velocity_smoother.jerk_limited_smoothing: true`）：普通起步／停车限制加速度及加加速度，最大加减速度不变。短时闭环和一次0.3 m/s停车验证通过，未覆盖全速度或实车。参数及日志字段见上述速度日志说明；通用平滑器默认仍关闭。

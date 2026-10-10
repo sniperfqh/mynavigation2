@@ -71,6 +71,10 @@ nav2_util::CallbackReturn VelocitySmoother::on_configure(const rclcpp_lifecycle:
   node->get_parameter("max_accel", max_accels_);
   node->get_parameter("max_decel", max_decels_);
 
+  if (max_velocities_.size() != 3 || min_velocities_.size() != 3 || max_accels_.size() != 3 || max_decels_.size() != 3)
+  {
+    throw std::runtime_error("Kinematic arrays must have three entries");
+  }
   for (unsigned int i = 0; i != 3; i++) {
     if (max_decels_[i] > 0.0) {
       throw std::runtime_error("Positive values set of deceleration! These should be negative to slow down!");
@@ -108,6 +112,35 @@ nav2_util::CallbackReturn VelocitySmoother::on_configure(const rclcpp_lifecycle:
   {
     throw std::runtime_error("Invalid setting of kinematic and/or deadband limits!" " All limits must be size of 3 representing (x, y, theta).");
   }
+  declare_parameter_if_not_declared(node, "jerk_limited_smoothing", rclcpp::ParameterValue(false));
+  std::vector<double> jerk_defaults(3, 0.0);
+  jerk_defaults[0] = 6.0;
+  jerk_defaults[2] = 4.0;
+  declare_parameter_if_not_declared(node, "max_accel_jerk", rclcpp::ParameterValue(jerk_defaults));
+  jerk_defaults[0] = 8.0;
+  jerk_defaults[2] = 6.0;
+  declare_parameter_if_not_declared(node, "max_decel_jerk", rclcpp::ParameterValue(jerk_defaults));
+  get_parameter("jerk_limited_smoothing", jerk_limited_smoothing_);
+  get_parameter("max_accel_jerk", max_accel_jerks_);
+  get_parameter("max_decel_jerk", max_decel_jerks_);
+  if (jerk_limited_smoothing_)
+  {
+    if (max_accel_jerks_.size() != 3 || max_decel_jerks_.size() != 3 || !std::isfinite(smoothing_frequency_) || smoothing_frequency_ <= 0.0 || scale_velocities_)
+    {
+      throw std::runtime_error("S-curve requires three-axis jerk limits, valid frequency and scale_velocities=false");
+    }
+    for (size_t i = 0; i < 3; ++i)
+    {
+      const bool axis_enabled = max_velocities_[i] != 0.0 || min_velocities_[i] != 0.0;
+      if (!std::isfinite(max_velocities_[i]) || !std::isfinite(min_velocities_[i]) || !std::isfinite(max_accels_[i]) || !std::isfinite(max_decels_[i]) || !std::isfinite(max_accel_jerks_[i]) || !std::isfinite(max_decel_jerks_[i]) || deadband_velocities_[i] != 0.0 || min_velocities_[i] > 0.0 || max_velocities_[i] < 0.0 || (axis_enabled && (max_accels_[i] <= 0.0 || max_decels_[i] >= 0.0 || max_accel_jerks_[i] <= 0.0 || max_decel_jerks_[i] <= 0.0)))
+      {
+        throw std::runtime_error("S-curve requires finite positive active-axis limits, zero deadband and speed bounds containing zero");
+      }
+    }
+    immediate_stop_on_zero_command_ = false;
+    set_parameter(rclcpp::Parameter("immediate_stop_on_zero_command", false));
+    LOG_INFO("S-curve enabled: accel_jerk=({},{},{}), decel_jerk=({},{},{}); ordinary zero commands decelerate smoothly", max_accel_jerks_[0], max_accel_jerks_[1], max_accel_jerks_[2], max_decel_jerks_[0], max_decel_jerks_[1], max_decel_jerks_[2]);
+  }
   target_maxvx_ = max_velocities_[0];
   target_minvx_ = min_velocities_[0];
 
@@ -133,6 +166,11 @@ nav2_util::CallbackReturn VelocitySmoother::on_configure(const rclcpp_lifecycle:
 
 nav2_util::CallbackReturn VelocitySmoother::on_activate(const rclcpp_lifecycle::State &) {
   feedback_initialized_ = false;
+  jerk_clock_initialized_ = false;
+  for (auto & profile : jerk_profiles_)
+  {
+    profile.reset();
+  }
   LOG_INFO("Activating");
   LOG_INFO("Activating smoothed cmd_vel publisher and smoothing timer");
   smoothed_cmd_pub_->on_activate();
@@ -261,7 +299,11 @@ void VelocitySmoother::smootherTimer() {
   if (now() - last_command_time_ > velocity_timeout_) {
     if (last_cmd_ == geometry_msgs::msg::Twist() || stopped_) {
       stopped_ = true;
-      feedback_initialized_ = false;
+      jerk_clock_initialized_ = false;
+      if (!jerk_limited_smoothing_)
+      {
+        feedback_initialized_ = false;
+      }
       return;
     }
     *command_ = geometry_msgs::msg::Twist();
@@ -291,6 +333,57 @@ void VelocitySmoother::smootherTimer() {
     }
     current_ = feedbackReference(feedback);
     feedback_initialized_ = true;
+  }
+  if (jerk_limited_smoothing_)
+  {
+    const auto tick = std::chrono::steady_clock::now();
+    const double dt = jerk_clock_initialized_ ? std::chrono::duration<double>(tick - jerk_last_tick_).count() : 1.0 / smoothing_frequency_;
+    jerk_last_tick_ = tick;
+    jerk_clock_initialized_ = true;
+    if (!std::isfinite(dt) || dt <= 0.0)
+    {
+      return;
+    }
+    std::array<double, 3> previous;
+    previous[0] = last_cmd_.linear.x;
+    previous[1] = last_cmd_.linear.y;
+    previous[2] = last_cmd_.angular.z;
+    std::array<double, 3> reference;
+    reference[0] = current_.linear.x;
+    reference[1] = current_.linear.y;
+    reference[2] = current_.angular.z;
+    std::array<double, 3> requested;
+    requested[0] = command_->linear.x;
+    requested[1] = command_->linear.y;
+    requested[2] = command_->angular.z;
+    std::array<double, 3> output;
+    for (size_t i = 0; i < 3; ++i)
+    {
+      const double low = i == 0 ? std::max(min_velocities_[i], target_minvx_) : min_velocities_[i];
+      const double high = i == 0 ? std::min(max_velocities_[i], target_maxvx_) : max_velocities_[i];
+      // 闭环只校正目标；零指令必须收敛到零，不因里程计滞后产生反向补偿。
+      double target = requested[i] == 0.0 ? 0.0 : requested[i] + previous[i] - reference[i];
+      target = std::clamp(target, low, high);
+      if (target * requested[i] < 0.0)
+      {
+        target = 0.0;
+      }
+      // 反向先规划零速；速度限幅消息作为新目标逐步制动，不瞬间截断输出。
+      if (target * previous[i] < 0.0)
+      {
+        target = 0.0;
+      }
+      const double old_acceleration = jerk_profiles_[i].acceleration();
+      output[i] = jerk_profiles_[i].advance(previous[i], target, dt, max_accels_[i], -max_decels_[i], max_accel_jerks_[i], max_decel_jerks_[i], min_velocities_[i], max_velocities_[i]);
+      const double acceleration = jerk_profiles_[i].acceleration();
+      LOG_DEBUG("S-curve axis={} dt={:.9f} input={:.9f} feedback_reference={:.9f} target={:.9f} output={:.9f} accel={:.9f} jerk={:.9f} max_accel={} max_decel={} max_accel_jerk={} max_decel_jerk={}", i, dt, requested[i], reference[i], target, output[i], acceleration, (acceleration - old_acceleration) / dt, max_accels_[i], max_decels_[i], max_accel_jerks_[i], max_decel_jerks_[i]);
+    }
+    cmd_vel->linear.x = output[0];
+    cmd_vel->linear.y = output[1];
+    cmd_vel->angular.z = output[2];
+    last_cmd_ = *cmd_vel;
+    smoothed_cmd_pub_->publish(std::move(cmd_vel));
+    return;
   }
   if (limitv2target) {
     // 当前速度不在 [target_minvx_, target_maxvx_] 区间内：以加速度/减速度步长逐步逼近目标限幅，避免超调
@@ -392,6 +485,29 @@ rcl_interfaces::msg::SetParametersResult VelocitySmoother::dynamicParametersCall
   rcl_interfaces::msg::SetParametersResult result;
   result.successful = true;
 
+  // 新模式的限制参数仅允许重新配置生命周期后变更，避免运动中改变可行域。
+  if (jerk_limited_smoothing_)
+  {
+    for (const auto & parameter : parameters)
+    {
+      const auto & name = parameter.get_name();
+      if (name == "jerk_limited_smoothing" || name == "max_accel_jerk" || name == "max_decel_jerk" || name == "max_accel" || name == "max_decel" || name == "max_velocity" || name == "min_velocity" || name == "deadband_velocity" || name == "smoothing_frequency" || name == "scale_velocities" || name == "immediate_stop_on_zero_command")
+      {
+        result.successful = false;
+        result.reason = "S-curve constraints require lifecycle deactivate/cleanup/configure";
+        return result;
+      }
+    }
+  }
+  for (const auto & parameter : parameters)
+  {
+    if (parameter.get_name() == "jerk_limited_smoothing" || parameter.get_name() == "max_accel_jerk" || parameter.get_name() == "max_decel_jerk")
+    {
+      result.successful = false;
+      result.reason = "S-curve settings require lifecycle reconfiguration";
+      return result;
+    }
+  }
   for (const auto & parameter : parameters)
   {
     if (parameter.get_name() == "feedback_correction_time" && parameter.get_type() == ParameterType::PARAMETER_DOUBLE && (!std::isfinite(parameter.as_double()) || parameter.as_double() <= 0.0))

@@ -126,6 +126,9 @@ private:
   double goal_stop_entry_tolerance_ { 0.0 };
   double goal_braking_reaction_time_ { 0.1 };
   double goal_braking_distance_margin_ { 0.1 };
+  bool dynamic_goal_braking_margin_enabled_ = false;
+  double goal_braking_min_distance_margin_ = 0.03;
+  double goal_braking_margin_transition_speed_ = 0.3;
   // 新制动策略默认关闭，避免未经验证的速度曲线直接进入实车速度链。
   bool adaptive_goal_braking_enabled_ { false };
   double adaptive_goal_max_deceleration_ { 1.0 };

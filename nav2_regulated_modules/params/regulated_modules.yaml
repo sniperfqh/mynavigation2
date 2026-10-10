@@ -557,6 +557,9 @@ controller_server:
       goal_braking_reaction_time: 0.1
       # 终点制动安全裕量，单位米。
       goal_braking_distance_margin: 0.1
+      dynamic_goal_braking_margin_enabled: false
+      goal_braking_min_distance_margin: 0.03
+      goal_braking_margin_transition_speed: 0.3
       # 自适应到点制动默认关闭；仅在单独确认后显式启用。
       adaptive_goal_braking_enabled: false
       # 自适应正常到点减速度上限，不能超过 1 m/s²。
@@ -888,6 +891,10 @@ velocity_smoother:
     use_sim_time: false
     # 速度平滑器输出频率，单位 Hz。
     smoothing_frequency: 100.0
+    # S 曲线已通过短时约束与低速停车检查，普通零指令平滑制动。
+    jerk_limited_smoothing: true
+    max_accel_jerk: [6.0, 0.0, 4.0]
+    max_decel_jerk: [8.0, 0.0, 6.0]
     # 超限时是否按比例缩放速度各分量。
     scale_velocities: false
     # 收到全零速度命令时是否立即输出停车。

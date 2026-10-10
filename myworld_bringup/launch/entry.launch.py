@@ -27,7 +27,10 @@ def generate_launch_description():
     adaptive_goal_braking_enabled = LaunchConfiguration('adaptive_goal_braking_enabled', default='false')
     fixed_path_goal_final_approach_velocity = LaunchConfiguration('fixed_path_goal_final_approach_velocity', default='0.01')
     fixed_path_goal_braking_reaction_time = LaunchConfiguration('fixed_path_goal_braking_reaction_time', default='0.1')
-    fixed_path_goal_braking_distance_margin = LaunchConfiguration('fixed_path_goal_braking_distance_margin', default='0.1')
+    fixed_path_goal_braking_distance_margin = LaunchConfiguration('fixed_path_goal_braking_distance_margin', default='')
+    fixed_path_dynamic_goal_braking_margin_enabled = LaunchConfiguration('fixed_path_dynamic_goal_braking_margin_enabled', default='')
+    fixed_path_goal_braking_min_distance_margin = LaunchConfiguration('fixed_path_goal_braking_min_distance_margin', default='')
+    fixed_path_goal_braking_margin_transition_speed = LaunchConfiguration('fixed_path_goal_braking_margin_transition_speed', default='')
     fixed_path_goal_terminal_lookahead_dist = LaunchConfiguration('fixed_path_goal_terminal_lookahead_dist', default='0.2')
     fixed_path_goal_terminal_lookahead_reference_speed = LaunchConfiguration('fixed_path_goal_terminal_lookahead_reference_speed', default='0.75')
     fixed_path_goal_terminal_lookahead_speed_gain = LaunchConfiguration('fixed_path_goal_terminal_lookahead_speed_gain', default='0.1')
@@ -84,6 +87,7 @@ def generate_launch_description():
 
     localization_arguments = {'map': map_file, 'use_sim_time': use_sim_time, 'params_file': params_file, 'launch_map_server': 'false', 'lifecycle_manager_name': 'lifecycle_manager_amcl',}
     algorithm_arguments = {'map': map_file,
+        **{key: LaunchConfiguration(key) for key in ['enable_velocity_diagnostics', 'log_dir', 'velocity_file_log_frequency', 'velocity_console_log_frequency']},
         'use_sim_time': use_sim_time,
         'params_file': params_file,
         'rviz_config_file': rviz_config_file,
@@ -104,6 +108,9 @@ def generate_launch_description():
         'fixed_path_goal_final_approach_velocity': fixed_path_goal_final_approach_velocity,
         'fixed_path_goal_braking_reaction_time': fixed_path_goal_braking_reaction_time,
         'fixed_path_goal_braking_distance_margin': fixed_path_goal_braking_distance_margin,
+        'fixed_path_dynamic_goal_braking_margin_enabled': fixed_path_dynamic_goal_braking_margin_enabled,
+        'fixed_path_goal_braking_min_distance_margin': fixed_path_goal_braking_min_distance_margin,
+        'fixed_path_goal_braking_margin_transition_speed': fixed_path_goal_braking_margin_transition_speed,
         'fixed_path_goal_terminal_lookahead_dist': fixed_path_goal_terminal_lookahead_dist,
         'fixed_path_goal_terminal_lookahead_reference_speed': fixed_path_goal_terminal_lookahead_reference_speed,
         'fixed_path_goal_terminal_lookahead_speed_gain': fixed_path_goal_terminal_lookahead_speed_gain,
@@ -128,7 +135,11 @@ def generate_launch_description():
     regulated_fixed_path = TimerAction(period=fixed_path_stack_start_delay, condition=IfCondition(is_fixed_path), actions=[IncludeLaunchDescription(PythonLaunchDescriptionSource(
                 [launch_file_dir, '/navigation_launch.py']), launch_arguments=algorithm_arguments.items())])
 
-    return LaunchDescription([ign_resource_path,
+    return LaunchDescription([
+        DeclareLaunchArgument('enable_velocity_diagnostics', default_value='true'),
+        DeclareLaunchArgument('log_dir', default_value=os.environ.get('SPDLOG_WRAPPER_LOG_DIR', '/tmp/nav2_logs')),
+        DeclareLaunchArgument('velocity_file_log_frequency', default_value='100.0'),
+        DeclareLaunchArgument('velocity_console_log_frequency', default_value='1.0'),ign_resource_path,
         ign_partition,
         ignition_sim,
         ignition_server,
@@ -158,7 +169,10 @@ def generate_launch_description():
         DeclareLaunchArgument('adaptive_goal_braking_enabled', default_value='false', description='Opt in to unvalidated adaptive fixed-path goal braking'),
         DeclareLaunchArgument('fixed_path_goal_final_approach_velocity', default_value='0.01', description='Fixed-path final approach velocity (m/s)'),
         DeclareLaunchArgument('fixed_path_goal_braking_reaction_time', default_value='0.1', description='Fixed-path braking reaction time margin (s)'),
-        DeclareLaunchArgument('fixed_path_goal_braking_distance_margin', default_value='0.1', description='Fixed-path braking distance margin (m)'),
+        DeclareLaunchArgument('fixed_path_goal_braking_distance_margin', default_value='', description='Fixed-path high braking margin; empty uses parameter YAML'),
+        DeclareLaunchArgument('fixed_path_dynamic_goal_braking_margin_enabled', default_value='', description='Fixed-path dynamic margin override; empty uses parameter YAML'),
+        DeclareLaunchArgument('fixed_path_goal_braking_min_distance_margin', default_value='', description='Fixed-path dynamic margin override; empty uses parameter YAML'),
+        DeclareLaunchArgument('fixed_path_goal_braking_margin_transition_speed', default_value='', description='Fixed-path dynamic margin override; empty uses parameter YAML'),
         DeclareLaunchArgument('fixed_path_goal_terminal_lookahead_dist', default_value='0.2', description='Fixed-path minimum terminal lookahead distance (m)'),
         DeclareLaunchArgument('fixed_path_goal_terminal_lookahead_reference_speed', default_value='0.75', description='Fixed-path terminal lookahead reference speed (m/s)'),
         DeclareLaunchArgument('fixed_path_goal_terminal_lookahead_speed_gain', default_value='0.1', description='Fixed-path terminal lookahead speed gain (s)'),

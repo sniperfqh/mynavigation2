@@ -228,3 +228,21 @@ Collision Monitor 依据 `base_link` 周围的矩形区域处理激光点：Stop
 | 监控、恢复、反馈和最终速度出口在哪里？ | [`navigator_monitor.cpp`](../src/navigator_monitor.cpp)、[`navigator_control.cpp`](../src/navigator_control.cpp)、[`chassis_control_subscriber.cpp`](../src/chassis_control_subscriber.cpp)、[`controlpub_node.cpp`](../../controlpub/src/controlpub_node.cpp) |
 
 现场核对建议从 `ros2 lifecycle get /regulated_navigator`、`ros2 action info /navigation_service`、`ros2 param get /controller_server controller_frequency`、`ros2 param get /velocity_smoother smoothing_frequency`、`ros2 topic info -v /control_to_uart`、TF、`/odometry`、`/motion_state` 和雷达扫描入手。这些命令只用于后续运行态取证；本文没有把静态源码结论当作现场验证结果。
+
+## 按实测速度连续调整制动裕量（实验，默认关闭）
+
+`dynamic_goal_braking_margin_enabled` 仅作用于 `adaptive_goal_braking_enabled=false` 的固定路径制动分支。裕量为 `m_min + (m_high-m_min) * clamp(abs(v_measured)/v_transition, 0, 1)`；高速上界沿用 `goal_braking_distance_margin=0.1 m`，候选低速下界 `goal_braking_min_distance_margin=0.03 m`，过渡速度 `goal_braking_margin_transition_speed=0.3 m/s`。前进／倒车共用速度绝对值，保持原方向处理、反应时间、减速度、0.01 m/s接近速度和终点停车锁存。速度指令仍受上一周期制动指令上界约束，裕量缩小不会重新加速。
+
+新增启动参数 `fixed_path_dynamic_goal_braking_margin_enabled`、`fixed_path_goal_braking_min_distance_margin`、`fixed_path_goal_braking_margin_transition_speed`，并修复 `fixed_path_goal_braking_distance_margin` 从入口到控制器的覆盖路由。四个参数默认空值表示读取参数YAML，显式参数优先；启用已有adaptive分支时不叠加连续裕量。无效新参数在控制器配置阶段拒绝，非有限反馈速度的裕量计算回退高速上界。
+
+当前实车与仿真YAML均保持开关false；0.8 m/s同种子基线／候选A/B及后续全速度验收全部通过前不修改默认启用状态。
+
+2026-10-10 A/B结果：基线、0.03 m、0.05 m每组20次有效测量；精度分别16/20、16/20、15/20。0.03 m终段约4.54／4.71 s（原10.48／10.34 s），蠕动约2.07／2.28 s。效率改善不替代精度验收，两个候选均未通过，开关保持false；未执行130次全速度与默认随机复核。
+
+## 速度链文件与终端日志
+
+主 launch 默认额外启动独立 `velocity_diagnostics_node`，文件 DEBUG 快照 100 Hz、终端 INFO 摘要 1 Hz，摘要也写入文件。记录控制器／平滑器／可选碰撞监控输入输出、ChassisControl 支路请求、底盘实际反馈及 UART 出口；每阶段附接收计数、数据年龄和有效状态，不参与控制。默认文件 `/tmp/nav2_logs/nav2_regulated_modules/velocity_diagnostics.log`；每文件 10 MiB、5 个备份，周期刷新。主 launch 子进程终端输出另由 ROS launch 留存。参数、字段及采样边界见 [velocity_logging.md](velocity_logging.md)。
+
+## S 曲线普通起停
+
+规控／仿真速度平滑器现默认开启 jerk_limited_smoothing，基于上一条实际输出维护加速度状态，以单调时钟 dt 限制加速度变化并提前收回加速度。普通零指令及输入超时不再走立即归零旁路，下游碰撞急停保持。硬加减速度值未提高，双工况取更严格的幅值与 jerk；误差1 Hz、速度与曲线状态100 Hz保存。新模式短时约束及一次0.3停车验证通过，未进行全速度或实车验收；详见速度日志说明。

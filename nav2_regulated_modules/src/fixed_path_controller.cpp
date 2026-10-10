@@ -2,6 +2,7 @@
 
 #include "nav2_regulated_modules/fixed_path_controller.hpp"
 #include "nav2_regulated_modules/detail/terminal_position.hpp"
+#include "nav2_regulated_modules/detail/braking_margin.hpp"
 #include "nav2_regulated_modules/fixed_path_speed_profile.hpp"
 
 #include <algorithm>
@@ -58,6 +59,9 @@ void FixedPathController::configure(const rclcpp_lifecycle::LifecycleNode::WeakP
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_stop_entry_tolerance", rclcpp::ParameterValue(0.0));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_braking_reaction_time", rclcpp::ParameterValue(0.1));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_braking_distance_margin", rclcpp::ParameterValue(0.1));
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".dynamic_goal_braking_margin_enabled", rclcpp::ParameterValue(false));
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_braking_min_distance_margin", rclcpp::ParameterValue(0.03));
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_braking_margin_transition_speed", rclcpp::ParameterValue(0.3));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".adaptive_goal_braking_enabled", rclcpp::ParameterValue(false));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".adaptive_goal_max_deceleration", rclcpp::ParameterValue(1.0));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".adaptive_goal_jerk_limit", rclcpp::ParameterValue(2.0));
@@ -95,6 +99,9 @@ void FixedPathController::configure(const rclcpp_lifecycle::LifecycleNode::WeakP
   node->get_parameter(plugin_name_ + ".goal_stop_entry_tolerance", goal_stop_entry_tolerance_);
   node->get_parameter(plugin_name_ + ".goal_braking_reaction_time", goal_braking_reaction_time_);
   node->get_parameter(plugin_name_ + ".goal_braking_distance_margin", goal_braking_distance_margin_);
+  node->get_parameter(plugin_name_ + ".dynamic_goal_braking_margin_enabled", dynamic_goal_braking_margin_enabled_);
+  node->get_parameter(plugin_name_ + ".goal_braking_min_distance_margin", goal_braking_min_distance_margin_);
+  node->get_parameter(plugin_name_ + ".goal_braking_margin_transition_speed", goal_braking_margin_transition_speed_);
   node->get_parameter(plugin_name_ + ".adaptive_goal_braking_enabled", adaptive_goal_braking_enabled_);
   node->get_parameter(plugin_name_ + ".adaptive_goal_max_deceleration", adaptive_goal_max_deceleration_);
   node->get_parameter(plugin_name_ + ".adaptive_goal_jerk_limit", adaptive_goal_jerk_limit_);
@@ -124,6 +131,11 @@ void FixedPathController::configure(const rclcpp_lifecycle::LifecycleNode::WeakP
   {
     throw nav2_core::PlannerException("FixedPathController stop entry tolerance must be finite and nonnegative");
   }
+  if (dynamic_goal_braking_margin_enabled_ && !detail::validBrakingMargin(goal_braking_min_distance_margin_, goal_braking_distance_margin_, goal_braking_margin_transition_speed_))
+  {
+    throw nav2_core::PlannerException("FixedPathController dynamic braking margin parameters are invalid");
+  }
+  LOG_INFO("连续制动裕量：enabled={}，minimum={:.3f}m，high={:.3f}m，transition={:.3f}m/s，adaptive_branch={}", dynamic_goal_braking_margin_enabled_, goal_braking_min_distance_margin_, goal_braking_distance_margin_, goal_braking_margin_transition_speed_, adaptive_goal_braking_enabled_);
   control_duration_ = 1.0 / controller_frequency;
   // 仅在显式启用新制动路径时校验专属参数；关闭时不改变旧配置的接受条件。
   if (adaptive_goal_braking_enabled_ && (!std::isfinite(adaptive_goal_max_deceleration_) || adaptive_goal_max_deceleration_ <= 0.0 || adaptive_goal_max_deceleration_ > 1.0 || !std::isfinite(adaptive_goal_jerk_limit_) || adaptive_goal_jerk_limit_ <= 0.0 || !std::isfinite(adaptive_goal_approach_speed_) || adaptive_goal_approach_speed_ <= 0.0 || !std::isfinite(adaptive_goal_response_time_) || adaptive_goal_response_time_ < 0.0 || !std::isfinite(adaptive_goal_distance_margin_) || adaptive_goal_distance_margin_ < 0.0))
@@ -463,7 +475,8 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
   {
     linear_magnitude = std::min(linear_magnitude, rotate_to_heading_angular_vel_ / std::abs(curvature));
   }
-  const double braking_reaction_distance = current_linear_velocity * goal_braking_reaction_time_ + goal_braking_distance_margin_;
+  const double effective_braking_margin = detail::brakingMargin(dynamic_goal_braking_margin_enabled_, adaptive_goal_braking_enabled_, velocity.linear.x, goal_braking_min_distance_margin_, goal_braking_distance_margin_, goal_braking_margin_transition_speed_);
+  const double braking_reaction_distance = current_linear_velocity * goal_braking_reaction_time_ + effective_braking_margin;
   // 新模式使用含响应延迟和 jerk 预留的停车距离；旧模式沿用固定减速度加反应裕量。
   const double braking_activation_distance = adaptive_goal_braking_enabled_ ? std::max(approach_velocity_scaling_dist_, stopping_distance) : std::max(approach_velocity_scaling_dist_, stopping_distance + braking_reaction_distance);
   // 首次进入减速区才锁定制动状态与当前命令，防止剩余距离波动反复切换阶段。
@@ -533,7 +546,7 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
         braking_target = std::min(linear_magnitude, std::max(braking_target, goal_final_approach_velocity_));
       }
       // 旧制动阶段只允许目标速度单调下降，避免定位抖动导致二次加速。
-      linear_magnitude = std::min(last_braking_command_magnitude_, braking_target);
+      linear_magnitude = detail::boundedBrakingCommand(last_braking_command_magnitude_, braking_target);
       last_braking_command_magnitude_ = linear_magnitude;
     }
   }

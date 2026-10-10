@@ -64,6 +64,10 @@ target_include_directories(nav2_regulated_modules_fixed_path_controller PUBLIC $
 target_compile_features(nav2_regulated_modules_fixed_path_controller PUBLIC cxx_std_17)
 ament_target_dependencies(nav2_regulated_modules_fixed_path_controller rclcpp rclcpp_lifecycle geometry_msgs nav2_core nav2_costmap_2d nav2_util nav_msgs pluginlib tf2 tf2_ros tf2_geometry_msgs spdlog_wrapper)
 
+add_executable(velocity_diagnostics_node src/velocity_diagnostics.cpp)
+target_compile_features(velocity_diagnostics_node PUBLIC cxx_std_17)
+ament_target_dependencies(velocity_diagnostics_node rclcpp geometry_msgs nav_msgs byd_custom_msgs spdlog_wrapper)
+
 add_executable(collision_boundary_visualizer_node src/collision_boundary_visualizer.cpp)
 target_compile_features(collision_boundary_visualizer_node PUBLIC c_std_99 cxx_std_17)
 ament_target_dependencies(collision_boundary_visualizer_node rclcpp geometry_msgs visualization_msgs)
@@ -74,7 +78,7 @@ install(TARGETS nav2_regulated_modules_fixed_path_controller
   RUNTIME DESTINATION bin
 )
 
-install(TARGETS regulated_navigator_node collision_boundary_visualizer_node
+install(TARGETS regulated_navigator_node collision_boundary_visualizer_node velocity_diagnostics_node
   DESTINATION lib/${PROJECT_NAME})
 
 install(DIRECTORY
@@ -98,6 +102,10 @@ ament_export_dependencies(nav2_core nav2_costmap_2d pluginlib)
 
 include(CTest)
 if(BUILD_TESTING)
+  add_executable(braking_margin_test test/braking_margin_test.cpp)
+  target_include_directories(braking_margin_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_compile_features(braking_margin_test PRIVATE cxx_std_17)
+  add_test(NAME braking_margin_test COMMAND braking_margin_test)
   add_executable(terminal_position_test test/terminal_position_test.cpp)
   target_include_directories(terminal_position_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_compile_features(terminal_position_test PRIVATE cxx_std_17)

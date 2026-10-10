@@ -30,6 +30,10 @@
 #include "spdlog_wrapper.hpp"
 #include "nav2_msgs/msg/speed_limit.hpp"
 
+#include <array>
+#include <chrono>
+#include "nav2_velocity_smoother/jerk_profile.hpp"
+
 namespace nav2_velocity_smoother
 {
 
@@ -138,6 +142,14 @@ protected:
   rclcpp::Clock::SharedPtr clock_;
   geometry_msgs::msg::Twist last_cmd_;
   geometry_msgs::msg::Twist::SharedPtr command_;
+
+  // S 曲线使用上一条实际输出及其加速度，闭环校正不能直接覆盖历史状态。
+  bool jerk_limited_smoothing_ = false;
+  std::vector<double> max_accel_jerks_;
+  std::vector<double> max_decel_jerks_;
+  std::array<JerkProfile, 3> jerk_profiles_;
+  std::chrono::steady_clock::time_point jerk_last_tick_;
+  bool jerk_clock_initialized_ = false;
 
   // Parameters
   double smoothing_frequency_;
