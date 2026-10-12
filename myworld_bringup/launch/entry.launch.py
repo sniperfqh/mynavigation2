@@ -1,13 +1,85 @@
+"""noamcl simulation: external localization exclusively publishes map -> base_link.
+
+Subscribe to /scan with the base_link -> base_scan extrinsics. /odometry is
+Gazebo velocity feedback for controllers; /motion_state feeds the smoother.
+No Gazebo bottom-chassis TF or substitute localization is published here.
+"""
+
 import os
+import tempfile
+import xml.etree.ElementTree as ET
+
+import yaml
 
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription, SetEnvironmentVariable, TimerAction
+from launch.actions import DeclareLaunchArgument, ExecuteProcess, IncludeLaunchDescription, SetEnvironmentVariable, TimerAction, OpaqueFunction, SetLaunchConfiguration
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration, PythonExpression
 from launch_ros.actions import Node
+
+
+def prepare_external_localization_parameters(context):
+    """Keep simulation dynamics, but use the real vehicle's velocity/TF interfaces."""
+    with open(LaunchConfiguration('params_file').perform(context), encoding='utf-8') as stream:
+        config = yaml.safe_load(stream)
+    config.pop('amcl', None)
+
+    def adapt_frames(values):
+        if isinstance(values, dict):
+            for key, value in values.items():
+                if key in ('robot_base_frame', 'base_frame_id'):
+                    values[key] = 'base_link'
+                elif key in ('global_frame', 'global_frame_id', 'odom_frame_id') and value == 'odom':
+                    values[key] = 'map'
+                elif key in ('odom_topic', 'velocity_odom_topic') and value == '/odom':
+                    values[key] = '/odometry'
+                else:
+                    adapt_frames(value)
+        elif isinstance(values, list):
+            for value in values:
+                adapt_frames(value)
+
+    adapt_frames(config)
+    mode = LaunchConfiguration('operation_mode').perform(context)
+    navigator = config['regulated_navigator']['ros__parameters']
+    navigator.update(operation_mode=mode, use_smoother=mode != 'fixed_path',
+                     controller_cmd_vel_topic='cmd_vel_nav', smoothed_cmd_vel_topic='cmd_vel',
+                     velocity_odom_topic='/odometry')
+    controller = config['controller_server']['ros__parameters']
+    controller['odom_topic'] = '/odometry'
+    config['velocity_smoother']['ros__parameters']['odom_topic'] = '/motion_state'
+    fixed = controller['FixedPathController']
+    # Preserve the original simulation wrapper's explicit motion-parameter overrides.
+    overrides = {
+        'desired_linear_vel': 'fixed_path_max_linear_velocity',
+        'approach_velocity_scaling_dist': 'fixed_path_approach_velocity_scaling_dist',
+        'goal_linear_deceleration': 'fixed_path_goal_linear_deceleration',
+        'goal_final_approach_velocity': 'fixed_path_goal_final_approach_velocity',
+        'goal_braking_reaction_time': 'fixed_path_goal_braking_reaction_time',
+        'goal_terminal_lookahead_dist': 'fixed_path_goal_terminal_lookahead_dist',
+        'goal_terminal_lookahead_reference_speed': 'fixed_path_goal_terminal_lookahead_reference_speed',
+        'goal_terminal_lookahead_speed_gain': 'fixed_path_goal_terminal_lookahead_speed_gain',
+        'goal_terminal_lookahead_min_dist': 'fixed_path_goal_terminal_lookahead_min_dist',
+        'goal_terminal_lookahead_max_dist': 'fixed_path_goal_terminal_lookahead_max_dist',
+        'rotate_to_heading_angular_vel': 'fixed_path_rotate_to_heading_angular_vel',
+        'max_angular_accel': 'fixed_path_max_angular_accel',
+        'rotate_to_heading_kp': 'fixed_path_rotate_to_heading_kp',
+        'goal_error_log_frequency': 'fixed_path_goal_error_log_frequency',
+    }
+    for key, argument in overrides.items():
+        explicit = LaunchConfiguration(argument).perform(context).strip()
+        if explicit:
+            fixed[key] = float(explicit)
+    tolerance = float(LaunchConfiguration('fixed_path_xy_goal_tolerance').perform(context))
+    controller['fixed_path_goal_checker']['xy_goal_tolerance'] = tolerance
+    controller['stopped_goal_checker']['xy_goal_tolerance'] = tolerance if mode == 'fixed_path' else 0.03
+    with tempfile.NamedTemporaryFile(mode='w', prefix='noamcl_', suffix='.yaml', delete=False) as stream:
+        yaml.safe_dump(config, stream, sort_keys=False)
+        path = stream.name
+    return [SetLaunchConfiguration('noamcl_params_file', path)]
 
 
 def generate_launch_description():
@@ -70,7 +142,16 @@ def generate_launch_description():
     rviz_config_file = os.path.join(bringup_dir, 'rviz', 'nav2_default_view.rviz')
     robot_description_file = os.path.join(bringup_dir, 'urdf', 'diffbot.urdf')
     with open(robot_description_file, 'r', encoding='utf-8') as urdf_file:
-        robot_description = urdf_file.read()
+        robot = ET.fromstring(urdf_file.read())
+    # External localization owns map -> base_link. Keep base_link a URDF root;
+    # publishing base_footprint -> base_link would give base_link two parents.
+    base_joint = robot.find("joint[@name='base_joint']")
+    origin = base_joint.find('origin')
+    if origin.get('xyz') != '0 0 0' or origin.get('rpy') != '0 0 0':
+        raise ValueError('noamcl expects the existing zero-offset base_joint')
+    base_joint.find('parent').set('link', 'base_link')
+    base_joint.find('child').set('link', 'base_footprint')
+    robot_description = ET.tostring(robot, encoding='unicode')
 
     resource_path = [os.path.join('/opt/ros/humble', 'share'), ':' + os.path.join(bringup_dir, 'models'), ':' + myworld_dir, ':' + os.path.join(myworld_dir, 'models')]
 
@@ -85,12 +166,14 @@ def generate_launch_description():
     remote_ignition_gui = ExecuteProcess(condition=IfCondition(is_remote_gui), cmd=['ign', 'gazebo', '-g', '-v', '3', world_only], output='screen')
     remote_ignition_server = ExecuteProcess(condition=IfCondition(is_remote), cmd=['ign', 'gazebo', '-r', '-s', '--headless-rendering', '-v', '3', world_only], output='screen')
 
-    localization_arguments = {'map': map_file, 'use_sim_time': use_sim_time, 'params_file': params_file, 'launch_map_server': 'false', 'lifecycle_manager_name': 'lifecycle_manager_amcl',}
     algorithm_arguments = {'map': map_file,
         **{key: LaunchConfiguration(key) for key in ['enable_velocity_diagnostics', 'log_dir', 'velocity_file_log_frequency', 'velocity_console_log_frequency']},
         'use_sim_time': use_sim_time,
-        'params_file': params_file,
+        'params_file': LaunchConfiguration('noamcl_params_file'),
         'rviz_config_file': rviz_config_file,
+        'use_rviz': 'false',
+        'namespace': '',
+        'use_namespace': 'false',
         'use_collision_monitor': use_collision_monitor,
         'use_collision_visualization': use_collision_visualization,
         'autostart': 'true',
@@ -129,11 +212,11 @@ def generate_launch_description():
         'fixed_path_goal_error_log_frequency': fixed_path_goal_error_log_frequency,
     }
 
-    regulated_autonomous = IncludeLaunchDescription(PythonLaunchDescriptionSource([launch_file_dir, '/navigation_launch.py']), condition=IfCondition(is_autonomous),
+    regulated_autonomous = IncludeLaunchDescription(PythonLaunchDescriptionSource([get_package_share_directory('nav2_regulated_modules'), '/launch/regulated_modules.launch.py']), condition=IfCondition(is_autonomous),
         launch_arguments=algorithm_arguments.items())
 
     regulated_fixed_path = TimerAction(period=fixed_path_stack_start_delay, condition=IfCondition(is_fixed_path), actions=[IncludeLaunchDescription(PythonLaunchDescriptionSource(
-                [launch_file_dir, '/navigation_launch.py']), launch_arguments=algorithm_arguments.items())])
+                [get_package_share_directory('nav2_regulated_modules'), '/launch/regulated_modules.launch.py']), launch_arguments=algorithm_arguments.items())])
 
     return LaunchDescription([
         DeclareLaunchArgument('enable_velocity_diagnostics', default_value='true'),
@@ -189,18 +272,33 @@ def generate_launch_description():
         DeclareLaunchArgument('fixed_path_goal_rotate_to_heading_kp', default_value='3.0', description='Deprecated compatibility option; terminal heading is ignored'),
         DeclareLaunchArgument('fixed_path_goal_position_entry_tolerance', default_value='0.008', description='Deprecated compatibility option; xy goal tolerance is used'),
         DeclareLaunchArgument('fixed_path_goal_error_log_frequency', default_value='1.0', description='Fixed-path goal error log frequency (Hz)'),
-        DeclareLaunchArgument('fixed_path_stack_start_delay', default_value='3.0', description='Delay the regulated fixed-path stack after AMCL (s)'),
+        DeclareLaunchArgument('fixed_path_stack_start_delay', default_value='3.0', description='Delay the regulated fixed-path stack for sensors and external localization (s)'),
         DeclareLaunchArgument('rviz_start_delay', default_value='5.0', description='Delay RViz until localization and sensor transforms are ready (s)'),
 
-        IncludeLaunchDescription(PythonLaunchDescriptionSource([launch_file_dir, '/ros_ign_bridge.launch.py']), launch_arguments={'use_sim_time': use_sim_time}.items()),
+        # Only sensors and velocity feedback cross the bridge. No Gazebo TF is
+        # published; external localization must provide map -> base_link.
+        OpaqueFunction(function=prepare_external_localization_parameters),
+        Node(package='ros_gz_bridge', executable='parameter_bridge', name='simulation_sensor_bridge',
+             output='screen', parameters=[{'use_sim_time': use_sim_time,
+                 'override_timestamps_with_wall_time': PythonExpression(["'", use_sim_time, "'.lower() == 'false'"])}],
+             arguments=[
+                 '/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist',
+                 '/odom@nav_msgs/msg/Odometry[gz.msgs.Odometry',
+                 '/joint_states@sensor_msgs/msg/JointState[gz.msgs.Model',
+                 '/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan',
+                 '/imu@sensor_msgs/msg/Imu[gz.msgs.IMU',
+                 '/camera/rgb/image_raw@sensor_msgs/msg/Image[gz.msgs.Image',
+                 '/camera/rgb/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo',
+             ], remappings=[('/odom', '/odometry')]),
+        Node(package='ros_gz_bridge', executable='parameter_bridge', name='gazebo_clock_bridge',
+             condition=IfCondition(use_sim_time), parameters=[{'use_sim_time': True}],
+             arguments=['/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock'], output='screen'),
 
         Node(package='myworld_bringup', executable='odom_to_motion_state.py', name='odom_to_motion_state', output='screen', parameters=[{'use_sim_time': use_sim_time,
-                'input_topic': '/odom',
+                'input_topic': '/odometry',
                 'output_topic': '/motion_state'}]),
         Node(condition=IfCondition(is_remote), package='myworld_bringup', executable='chassis_control_to_twist.py', name='chassis_control_to_twist', output='screen',
-            parameters=[params_file, {'use_sim_time': use_sim_time}]),
-        IncludeLaunchDescription(PythonLaunchDescriptionSource([launch_file_dir, '/localization_launch.py']), condition=IfCondition(PythonExpression([
-                "'", operation_mode, "' in ['autonomous', 'fixed_path']"])), launch_arguments=localization_arguments.items()),
+            parameters=[LaunchConfiguration('noamcl_params_file'), {'use_sim_time': use_sim_time}]),
 
         regulated_autonomous,
         regulated_fixed_path,
