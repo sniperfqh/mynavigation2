@@ -25,17 +25,17 @@ def generate_launch_description():
     fixed_path_approach_velocity_scaling_dist = LaunchConfiguration('fixed_path_approach_velocity_scaling_dist', default='0.8')
     fixed_path_goal_linear_deceleration = LaunchConfiguration('fixed_path_goal_linear_deceleration', default='0.25')
     adaptive_goal_braking_enabled = LaunchConfiguration('adaptive_goal_braking_enabled', default='false')
-    fixed_path_goal_final_approach_velocity = LaunchConfiguration('fixed_path_goal_final_approach_velocity', default='0.01')
+    fixed_path_goal_final_approach_velocity = LaunchConfiguration('fixed_path_goal_final_approach_velocity', default='')
     fixed_path_goal_braking_reaction_time = LaunchConfiguration('fixed_path_goal_braking_reaction_time', default='0.1')
     fixed_path_goal_braking_distance_margin = LaunchConfiguration('fixed_path_goal_braking_distance_margin', default='')
     fixed_path_dynamic_goal_braking_margin_enabled = LaunchConfiguration('fixed_path_dynamic_goal_braking_margin_enabled', default='')
     fixed_path_goal_braking_min_distance_margin = LaunchConfiguration('fixed_path_goal_braking_min_distance_margin', default='')
     fixed_path_goal_braking_margin_transition_speed = LaunchConfiguration('fixed_path_goal_braking_margin_transition_speed', default='')
-    fixed_path_goal_terminal_lookahead_dist = LaunchConfiguration('fixed_path_goal_terminal_lookahead_dist', default='0.2')
+    fixed_path_goal_terminal_lookahead_dist = LaunchConfiguration('fixed_path_goal_terminal_lookahead_dist', default='')
     fixed_path_goal_terminal_lookahead_reference_speed = LaunchConfiguration('fixed_path_goal_terminal_lookahead_reference_speed', default='0.75')
     fixed_path_goal_terminal_lookahead_speed_gain = LaunchConfiguration('fixed_path_goal_terminal_lookahead_speed_gain', default='0.1')
-    fixed_path_goal_terminal_lookahead_min_dist = LaunchConfiguration('fixed_path_goal_terminal_lookahead_min_dist', default='0.15')
-    fixed_path_goal_terminal_lookahead_max_dist = LaunchConfiguration('fixed_path_goal_terminal_lookahead_max_dist', default='0.25')
+    fixed_path_goal_terminal_lookahead_min_dist = LaunchConfiguration('fixed_path_goal_terminal_lookahead_min_dist', default='')
+    fixed_path_goal_terminal_lookahead_max_dist = LaunchConfiguration('fixed_path_goal_terminal_lookahead_max_dist', default='')
     fixed_path_xy_goal_tolerance = LaunchConfiguration('fixed_path_xy_goal_tolerance', default='0.01')
     fixed_path_yaw_goal_tolerance = LaunchConfiguration('fixed_path_yaw_goal_tolerance', default='0.08726646259971647')
     fixed_path_goal_position_hysteresis = LaunchConfiguration('fixed_path_goal_position_hysteresis', default='1.0')
@@ -167,17 +167,17 @@ def generate_launch_description():
         DeclareLaunchArgument('fixed_path_approach_velocity_scaling_dist', default_value='0.8', description='Fixed-path controller approach scaling distance (m)'),
         DeclareLaunchArgument('fixed_path_goal_linear_deceleration', default_value='0.25', description='Fixed-path goal deceleration (m/s^2)'),
         DeclareLaunchArgument('adaptive_goal_braking_enabled', default_value='false', description='Opt in to unvalidated adaptive fixed-path goal braking'),
-        DeclareLaunchArgument('fixed_path_goal_final_approach_velocity', default_value='0.01', description='Fixed-path final approach velocity (m/s)'),
+        DeclareLaunchArgument('fixed_path_goal_final_approach_velocity', default_value='', description='Fixed-path final approach velocity (m/s)'),
         DeclareLaunchArgument('fixed_path_goal_braking_reaction_time', default_value='0.1', description='Fixed-path braking reaction time margin (s)'),
         DeclareLaunchArgument('fixed_path_goal_braking_distance_margin', default_value='', description='Fixed-path high braking margin; empty uses parameter YAML'),
         DeclareLaunchArgument('fixed_path_dynamic_goal_braking_margin_enabled', default_value='', description='Fixed-path dynamic margin override; empty uses parameter YAML'),
         DeclareLaunchArgument('fixed_path_goal_braking_min_distance_margin', default_value='', description='Fixed-path dynamic margin override; empty uses parameter YAML'),
         DeclareLaunchArgument('fixed_path_goal_braking_margin_transition_speed', default_value='', description='Fixed-path dynamic margin override; empty uses parameter YAML'),
-        DeclareLaunchArgument('fixed_path_goal_terminal_lookahead_dist', default_value='0.2', description='Fixed-path minimum terminal lookahead distance (m)'),
+        DeclareLaunchArgument('fixed_path_goal_terminal_lookahead_dist', default_value='', description='Fixed-path minimum terminal lookahead distance (m)'),
         DeclareLaunchArgument('fixed_path_goal_terminal_lookahead_reference_speed', default_value='0.75', description='Fixed-path terminal lookahead reference speed (m/s)'),
         DeclareLaunchArgument('fixed_path_goal_terminal_lookahead_speed_gain', default_value='0.1', description='Fixed-path terminal lookahead speed gain (s)'),
-        DeclareLaunchArgument('fixed_path_goal_terminal_lookahead_min_dist', default_value='0.15', description='Fixed-path terminal lookahead minimum distance (m)'),
-        DeclareLaunchArgument('fixed_path_goal_terminal_lookahead_max_dist', default_value='0.25', description='Fixed-path terminal lookahead maximum distance (m)'),
+        DeclareLaunchArgument('fixed_path_goal_terminal_lookahead_min_dist', default_value='', description='Fixed-path terminal lookahead minimum distance (m)'),
+        DeclareLaunchArgument('fixed_path_goal_terminal_lookahead_max_dist', default_value='', description='Fixed-path terminal lookahead maximum distance (m)'),
         DeclareLaunchArgument('fixed_path_xy_goal_tolerance', default_value='0.01', description='Fixed-path position goal tolerance (m)'),
         DeclareLaunchArgument('fixed_path_yaw_goal_tolerance', default_value='0.08726646259971647', description='Deprecated compatibility option; terminal heading is ignored'),
         DeclareLaunchArgument('fixed_path_goal_position_hysteresis', default_value='1.0', description='Deprecated compatibility option; terminal stop is latched'),

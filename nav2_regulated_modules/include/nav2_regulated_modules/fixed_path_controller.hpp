@@ -49,6 +49,10 @@ class FixedPathController : public nav2_core::Controller, public nav2_core::Term
   bool isTerminalStopLatched() override;
   // 只检查终点位置精度，供任务成功判定使用。
   bool isTerminalPositionAccurate() override;
+  double getTerminalStableDuration() const override
+  {
+    return terminal_convergence_enabled_ ? 1.0 : 0.0;
+  }
 
 private:
   enum class Phase
@@ -126,6 +130,7 @@ private:
   double goal_linear_deceleration_ { 0.25 };
   double goal_final_approach_velocity_ { 0.01 };
   double goal_stop_entry_tolerance_ { 0.0 };
+  bool terminal_convergence_enabled_ = false;
   double goal_braking_reaction_time_ { 0.1 };
   double goal_braking_distance_margin_ { 0.1 };
   bool dynamic_goal_braking_margin_enabled_ = false;

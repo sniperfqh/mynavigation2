@@ -24,6 +24,10 @@ public:
   virtual ~TerminalAwareController() = default;
   virtual bool isTerminalStopLatched() = 0;
   virtual bool isTerminalPositionAccurate() = 0;
+  virtual double getTerminalStableDuration() const
+  {
+    return 0.0;
+  }
 };
 
 }

@@ -16,6 +16,7 @@
 #define NAV2_CONTROLLER__CONTROLLER_SERVER_HPP_
 
 #include <memory>
+#include "nav2_core/terminal_stability.hpp"
 #include <string>
 #include <thread>
 #include <unordered_map>
@@ -256,6 +257,7 @@ protected:
 
   // Whether we've published the single controller warning yet
   geometry_msgs::msg::PoseStamped end_pose_;
+  nav2_core::TerminalStability terminal_stability_;
 
   // Last time the controller generated a valid command
   rclcpp::Time last_valid_cmd_time_;

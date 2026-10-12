@@ -564,6 +564,8 @@ controller_server:
       goal_braking_margin_transition_speed: 0.3
       # 自适应到点制动默认关闭；仅在单独确认后显式启用。
       adaptive_goal_braking_enabled: false
+      # 新末端收敛先在仿真验收，实车保持原行为。
+      terminal_convergence_enabled: false
       # 自适应正常到点减速度上限，不能超过 1 m/s²。
       adaptive_goal_max_deceleration: 1.0
       # 自适应制动的减速度变化率上限，单位 m/s³。

@@ -2,6 +2,7 @@
 
 #include "nav2_regulated_modules/fixed_path_controller.hpp"
 #include "nav2_regulated_modules/detail/terminal_position.hpp"
+#include "nav2_regulated_modules/detail/terminal_lookahead.hpp"
 #include "nav2_regulated_modules/detail/braking_margin.hpp"
 #include "nav2_regulated_modules/fixed_path_speed_profile.hpp"
 
@@ -64,6 +65,7 @@ void FixedPathController::configure(const rclcpp_lifecycle::LifecycleNode::WeakP
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_braking_min_distance_margin", rclcpp::ParameterValue(0.03));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_braking_margin_transition_speed", rclcpp::ParameterValue(0.3));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".adaptive_goal_braking_enabled", rclcpp::ParameterValue(false));
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".terminal_convergence_enabled", rclcpp::ParameterValue(false));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".adaptive_goal_max_deceleration", rclcpp::ParameterValue(1.0));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".adaptive_goal_jerk_limit", rclcpp::ParameterValue(2.0));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".adaptive_goal_approach_speed", rclcpp::ParameterValue(0.03));
@@ -105,6 +107,7 @@ void FixedPathController::configure(const rclcpp_lifecycle::LifecycleNode::WeakP
   node->get_parameter(plugin_name_ + ".goal_braking_min_distance_margin", goal_braking_min_distance_margin_);
   node->get_parameter(plugin_name_ + ".goal_braking_margin_transition_speed", goal_braking_margin_transition_speed_);
   node->get_parameter(plugin_name_ + ".adaptive_goal_braking_enabled", adaptive_goal_braking_enabled_);
+  node->get_parameter(plugin_name_ + ".terminal_convergence_enabled", terminal_convergence_enabled_);
   node->get_parameter(plugin_name_ + ".adaptive_goal_max_deceleration", adaptive_goal_max_deceleration_);
   node->get_parameter(plugin_name_ + ".adaptive_goal_jerk_limit", adaptive_goal_jerk_limit_);
   node->get_parameter(plugin_name_ + ".adaptive_goal_approach_speed", adaptive_goal_approach_speed_);
@@ -301,7 +304,7 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
     throw nav2_core::PlannerException("FixedPathController requires valid position and stopped-velocity tolerances");
   }
   // 新制动路径依赖实测速度；只有启用该路径时才对无效反馈执行零速保护。
-  if (adaptive_goal_braking_enabled_ && (!std::isfinite(velocity.linear.x) || !std::isfinite(velocity.angular.z)))
+  if ((adaptive_goal_braking_enabled_ || terminal_convergence_enabled_) && (!std::isfinite(velocity.linear.x) || !std::isfinite(velocity.angular.z)))
   {
     LOG_ERROR("固定路径里程计速度无效，输出零速保护");
     return zeroCommand();
@@ -423,7 +426,7 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
   // 自适应关闭时不调用新包络；旧模式仍以固定减速度计算制动距离。
   const auto speed_profile = adaptive_goal_braking_enabled_ ? calculateFixedPathSpeedProfile(current_linear_velocity, remaining, effective_linear_limit, adaptive_goal_max_deceleration_, adaptive_goal_jerk_limit_, adaptive_goal_response_time_, adaptive_goal_distance_margin_, stop_tolerance, adaptive_goal_approach_speed_) : FixedPathSpeedProfile{0.0, 0.0, 0.0};
   const double stopping_distance = adaptive_goal_braking_enabled_ ? speed_profile.stopping_distance : current_linear_velocity * current_linear_velocity / (2.0 * goal_linear_deceleration_);
-  const double expected_linear_velocity = std::max(0.0, effective_linear_limit);
+  const double expected_linear_velocity = terminal_convergence_enabled_ ? std::abs(velocity.linear.x) : std::max(0.0, effective_linear_limit);
   // 末段前视随有效速度变化，但始终限制在配置的最小和最大距离之间。
   const double dynamic_terminal_lookahead_distance = std::clamp(goal_terminal_lookahead_dist_ + goal_terminal_lookahead_speed_gain_ * (expected_linear_velocity - goal_terminal_lookahead_reference_speed_), goal_terminal_lookahead_min_dist_, goal_terminal_lookahead_max_dist_);
   // 进入 XY 容差或越过终点平面都会触发零速锁存，避免继续向前驶离终点。
@@ -444,10 +447,10 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
     LOG_INFO("固定路径终点停车已锁存，原因={}，位置误差={:.4f}m，终点纵向投影={:.4f}m，锁存跟踪航向误差={:.3f}rad（{:.2f}deg），停车后不再旋转", goal_distance <= stop_tolerance ? "within_tolerance" : "goal_plane_crossed", goal_distance, terminal_projection, terminal_tracking_yaw_error_, terminal_tracking_yaw_error_ * 180.0 / M_PI);
   }
   // 旧模式允许停车后再次进入位置容差时单向锁存精度，兼容已有成功判定。
-  else if (terminal_stop_latched_ && goal_stop_entry_tolerance_ > 0.0)
+  else if (terminal_stop_latched_ && (goal_stop_entry_tolerance_ > 0.0 || terminal_convergence_enabled_))
   {
     // 实验入口启用时逐周期复核当前验收半径，不保留历史准确状态。
-    terminal_position_accurate_ = terminal_position.accurate;
+    terminal_position_accurate_ = terminal_convergence_enabled_ ? goal_distance <= goal_xy_tolerance : terminal_position.accurate;
   }
   else if (terminal_stop_latched_ && !terminal_position_accurate_ && goal_distance <= goal_xy_tolerance)
   {
@@ -473,7 +476,8 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
   }
   const double nominal_lookahead_distance = std::clamp(std::max(lookahead_dist_, std::abs(velocity.linear.x) * lookahead_time_), min_lookahead_dist_, max_lookahead_dist_);
   // 远离终点按速度选常规前视；接近终点时收缩到不小于末段动态前视的距离。
-  const double lookahead_distance = std::min(nominal_lookahead_distance, std::max(dynamic_terminal_lookahead_distance, goal_distance));
+  const double normal_lookahead_distance = std::min(nominal_lookahead_distance, std::max(dynamic_terminal_lookahead_distance, goal_distance));
+  const double lookahead_distance = terminal_convergence_enabled_ ? detail::terminalLookahead(normal_lookahead_distance, dynamic_terminal_lookahead_distance, goal_distance) : normal_lookahead_distance;
   auto carrot = selectCarrot(nearest_index_, lookahead_distance);
   carrot.header.frame_id = global_plan_.header.frame_id;
   carrot.header.stamp = pose.header.stamp;

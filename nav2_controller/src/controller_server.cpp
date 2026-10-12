@@ -197,6 +197,7 @@ nav2_util::CallbackReturn ControllerServer::on_deactivate(const rclcpp_lifecycle
   LOG_INFO("Deactivating");
 
   action_server_->deactivate();
+  terminal_stability_.reset();
   ControllerMap::iterator it;
   for (it = controllers_.begin(); it != controllers_.end(); ++it) {
     it->second->deactivate();
@@ -222,6 +223,7 @@ nav2_util::CallbackReturn ControllerServer::on_deactivate(const rclcpp_lifecycle
 }
 
 nav2_util::CallbackReturn ControllerServer::on_cleanup(const rclcpp_lifecycle::State & /*state*/) {
+  terminal_stability_.reset();
   LOG_INFO("Cleaning up");
 
   // Cleanup the helper classes
@@ -321,6 +323,7 @@ void ControllerServer::computeControl() {
       }
 
       if (action_server_->is_cancel_requested()) {
+        terminal_stability_.reset();
         LOG_INFO("Goal was canceled. Stopping the robot.");
         action_server_->terminate_all();
         publishZeroVelocity();
@@ -371,6 +374,7 @@ void ControllerServer::computeControl() {
 }
 
 void ControllerServer::setPlannerPath(const nav_msgs::msg::Path & path) {
+  terminal_stability_.reset();
   RCLCPP_DEBUG(get_logger(), "Providing path to the controller %s", current_controller_.c_str());
   if (path.poses.empty()) {
     throw nav2_core::PlannerException("Invalid path, Path is empty.");
@@ -497,6 +501,7 @@ bool ControllerServer::isGoalReached() {
   geometry_msgs::msg::PoseStamped pose;
 
   if (!getRobotPose(pose)) {
+    terminal_stability_.reset();
     return false;
   }
 
@@ -506,6 +511,35 @@ bool ControllerServer::isGoalReached() {
   auto * terminal_aware_controller = dynamic_cast<nav2_core::TerminalAwareController *>(controllers_[current_controller_].get());
   if (terminal_aware_controller)
   {
+    const double stable_duration = terminal_aware_controller->getTerminalStableDuration();
+    if (stable_duration > 0.0)
+    {
+      geometry_msgs::msg::Pose pose_tolerance;
+      geometry_msgs::msg::Twist velocity_tolerance;
+      if (!goal_checkers_[current_goal_checker_]->getTolerances(pose_tolerance, velocity_tolerance) || !std::isfinite(pose_tolerance.position.x) || pose_tolerance.position.x <= 0.0)
+      {
+        terminal_stability_.reset();
+        throw nav2_core::PlannerException("Terminal convergence requires valid XY tolerance");
+      }
+      geometry_msgs::msg::PoseStamped goal_pose;
+      rclcpp::Duration transform_tolerance = rclcpp::Duration::from_seconds(costmap_ros_->getTransformTolerance());
+      if (!nav_2d_utils::transformPose(costmap_ros_->getTfBuffer(), costmap_ros_->getGlobalFrameID(), end_pose_, goal_pose, transform_tolerance))
+      {
+        terminal_stability_.reset();
+        return false;
+      }
+      const auto measured = odom_sub_->getTwistStamped();
+      const double now_seconds = now().seconds();
+      const double odom_age = now_seconds - rclcpp::Time(measured.header.stamp).seconds();
+      const double pose_age = now_seconds - rclcpp::Time(pose.header.stamp).seconds();
+      const double distance = std::hypot(pose.pose.position.x - goal_pose.pose.position.x, pose.pose.position.y - goal_pose.pose.position.y);
+      const double linear_speed = std::hypot(measured.velocity.x, measured.velocity.y);
+      const double angular_speed = std::abs(measured.velocity.theta);
+      const bool valid = terminal_aware_controller->isTerminalStopLatched() && terminal_aware_controller->isTerminalPositionAccurate() && std::isfinite(distance) && distance <= pose_tolerance.position.x && std::isfinite(linear_speed) && std::isfinite(angular_speed) && std::isfinite(velocity_tolerance.linear.x) && std::isfinite(velocity_tolerance.angular.z) && velocity_tolerance.linear.x >= 0.0 && velocity_tolerance.angular.z >= 0.0 && linear_speed <= velocity_tolerance.linear.x && angular_speed <= velocity_tolerance.angular.z && odom_age >= 0.0 && odom_age <= 0.2 && pose_age >= 0.0 && pose_age <= 0.2;
+      const bool stable = terminal_stability_.observe(valid, now_seconds, stable_duration);
+      LOG_DEBUG("终点当前复核：xy={:.6f}，v={:.6f}，w={:.6f}，odom_age={:.6f}，pose_age={:.6f}，valid={}，stable={}", distance, linear_speed, angular_speed, odom_age, pose_age, valid, stable);
+      return stable;
+    }
     if (!terminal_aware_controller->isTerminalStopLatched())
     {
       RCLCPP_DEBUG_THROTTLE(get_logger(), *get_clock(), 1000, "终点感知控制器尚未锁存停车，拒绝报告成功");

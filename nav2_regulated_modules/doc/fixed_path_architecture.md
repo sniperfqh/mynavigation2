@@ -149,13 +149,19 @@ stateDiagram-v2
 
 ### 3.3 停车与完成
 
+`terminal_convergence_enabled` 为仿真先验证的可选末端策略，默认关闭，实车 YAML 显式保持 `false`。启用时，末端动态前视按实测线速度绝对值计算，而不是按任务限速计算；在终点前 `0.50 m` 到 `0.10 m` 连续混合常规与末端前视，保持原有角速度和曲率限幅。离散 carrot 选择仍可能使实际前视大于请求值。
+
+启用该策略后，停车位置精度逐周期按当前 XY 误差复核，不沿用历史精度。`TerminalAwareController::getTerminalStableDuration()` 默认返回 `0`，固定路径新策略返回 `1.0 s`；控制服务器要求已锁停、当前 XY 误差≤`10 mm`、原始实测平面线速度≤`0.01 m/s`、角速度≤`0.05 rad/s`，且速度及位姿时间戳年龄≤`0.20 s`，连续 `1 s` 才成功。无效反馈、误差超限、时钟倒退、采样间隔超过 `0.20 s`、新路径、取消和生命周期切换重置计时。试验停车入口为 `6 mm`；越界保护和停车后不旋转保持不变。
+
+`myworld_bringup` 的末端前视基准／最小／最大值与微量接近速度启动实参默认留空，保留参数 YAML；显式启动实参优先。候选参数及是否通过完整验收须以运行态参数与测试报告为准，不能由源码默认值推断。
+
 进入 `fixed_path_goal_checker.xy_goal_tolerance=0.01 m` 或到达末段且越过终点切线的法向平面时，控制器进入 `STOPPED` 并锁存零速，不再追点或原地转向。终点切线航向误差会记录到日志，但**不参与成功条件**。越界锁存也不自动等于位置准确：控制器分别维护停车锁存和位置精度状态。
 
 默认非自适应分支在首次停车时记录 `terminal_position_accurate_`。停车后若原先不准确、后续位姿进入容差，会把该标志单向置为准确；已准确后不会因当前位姿又离开容差而撤回。因此该标志是位置准确锁存，不是停后持续误差检验。
 
-显式设置 `FixedPathController.goal_stop_entry_tolerance>0` 时，采用更小的停车入口半径，并按 GoalChecker 的验收半径逐周期复核当前精度；入口半径不得超过验收半径。实验采用入口 `0.005 m`、验收 `0.01 m`，越过终点平面仍锁存零速。该参数默认 `0.0`，保留上述原逻辑；它不在生产成功分支增加连续 1 秒窗口，该窗口由独立实验工具验证。
+显式设置 `FixedPathController.goal_stop_entry_tolerance>0` 时，采用更小的停车入口半径，并按 GoalChecker 的验收半径逐周期复核当前精度；入口半径不得超过验收半径。实验采用入口 `0.005 m`、验收 `0.01 m`，越过终点平面仍锁存零速。该参数默认 `0.0`，保留上述原逻辑；单独设置入口参数不会增加连续 1 秒窗口；需同时启用上述末端策略。
 
-当前 [`ControllerServer::isGoalReached()`](../../nav2_controller/src/controller_server.cpp) 对 `TerminalAwareController` 走专用分支：要求已停车锁存、位置准确标志为真，以及 `/odometry` 的阈值处理后平面线速度幅值不超过 `0.01 m/s`、角速度绝对值不超过 `0.05 rad/s`。虽然 [`FixedPathGoalChecker`](../src/fixed_path_goal_checker.cpp) 配有 `position_stable_cycles=10` 并实现 `isGoalReached()`，当前专用成功分支只读取它的停稳容差，不调用该稳定计数方法。不能把 10 周期写成实际终点完成门槛，更不能解释成连续 1 秒精度验收。通过后 `FollowPath` 成功，外层 Action 返回 `finish=true`；航向误差仍只作诊断。
+末端策略关闭时，[`ControllerServer::isGoalReached()`](../../nav2_controller/src/controller_server.cpp) 对 `TerminalAwareController` 走专用分支：要求已停车锁存、位置准确标志为真，以及 `/odometry` 的阈值处理后平面线速度幅值不超过 `0.01 m/s`、角速度绝对值不超过 `0.05 rad/s`。虽然 [`FixedPathGoalChecker`](../src/fixed_path_goal_checker.cpp) 配有 `position_stable_cycles=10` 并实现 `isGoalReached()`，当前专用成功分支只读取它的停稳容差，不调用该稳定计数方法。不能把 10 周期写成实际终点完成门槛，更不能解释成连续 1 秒精度验收。通过后 `FollowPath` 成功，外层 Action 返回 `finish=true`；航向误差仍只作诊断。
 
 如果越过终点平面后位置准确标志仍为假，插件保持零速，Controller Server 拒绝成功；默认没有独立的 3 秒终点超时，也不会自动反向补偿。后续由取消、原进度超时或控制异常决定是否结束并进入恢复。自适应分支不同：停车后逐周期复核当前 XY，实测线速度绝对值已降至停止阈值但 XY 仍在容差外时抛出控制异常；该异常检查没有同时要求角速度达标，该分支默认关闭。
 
