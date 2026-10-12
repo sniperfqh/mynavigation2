@@ -558,14 +558,17 @@ controller_server:
       # 终点制动反应预留时间，单位秒。
       goal_braking_reaction_time: 0.1
       # 终点制动安全裕量，单位米。
-      goal_braking_distance_margin: 0.1
-      dynamic_goal_braking_margin_enabled: false
-      goal_braking_min_distance_margin: 0.03
+      goal_braking_distance_margin: 0.12
+      # 启用动态裕量：低速 0.05 m、高速 0.12 m，均比仿真候选增加 0.02 m。
+      dynamic_goal_braking_margin_enabled: true
+      goal_braking_min_distance_margin: 0.05
       goal_braking_margin_transition_speed: 0.3
       # 自适应到点制动默认关闭；仅在单独确认后显式启用。
       adaptive_goal_braking_enabled: false
-      # 新末端收敛先在仿真验收，实车保持原行为。
-      terminal_convergence_enabled: false
+      # 实车启用末端收敛与当前精度连续 1 秒成功复核；现场效果待验收。
+      terminal_convergence_enabled: true
+      # 停车入口 6 mm，成功验收仍使用 GoalChecker 的 10 mm 容差。
+      goal_stop_entry_tolerance: 0.006
       # 自适应正常到点减速度上限，不能超过 1 m/s²。
       adaptive_goal_max_deceleration: 1.0
       # 自适应制动的减速度变化率上限，单位 m/s³。
@@ -577,15 +580,15 @@ controller_server:
       # 自适应停车距离的固定裕量，单位米。
       adaptive_goal_distance_margin: 0.01
       # 终点前视的基准距离，单位米。
-      goal_terminal_lookahead_dist: 0.2
+      goal_terminal_lookahead_dist: 0.06
       # 终点前视基准速度，单位米每秒。
       goal_terminal_lookahead_reference_speed: 0.75
       # 终点前视随速度变化的增益。
       goal_terminal_lookahead_speed_gain: 0.1
       # 终点前视距离下界，单位米。
-      goal_terminal_lookahead_min_dist: 0.15
+      goal_terminal_lookahead_min_dist: 0.04
       # 终点前视距离上界，单位米。
-      goal_terminal_lookahead_max_dist: 0.25
+      goal_terminal_lookahead_max_dist: 0.12
       # 终点误差诊断输出频率，单位 Hz。
       goal_error_log_frequency: 1.0
       # 起点航向连续达标的周期数；1 表示进入 3 度容差的同一控制周期开始跟踪。
