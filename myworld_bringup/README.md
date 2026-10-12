@@ -172,6 +172,17 @@ Gazebo 出生位姿与 AMCL 参数中的初始位姿保持一致，并设置
 `/clock` 和 `/odom/tf`。联调外部 Ignition 工具时可显式传入
 `ign_partition:=myworld_debug`，并在工具终端设置同名 `IGN_PARTITION`。
 
+`entry.launch.py` 默认使用真实系统时间（`use_sim_time:=false`）。Gazebo 桥接的
+`/odom`、`/scan`、关节、IMU 和相机消息采用桥接发布时间的 Unix 时间戳；
+`/motion_state` 继承 `/odom.header`。Gazebo 动态 TF 经 `/_gazebo/tf` 转发后逐个
+改写时间戳，AMCL、Robot State Publisher、导航和 RViz 使用同一系统时钟。
+`/tf_static` 保留静态变换时间语义；AMCL 的 TF 预发布时间容差保留。
+系统时间模式不发布仿真 `/clock`，暂停 Gazebo 时导航超时仍继续计时。
+
+需要原仿真时间模式时显式指定 `use_sim_time:=true`：恢复 `/clock` 桥接、原始
+Gazebo 消息时间戳及动态 TF 直接桥接。新模式耗时按系统时间统计，不能直接与历史
+仿真秒耗时混用；Unix 秒数来自实际系统时钟，不固定为某个数字前缀。
+
 自主与固定路径仿真模式启动 `controlpub`，仅把统一规控链的 `/cmd_vel` 转换为
 `/control_to_uart`。`regulated_navigator` 仍监听 `/downstream/chassis_control`；没有
 收到该话题时，不会由 ChassisControl 分支向 `/control_to_uart` 发布控制消息。

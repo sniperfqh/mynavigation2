@@ -16,6 +16,7 @@ install(PROGRAMS
   scripts/chassis_control_to_twist.py
   scripts/cpu_lidar.py
   scripts/odom_to_motion_state.py
+  scripts/tf_system_time.py
   DESTINATION lib/${PROJECT_NAME}
 )
 

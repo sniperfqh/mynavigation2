@@ -12,7 +12,7 @@ from launch_ros.actions import Node
 
 def generate_launch_description():
     default_ign_partition = 'myworld_bringup_{}_{}'.format(os.environ.get('ROS_DOMAIN_ID', '0'), os.getpid())
-    use_sim_time = LaunchConfiguration('use_sim_time', default='true')
+    use_sim_time = LaunchConfiguration('use_sim_time', default='false')
     ign_partition_name = LaunchConfiguration('ign_partition', default=default_ign_partition)
     use_rviz = LaunchConfiguration('use_rviz', default='true')
     use_collision_monitor = LaunchConfiguration('use_collision_monitor', default='false')
@@ -151,7 +151,7 @@ def generate_launch_description():
         Node(package='robot_state_publisher', executable='robot_state_publisher', name='robot_state_publisher', output='screen', parameters=[{'use_sim_time': use_sim_time,
                 'robot_description': robot_description}]),
 
-        DeclareLaunchArgument('use_sim_time', default_value=use_sim_time, description='If true, use simulated clock'),
+        DeclareLaunchArgument('use_sim_time', default_value='false', description='Use system timestamps by default; true restores Gazebo simulation time'),
         DeclareLaunchArgument('map', default_value=default_map, description='Map YAML: myworld3 for fixed_path, myworld2 for other modes; explicit map overrides the default'),
         DeclareLaunchArgument('params_file', default_value=os.path.join(bringup_dir, 'params', 'myworld2.yaml'), description='Explicit simulation parameter file for isolated experiments'),
         DeclareLaunchArgument('world_file', default_value=os.path.join(myworld_dir, 'world_only.sdf'), description='Explicit simulation SDF for isolated experiments'),
