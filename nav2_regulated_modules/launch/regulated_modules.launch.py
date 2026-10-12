@@ -107,11 +107,8 @@ def generate_launch_description():
         PythonExpression([fixed_path_progress_timeout, " if '", operation_mode,"' == 'fixed_path' else 10.0"]),value_type=float)
     adaptive_fixed_path = PythonExpression(["'", operation_mode, "' == 'fixed_path' and '", adaptive_goal_braking_enabled, "'.lower() == 'true'"])
     # 仅在显式启用自适应固定路径时约束正常减速；默认保持原速度平滑器参数。
-    fixed_path_smoother_deceleration = ParameterValue([
-        PythonExpression(["-1.0 if (", adaptive_fixed_path, ") else -2.0"]),
-        0.0, -3.2], value_type=list[float])
-    fixed_path_immediate_stop = ParameterValue(
-        adaptive_fixed_path, value_type=bool)
+    fixed_path_smoother_deceleration = ParameterValue([PythonExpression(["-1.0 if (", adaptive_fixed_path, ") else -2.0"]),0.0, -3.2], value_type=list[float])
+    fixed_path_immediate_stop = ParameterValue(adaptive_fixed_path, value_type=bool)
     fixed_path_smoother_params = {
         'max_decel': fixed_path_smoother_deceleration,
         'immediate_stop_on_zero_command': fixed_path_immediate_stop,

@@ -134,7 +134,7 @@ def generate_launch_description():
     launch_file_dir = os.path.dirname(__file__)
     myworld_dir = os.path.join(bringup_dir, 'models', 'myworld2')
     default_map = PythonExpression([
-        "'", os.path.join(bringup_dir, 'models', 'myworld3', 'myworld3.yaml'),
+        "'", os.path.join('/userdata/map/pbstream', 'out.yaml'),
         "' if '", operation_mode, "' == 'fixed_path' else '",
         os.path.join(myworld_dir, 'myworld2.yaml'), "'"])
     map_file = LaunchConfiguration('map', default=default_map)
