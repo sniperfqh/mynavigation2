@@ -89,7 +89,7 @@ def generate_launch_description():
     use_rviz = LaunchConfiguration('use_rviz', default='true')
     use_collision_monitor = LaunchConfiguration('use_collision_monitor', default='false')
     use_collision_visualization = LaunchConfiguration('use_collision_visualization', default='true')
-    headless = LaunchConfiguration('headless', default='false')
+    headless = LaunchConfiguration('headless', default='true')
     operation_mode = LaunchConfiguration('operation_mode', default='autonomous')
     enable_localization_jump_detection = LaunchConfiguration('enable_localization_jump_detection', default='false')
     fixed_path_progress_timeout = LaunchConfiguration('fixed_path_progress_timeout', default='120.0')
@@ -242,7 +242,7 @@ def generate_launch_description():
         DeclareLaunchArgument('use_rviz', default_value='true', description='Whether to start RViz'),
         DeclareLaunchArgument('use_collision_monitor', default_value='false', description='Enable Collision Monitor in autonomous and fixed-path simulation'),
         DeclareLaunchArgument('use_collision_visualization', default_value='true', description='Enable Collision Monitor boundary visualization in simulation'),
-        DeclareLaunchArgument('headless', default_value='false', description='Run only the Ignition Gazebo server'),
+        DeclareLaunchArgument('headless', default_value='true', description='Run only the Ignition Gazebo server by default; false enables Gazebo GUI'),
         DeclareLaunchArgument('operation_mode', default_value='autonomous', choices=['remote', 'autonomous', 'fixed_path'], description='Select the robot operation mode'),
         DeclareLaunchArgument('enable_localization_jump_detection', default_value='false', description='Whether localization pose jumps cancel control and stop the simulated robot'),
         DeclareLaunchArgument('fixed_path_progress_timeout', default_value='120.0', description='Maximum stationary time in fixed-path mode'),

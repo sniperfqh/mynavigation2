@@ -24,7 +24,7 @@ def resolve_braking_margin_arguments(context):
     values = config.get('controller_server', {}).get('ros__parameters', {}).get('FixedPathController', {})
     defaults = {
         'goal_braking_distance_margin': 0.1,
-        'dynamic_goal_braking_margin_enabled': False,
+        'dynamic_goal_braking_margin_enabled': True,
         'goal_braking_min_distance_margin': 0.03,
         'goal_braking_margin_transition_speed': 0.3,
     }

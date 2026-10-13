@@ -392,10 +392,13 @@ controller_server:
       goal_final_approach_velocity: 0.01
       goal_braking_reaction_time: 0.1
       goal_braking_distance_margin: 0.1
-      dynamic_goal_braking_margin_enabled: false
+      dynamic_goal_braking_margin_enabled: true
       goal_braking_min_distance_margin: 0.03
       goal_braking_margin_transition_speed: 0.3
       adaptive_goal_braking_enabled: false
+      terminal_convergence_enabled: true
+      # 第一阶段仿真候选：8 mm 入口预留定位变化空间，独立精度验收仍为 10 mm。
+      goal_stop_entry_tolerance: 0.008
       adaptive_goal_max_deceleration: 1.0
       adaptive_goal_jerk_limit: 2.0
       adaptive_goal_approach_speed: 0.03

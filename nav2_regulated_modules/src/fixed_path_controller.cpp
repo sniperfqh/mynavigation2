@@ -61,11 +61,11 @@ void FixedPathController::configure(const rclcpp_lifecycle::LifecycleNode::WeakP
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_stop_entry_tolerance", rclcpp::ParameterValue(0.0));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_braking_reaction_time", rclcpp::ParameterValue(0.1));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_braking_distance_margin", rclcpp::ParameterValue(0.1));
-  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".dynamic_goal_braking_margin_enabled", rclcpp::ParameterValue(false));
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".dynamic_goal_braking_margin_enabled", rclcpp::ParameterValue(true));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_braking_min_distance_margin", rclcpp::ParameterValue(0.03));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_braking_margin_transition_speed", rclcpp::ParameterValue(0.3));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".adaptive_goal_braking_enabled", rclcpp::ParameterValue(false));
-  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".terminal_convergence_enabled", rclcpp::ParameterValue(false));
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".terminal_convergence_enabled", rclcpp::ParameterValue(true));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".adaptive_goal_max_deceleration", rclcpp::ParameterValue(1.0));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".adaptive_goal_jerk_limit", rclcpp::ParameterValue(2.0));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".adaptive_goal_approach_speed", rclcpp::ParameterValue(0.03));
@@ -457,7 +457,7 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
     terminal_position_accurate_ = true;
     LOG_INFO("固定路径停车后位置精度已进入容差并单向锁存，位置误差={:.4f}m，位置容差={:.4f}m", goal_distance, goal_xy_tolerance);
   }
-  // 已停车锁存后不再计算前视、曲率或前进指令；只有停稳且位置达标才可能成功。
+  // 已停车锁存后持续输出零速；停稳后的精度复核和2秒成功兜底由控制服务器处理。
   if (terminal_stop_latched_)
   {
     // 新模式逐周期复核当前 XY 误差，不沿用曾短暂经过容差时的历史位置。

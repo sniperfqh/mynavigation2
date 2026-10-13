@@ -198,6 +198,7 @@ nav2_util::CallbackReturn ControllerServer::on_deactivate(const rclcpp_lifecycle
 
   action_server_->deactivate();
   terminal_stability_.reset();
+  terminal_stop_wait_.reset();
   ControllerMap::iterator it;
   for (it = controllers_.begin(); it != controllers_.end(); ++it) {
     it->second->deactivate();
@@ -224,6 +225,7 @@ nav2_util::CallbackReturn ControllerServer::on_deactivate(const rclcpp_lifecycle
 
 nav2_util::CallbackReturn ControllerServer::on_cleanup(const rclcpp_lifecycle::State & /*state*/) {
   terminal_stability_.reset();
+  terminal_stop_wait_.reset();
   LOG_INFO("Cleaning up");
 
   // Cleanup the helper classes
@@ -324,6 +326,7 @@ void ControllerServer::computeControl() {
 
       if (action_server_->is_cancel_requested()) {
         terminal_stability_.reset();
+        terminal_stop_wait_.reset();
         LOG_INFO("Goal was canceled. Stopping the robot.");
         action_server_->terminate_all();
         publishZeroVelocity();
@@ -374,6 +377,7 @@ void ControllerServer::computeControl() {
 }
 
 void ControllerServer::setPlannerPath(const nav_msgs::msg::Path & path) {
+  terminal_stop_wait_.reset();
   terminal_stability_.reset();
   RCLCPP_DEBUG(get_logger(), "Providing path to the controller %s", current_controller_.c_str());
   if (path.poses.empty()) {
@@ -535,9 +539,17 @@ bool ControllerServer::isGoalReached() {
       const double distance = std::hypot(pose.pose.position.x - goal_pose.pose.position.x, pose.pose.position.y - goal_pose.pose.position.y);
       const double linear_speed = std::hypot(measured.velocity.x, measured.velocity.y);
       const double angular_speed = std::abs(measured.velocity.theta);
-      const bool valid = terminal_aware_controller->isTerminalStopLatched() && terminal_aware_controller->isTerminalPositionAccurate() && std::isfinite(distance) && distance <= pose_tolerance.position.x && std::isfinite(linear_speed) && std::isfinite(angular_speed) && std::isfinite(velocity_tolerance.linear.x) && std::isfinite(velocity_tolerance.angular.z) && velocity_tolerance.linear.x >= 0.0 && velocity_tolerance.angular.z >= 0.0 && linear_speed <= velocity_tolerance.linear.x && angular_speed <= velocity_tolerance.angular.z && odom_age >= 0.0 && odom_age <= 0.2 && pose_age >= 0.0 && pose_age <= 0.2;
+      const bool stopped = terminal_aware_controller->isTerminalStopLatched() && std::isfinite(linear_speed) && std::isfinite(angular_speed) && std::isfinite(velocity_tolerance.linear.x) && std::isfinite(velocity_tolerance.angular.z) && velocity_tolerance.linear.x >= 0.0 && velocity_tolerance.angular.z >= 0.0 && linear_speed <= velocity_tolerance.linear.x && angular_speed <= velocity_tolerance.angular.z && odom_age >= 0.0 && odom_age <= 0.2;
+      const double steady_seconds = std::chrono::duration<double>(std::chrono::steady_clock::now().time_since_epoch()).count();
+      const bool wait_expired = terminal_stop_wait_.expired(stopped, steady_seconds);
+      const bool valid = stopped && terminal_aware_controller->isTerminalPositionAccurate() && std::isfinite(distance) && distance <= pose_tolerance.position.x && pose_age >= 0.0 && pose_age <= 0.2;
       const bool stable = terminal_stability_.observe(valid, now_seconds, stable_duration);
       LOG_DEBUG("终点当前复核：xy={:.6f}，v={:.6f}，w={:.6f}，odom_age={:.6f}，pose_age={:.6f}，valid={}，stable={}", distance, linear_speed, angular_speed, odom_age, pose_age, valid, stable);
+      if (!stable && wait_expired && std::isfinite(distance) && pose_age >= 0.0 && pose_age <= 0.2)
+      {
+        LOG_WARN("终点已锁停且停稳，2秒精度复核等待结束，按已到点返回成功：xy={:.6f}m，容差={:.6f}m，精度超限={}，连续精度复核未通过=true，v={:.6f}m/s，w={:.6f}rad/s，odom_age={:.6f}s，pose_age={:.6f}s", distance, pose_tolerance.position.x, distance > pose_tolerance.position.x, linear_speed, angular_speed, odom_age, pose_age);
+        return true;
+      }
       return stable;
     }
     if (!terminal_aware_controller->isTerminalStopLatched())

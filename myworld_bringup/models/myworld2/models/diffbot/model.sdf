@@ -257,14 +257,14 @@
       <sensor name="gpu_lidar" type="gpu_lidar">
         <topic>scan</topic>
         <ignition_frame_id>base_scan</ignition_frame_id>
-        <update_rate>10</update_rate>
+        <update_rate>30</update_rate>
         <lidar>
           <scan>
             <horizontal>
-              <samples>720</samples>
+              <samples>2701</samples>
               <resolution>1</resolution>
-              <min_angle>-3.14159</min_angle>
-              <max_angle>3.14159</max_angle>
+              <min_angle>-2.356194490192345</min_angle>
+              <max_angle>2.356194490192345</max_angle>
             </horizontal>
           </scan>
           <range>
@@ -273,13 +273,11 @@
             <resolution>0.01</resolution>
           </range>
           <noise>
-            <type>gaussian</type>
-            <mean>0.0</mean>
-            <stddev>0.01</stddev>
+            <type>none</type>
           </noise>
         </lidar>
         <always_on>true</always_on>
-        <visualize>true</visualize>
+        <visualize>false</visualize>
       </sensor>
     </link>
 

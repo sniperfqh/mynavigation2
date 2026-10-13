@@ -258,6 +258,7 @@ protected:
   // Whether we've published the single controller warning yet
   geometry_msgs::msg::PoseStamped end_pose_;
   nav2_core::TerminalStability terminal_stability_;
+  nav2_core::TerminalStopWait terminal_stop_wait_;
 
   // Last time the controller generated a valid command
   rclcpp::Time last_valid_cmd_time_;
