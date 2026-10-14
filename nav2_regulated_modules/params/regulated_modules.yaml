@@ -548,20 +548,20 @@ controller_server:
       # 起点原地对齐角速度比例增益。
       rotate_to_heading_kp: 1.5
       # 接近目标时允许的最小线速度，单位米每秒。
-      min_approach_linear_velocity: 0.005
+      min_approach_linear_velocity: 0.02
       # 进入目标减速区的距离，单位米。
-      approach_velocity_scaling_dist: 0.8
+      approach_velocity_scaling_dist: 0.7
       # 终点减速计算使用的线性减速度，单位米每二次方秒。
-      goal_linear_deceleration: 0.25
+      goal_linear_deceleration: 0.2
       # 终点微量接近速度，单位米每秒。
-      goal_final_approach_velocity: 0.01
+      goal_final_approach_velocity: 0.015
       # 终点制动反应预留时间，单位秒。
       goal_braking_reaction_time: 0.1
       # 终点制动安全裕量，单位米。
-      goal_braking_distance_margin: 0.12
-      # 启用动态裕量：低速 0.05 m、高速 0.12 m，均比仿真候选增加 0.02 m。
+      goal_braking_distance_margin: 0.05
+      # 启用动态裕量：低速 0.015 m、高速 0.05 m；当前候选参数待实车验收。
       dynamic_goal_braking_margin_enabled: true
-      goal_braking_min_distance_margin: 0.05
+      goal_braking_min_distance_margin: 0.015
       goal_braking_margin_transition_speed: 0.3
       # 自适应到点制动默认关闭；仅在单独确认后显式启用。
       adaptive_goal_braking_enabled: false
