@@ -123,6 +123,45 @@ nav2_util::CallbackReturn VelocitySmoother::on_configure(const rclcpp_lifecycle:
   get_parameter("jerk_limited_smoothing", jerk_limited_smoothing_);
   get_parameter("max_accel_jerk", max_accel_jerks_);
   get_parameter("max_decel_jerk", max_decel_jerks_);
+  declare_parameter_if_not_declared(node, "collision_state_enabled", rclcpp::ParameterValue(false));
+  declare_parameter_if_not_declared(node, "collision_state_topic", rclcpp::ParameterValue(std::string("/collision_state")));
+  declare_parameter_if_not_declared(node, "collision_state_timeout", rclcpp::ParameterValue(0.5));
+  get_parameter("collision_state_enabled", collision_state_enabled_);
+  const auto collision_topic = get_parameter("collision_state_topic").as_string();
+  collision_state_.configure(get_parameter("collision_state_timeout").as_double());
+  if (collision_state_enabled_ && (!jerk_limited_smoothing_ || collision_topic.empty()))
+  {
+    throw std::runtime_error("collision state requires S-curve smoothing and a nonempty topic");
+  }
+  collision_task_speed_ = 0.0;
+  collision_last_state_ = -1;
+  collision_last_reason_.clear();
+  collision_params_handler_ = add_on_set_parameters_callback([](const std::vector<rclcpp::Parameter> & parameters)
+  {
+    rcl_interfaces::msg::SetParametersResult result;
+    result.successful = true;
+    for (const auto & parameter : parameters)
+    {
+      if (nav2_util::isCollisionStateParameter(parameter.get_name()))
+      {
+        result.successful = false;
+        result.reason = "collision state settings require lifecycle cleanup/configure";
+        break;
+      }
+    }
+    return result;
+  });
+  if (collision_state_enabled_)
+  {
+    collision_state_sub_ = create_subscription<std_msgs::msg::UInt8>(collision_topic, rclcpp::QoS(1).best_effort().durability_volatile(), [this](std_msgs::msg::UInt8::ConstSharedPtr msg)
+    {
+      collision_state_.update(msg->data);
+      if (msg->data > 4)
+      {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000, "Invalid collision state %u; selecting idle", static_cast<unsigned>(msg->data));
+      }
+    });
+  }
   if (jerk_limited_smoothing_)
   {
     if (max_accel_jerks_.size() != 3 || max_decel_jerks_.size() != 3 || !std::isfinite(smoothing_frequency_) || smoothing_frequency_ <= 0.0 || scale_velocities_)
@@ -165,6 +204,10 @@ nav2_util::CallbackReturn VelocitySmoother::on_configure(const rclcpp_lifecycle:
 }
 
 nav2_util::CallbackReturn VelocitySmoother::on_activate(const rclcpp_lifecycle::State &) {
+  collision_state_.reset();
+  collision_task_speed_ = 0.0;
+  collision_last_state_ = -1;
+  collision_last_reason_.clear();
   feedback_initialized_ = false;
   jerk_clock_initialized_ = false;
   for (auto & profile : jerk_profiles_)
@@ -185,6 +228,8 @@ nav2_util::CallbackReturn VelocitySmoother::on_activate(const rclcpp_lifecycle::
 }
 
 nav2_util::CallbackReturn VelocitySmoother::on_deactivate(const rclcpp_lifecycle::State &) {
+  collision_state_.reset();
+  collision_task_speed_ = 0.0;
   feedback_initialized_ = false;
   LOG_INFO("Deactivating");
   if (timer_) {
@@ -200,6 +245,10 @@ nav2_util::CallbackReturn VelocitySmoother::on_deactivate(const rclcpp_lifecycle
 }
 
 nav2_util::CallbackReturn VelocitySmoother::on_cleanup(const rclcpp_lifecycle::State &) {
+  collision_state_sub_.reset();
+  collision_params_handler_.reset();
+  collision_state_.reset();
+  speed_limit_sub_.reset();
   LOG_INFO("Cleaning up");
   smoothed_cmd_pub_.reset();
   odom_smoother_.reset();
@@ -291,7 +340,13 @@ double VelocitySmoother::applyConstraints(const double v_curr, const double v_cm
 void VelocitySmoother::smootherTimer() {
   // Wait until the first command is received
   if (!command_) {
-    return;
+    if (!collision_state_enabled_)
+    {
+      return;
+    }
+    // 启用门控后初始无输入也选择零目标，不继承旧任务运动。
+    command_ = std::make_shared<geometry_msgs::msg::Twist>();
+    last_command_time_ = now();
   }
 
   auto cmd_vel = std::make_unique<geometry_msgs::msg::Twist>();
@@ -356,6 +411,18 @@ void VelocitySmoother::smootherTimer() {
     requested[0] = command_->linear.x;
     requested[1] = command_->linear.y;
     requested[2] = command_->angular.z;
+    const auto raw_requested = requested;
+    const auto collision = collision_state_.snapshot();
+    if (collision_state_enabled_)
+    {
+      requested = nav2_util::collisionVelocityTarget(raw_requested, collision_task_speed_, collision, min_velocities_, max_velocities_);
+      if (collision_last_state_ != collision.effective || collision_last_reason_ != collision.reason())
+      {
+        LOG_INFO("collision 门控：raw={}，effective={}，reason={}，age={:.3f}s，task={:.3f}m/s，cap={:.3f}m/s", collision.raw, collision.effective, collision.reason(), collision.age, collision_task_speed_, collision_task_speed_ * collision.ratio());
+        collision_last_state_ = collision.effective;
+        collision_last_reason_ = collision.reason();
+      }
+    }
     std::array<double, 3> output;
     for (size_t i = 0; i < 3; ++i)
     {
@@ -364,6 +431,10 @@ void VelocitySmoother::smootherTimer() {
       // 闭环只校正目标；零指令必须收敛到零，不因里程计滞后产生反向补偿。
       double target = requested[i] == 0.0 ? 0.0 : requested[i] + previous[i] - reference[i];
       target = std::clamp(target, low, high);
+      if (collision_state_enabled_)
+      {
+        target = nav2_util::collisionFeedbackTarget(target, requested[i]);
+      }
       if (target * requested[i] < 0.0)
       {
         target = 0.0;
@@ -376,7 +447,14 @@ void VelocitySmoother::smootherTimer() {
       const double old_acceleration = jerk_profiles_[i].acceleration();
       output[i] = jerk_profiles_[i].advance(previous[i], target, dt, max_accels_[i], -max_decels_[i], max_accel_jerks_[i], max_decel_jerks_[i], min_velocities_[i], max_velocities_[i]);
       const double acceleration = jerk_profiles_[i].acceleration();
-      LOG_DEBUG("S-curve axis={} dt={:.9f} input={:.9f} feedback_reference={:.9f} target={:.9f} output={:.9f} accel={:.9f} jerk={:.9f} max_accel={} max_decel={} max_accel_jerk={} max_decel_jerk={}", i, dt, requested[i], reference[i], target, output[i], acceleration, (acceleration - old_acceleration) / dt, max_accels_[i], max_decels_[i], max_accel_jerks_[i], max_decel_jerks_[i]);
+      if (collision_state_enabled_)
+      {
+        LOG_DEBUG("S-curve collision axis={} dt={:.9f} raw={:.9f} selected={:.9f} feedback_reference={:.9f} target={:.9f} output={:.9f} accel={:.9f} jerk={:.9f} state={} age={:.6f} task={:.6f} cap={:.6f}", i, dt, raw_requested[i], requested[i], reference[i], target, output[i], acceleration, (acceleration - old_acceleration) / dt, collision.effective, collision.age, collision_task_speed_, collision_task_speed_ * collision.ratio());
+      }
+      else
+      {
+        LOG_DEBUG("S-curve axis={} dt={:.9f} input={:.9f} feedback_reference={:.9f} target={:.9f} output={:.9f} accel={:.9f} jerk={:.9f} max_accel={} max_decel={} max_accel_jerk={} max_decel_jerk={}", i, dt, requested[i], reference[i], target, output[i], acceleration, (acceleration - old_acceleration) / dt, max_accels_[i], max_decels_[i], max_accel_jerks_[i], max_decel_jerks_[i]);
+      }
     }
     cmd_vel->linear.x = output[0];
     cmd_vel->linear.y = output[1];
@@ -468,6 +546,11 @@ void VelocitySmoother::smootherTimer() {
 
 void VelocitySmoother::speedLimitCallback(const nav2_msgs::msg::SpeedLimit::SharedPtr msg)
 {
+  if (collision_state_enabled_ && (!std::isfinite(msg->speed_limit) || msg->speed_limit < 0.0))
+  {
+    RCLCPP_WARN(get_logger(), "Ignoring invalid task speed limit");
+    return;
+  }
   if (msg->percentage)
   {
     RCLCPP_ERROR(this->get_logger(), "Percentage mode is not supported");
@@ -478,6 +561,11 @@ void VelocitySmoother::speedLimitCallback(const nav2_msgs::msg::SpeedLimit::Shar
   RCLCPP_INFO(this->get_logger(), "set symmetric speed limit = [-%0.3f, %0.3f]", speed_magnitude, speed_magnitude);
   target_maxvx_ = speed_magnitude;
   target_minvx_ = -speed_magnitude;
+  if (collision_state_enabled_)
+  {
+    collision_task_speed_ = speed_magnitude;
+    LOG_INFO("collision 任务速度基准更新：{:.3f}m/s", collision_task_speed_);
+  }
   limitv2target = true;
 }
 

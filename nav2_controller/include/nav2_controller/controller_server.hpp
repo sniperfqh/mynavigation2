@@ -34,6 +34,8 @@
 #include "nav2_util/lifecycle_node.hpp"
 #include "nav2_util/simple_action_server.hpp"
 #include "nav2_util/robot_utils.hpp"
+#include "nav2_util/collision_state.hpp"
+#include "std_msgs/msg/u_int8.hpp"
 #include "pluginlib/class_loader.hpp"
 #include "pluginlib/class_list_macros.hpp"
 #include "spdlog_wrapper.hpp"
@@ -153,6 +155,8 @@ protected:
    * @brief Calculates velocity and publishes to "cmd_vel" topic
    */
   void computeAndPublishVelocity();
+  // collision 停车只暂停无进展检查，不重置跟踪路径或忽略位姿异常。
+  void checkProgress(geometry_msgs::msg::PoseStamped & pose);
   /**
    * @brief Calls setPlannerPath method with an updated path received from
    * action server
@@ -220,6 +224,11 @@ protected:
   std::unique_ptr<nav_2d_utils::OdomSubscriber> odom_sub_;
   rclcpp_lifecycle::LifecyclePublisher<geometry_msgs::msg::Twist>::SharedPtr vel_publisher_;
   rclcpp::Subscription<nav2_msgs::msg::SpeedLimit>::SharedPtr speed_limit_sub_;
+  bool collision_state_enabled_ = false;
+  nav2_util::CollisionState collision_state_;
+  rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr collision_state_sub_;
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr collision_params_handler_;
+  bool collision_progress_paused_ = false;
 
   // Progress Checker Plugin
   pluginlib::ClassLoader<nav2_core::ProgressChecker> progress_checker_loader_;

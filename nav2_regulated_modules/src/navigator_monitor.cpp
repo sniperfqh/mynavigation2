@@ -28,7 +28,6 @@ void RegulatedNavigator::startRecovery(const std::string & reason)
     return;
   }
   task_.state = NavigationState::CLEARING_COSTMAP;
-  task_.last_error = reason;
   ++task_.recovery_count;
   LOG_WARN("进入导航恢复，generation={}，round={}/{}，reason={}", task_.generation, task_.recovery_count, max_recovery_rounds_, reason);
   cancelSubGoals(true);
@@ -123,7 +122,18 @@ void RegulatedNavigator::monitorTask()
   // 控制期间仅以足够的 map 坐标位移刷新进度时间，静止过久进入恢复。
   if (task_.state == NavigationState::CONTROLLING)
   {
-    if (task_.last_progress_pose.header.frame_id.empty() || navigation_utils::poseDistance(current_pose, task_.last_progress_pose) >= progress_min_translation_)
+    const bool collision_wait = collision_state_enabled_ && task_.type == TaskType::NAVIGATION_SERVICE && collision_state_.snapshot().stopped();
+    if (collision_wait || collision_progress_paused_)
+    {
+      if (collision_progress_paused_ != collision_wait)
+      {
+        LOG_INFO("collision 固定路径无进展计时：paused={}，generation={}，继续保留任务与原路径", collision_wait, task_.generation);
+      }
+      task_.last_progress_pose = current_pose;
+      task_.last_progress_time = now();
+      collision_progress_paused_ = collision_wait;
+    }
+    else if (task_.last_progress_pose.header.frame_id.empty() || navigation_utils::poseDistance(current_pose, task_.last_progress_pose) >= progress_min_translation_)
     {
       task_.last_progress_pose = current_pose;
       task_.last_progress_time = now();

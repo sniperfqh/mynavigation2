@@ -70,11 +70,8 @@ struct NavigationTask
   double total_path_length { 0.0 };
   // 固定路径请求速度与前后向标记不直接改变普通导航控制器参数。
   double requested_speed { 0.0 };
-  double start_yaw { 0.0 };
-  double goal_yaw { 0.0 };
   uint8_t motion_direction { 0 };
   float progress { 0.0F };
-  std::string last_error;
 };
 
 }

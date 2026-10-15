@@ -8,6 +8,9 @@ ament_target_dependencies(velocity_smoother_tests
 target_link_libraries(velocity_smoother_tests
   ${library_name}
 )
+ament_add_gtest(collision_smoother_tests test_collision_smoother.cpp)
+ament_target_dependencies(collision_smoother_tests ${dependencies})
+target_link_libraries(collision_smoother_tests ${library_name})
 
 add_executable(jerk_profile_test jerk_profile_test.cpp)
 target_compile_features(jerk_profile_test PRIVATE cxx_std_17)

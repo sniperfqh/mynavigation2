@@ -19,6 +19,9 @@ RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : na
   declare_parameter("global_frame", "map");
   declare_parameter("robot_base_frame", "base_link");
   declare_parameter("operation_mode", "autonomous");
+  declare_parameter("collision_state_enabled", false);
+  declare_parameter("collision_state_topic", "/collision_state");
+  declare_parameter("collision_state_timeout", 0.5);
   declare_parameter("goal_topic", "goal_pose");
   declare_parameter("navigation_service_action", "navigation_service");
   declare_parameter("fixed_path_visualization_topic", "fixed_path_plan");
@@ -113,6 +116,35 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   fixed_path_boundaries_topic_ = get_parameter("fixed_path_boundaries_topic").as_string();
   fixed_path_controller_id_ = get_parameter("fixed_path_controller_id").as_string();
   fixed_path_goal_checker_id_ = get_parameter("fixed_path_goal_checker_id").as_string();
+  collision_state_enabled_ = operation_mode_ == NavigationMode::FIXED_PATH && get_parameter("collision_state_enabled").as_bool();
+  const auto collision_topic = get_parameter("collision_state_topic").as_string();
+  collision_state_.configure(get_parameter("collision_state_timeout").as_double());
+  if (collision_state_enabled_ && collision_topic.empty())
+  {
+    throw std::invalid_argument("collision_state_topic must not be empty");
+  }
+  collision_params_handler_ = add_on_set_parameters_callback([](const std::vector<rclcpp::Parameter> & parameters)
+  {
+    rcl_interfaces::msg::SetParametersResult result;
+    result.successful = true;
+    for (const auto & parameter : parameters)
+    {
+      if (nav2_util::isCollisionStateParameter(parameter.get_name()))
+      {
+        result.successful = false;
+        result.reason = "collision state settings require lifecycle cleanup/configure";
+        break;
+      }
+    }
+    return result;
+  });
+  if (collision_state_enabled_)
+  {
+    collision_state_sub_ = create_subscription<std_msgs::msg::UInt8>(collision_topic, rclcpp::QoS(1).best_effort().durability_volatile(), [this](std_msgs::msg::UInt8::ConstSharedPtr msg)
+    {
+      collision_state_.update(msg->data);
+    });
+  }
   server_timeout_ = get_parameter("server_timeout").as_double();
   cancel_timeout_ = get_parameter("cancel_timeout").as_double();
   smoothing_duration_ = get_parameter("max_smoothing_duration").as_double();
@@ -233,7 +265,6 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   const auto velocity_log_period = std::chrono::duration<double>(1.0 / velocity_log_frequency_);
   velocity_log_timer_ = create_wall_timer(std::chrono::duration_cast<std::chrono::milliseconds>(velocity_log_period), std::bind(&RegulatedNavigator::logVelocityChain, this));
 
-  configured_ = true;
   LOG_INFO("独立规控导航器配置完成，operation_mode={}，定位跳变保护={}，平移阈值={:.3f}m，旋转阈值={:.3f}rad，速度日志={}Hz，反馈={}，控制器输出={}，平滑器输出={}", operation_mode, enable_localization_jump_detection_ ? "启用" : "关闭", max_translation_jump_, max_rotation_jump_, velocity_log_frequency_, velocity_odom_topic_, controller_cmd_vel_topic_, smoothed_cmd_vel_topic_);
   return nav2_util::CallbackReturn::SUCCESS;
 }
@@ -241,6 +272,8 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
 // 激活生命周期发布器及任务入口，允许外部请求进入。
 nav2_util::CallbackReturn RegulatedNavigator::on_activate(const rclcpp_lifecycle::State &)
 {
+  collision_state_.reset();
+  collision_progress_paused_ = false;
   if (fixed_path_pub_)
   {
     fixed_path_pub_->on_activate();
@@ -268,6 +301,8 @@ nav2_util::CallbackReturn RegulatedNavigator::on_deactivate(const rclcpp_lifecyc
     chassis_control_subscriber_->deactivate();
   }
   cancelTask("节点停用");
+  collision_state_.reset();
+  collision_progress_paused_ = false;
   if (fixed_path_pub_)
   {
     fixed_path_pub_->on_deactivate();
@@ -284,6 +319,10 @@ nav2_util::CallbackReturn RegulatedNavigator::on_deactivate(const rclcpp_lifecyc
 // 销毁配置阶段创建的接口与资源，恢复未配置状态。
 nav2_util::CallbackReturn RegulatedNavigator::on_cleanup(const rclcpp_lifecycle::State &)
 {
+  collision_state_sub_.reset();
+  collision_params_handler_.reset();
+  collision_state_.reset();
+  collision_progress_paused_ = false;
   cancelTask("节点清理");
   navigate_pose_server_.reset();
   navigate_poses_server_.reset();
@@ -318,7 +357,6 @@ nav2_util::CallbackReturn RegulatedNavigator::on_cleanup(const rclcpp_lifecycle:
   }
   tf_listener_.reset();
   tf_buffer_.reset();
-  configured_ = false;
   LOG_INFO("独立规控导航器已清理");
   return nav2_util::CallbackReturn::SUCCESS;
 }

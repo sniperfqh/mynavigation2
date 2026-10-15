@@ -223,6 +223,10 @@ regulated_navigator:
     controller_id: "RPP"
     # 固定路径使用的控制器标识。
     fixed_path_controller_id: "FixedPathController"
+    # launch 统一注入固定路径 collision 订阅设置；默认关闭。
+    collision_state_enabled: false
+    collision_state_topic: "/collision_state"
+    collision_state_timeout: 0.5
     # 固定路径使用的目标检查器标识。
     fixed_path_goal_checker_id: "fixed_path_goal_checker"
     # 普通导航使用的目标检查器标识。
@@ -318,6 +322,10 @@ controller_server:
     use_sim_time: false
     # 控制器循环频率，单位 Hz。
     controller_frequency: 100.0
+    # collision 停车期间暂停固定路径无进展检查，仍处理取消和 TF 异常。
+    collision_state_enabled: false
+    collision_state_topic: "/collision_state"
+    collision_state_timeout: 0.5
     # 控制器读取里程计的话题。
     odom_topic: "/odometry"
     # 小于此值的 x 向里程计速度视为零，单位米每秒。
@@ -898,6 +906,10 @@ velocity_smoother:
     use_sim_time: false
     # 速度平滑器输出频率，单位 Hz。
     smoothing_frequency: 100.0
+    # 固定路径平滑前状态门控；topic/timeout 是 launch 注入三个节点的统一来源。
+    collision_state_enabled: false
+    collision_state_topic: "/collision_state"
+    collision_state_timeout: 0.5
     # S 曲线已通过短时约束与低速停车检查，普通零指令平滑制动。
     jerk_limited_smoothing: true
     max_accel_jerk: [6.0, 0.0, 4.0]

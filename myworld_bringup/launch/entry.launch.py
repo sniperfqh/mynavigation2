@@ -109,15 +109,9 @@ def generate_launch_description():
     fixed_path_goal_terminal_lookahead_min_dist = LaunchConfiguration('fixed_path_goal_terminal_lookahead_min_dist', default='')
     fixed_path_goal_terminal_lookahead_max_dist = LaunchConfiguration('fixed_path_goal_terminal_lookahead_max_dist', default='')
     fixed_path_xy_goal_tolerance = LaunchConfiguration('fixed_path_xy_goal_tolerance', default='0.01')
-    fixed_path_yaw_goal_tolerance = LaunchConfiguration('fixed_path_yaw_goal_tolerance', default='0.08726646259971647')
-    fixed_path_goal_position_hysteresis = LaunchConfiguration('fixed_path_goal_position_hysteresis', default='1.0')
     fixed_path_rotate_to_heading_angular_vel = LaunchConfiguration('fixed_path_rotate_to_heading_angular_vel', default='0.4')
     fixed_path_max_angular_accel = LaunchConfiguration('fixed_path_max_angular_accel', default='0.8')
     fixed_path_rotate_to_heading_kp = LaunchConfiguration('fixed_path_rotate_to_heading_kp', default='1.5')
-    fixed_path_goal_rotate_to_heading_angular_vel = LaunchConfiguration('fixed_path_goal_rotate_to_heading_angular_vel', default='0.8')
-    fixed_path_goal_max_angular_accel = LaunchConfiguration('fixed_path_goal_max_angular_accel', default='1.6')
-    fixed_path_goal_rotate_to_heading_kp = LaunchConfiguration('fixed_path_goal_rotate_to_heading_kp', default='3.0')
-    fixed_path_goal_position_entry_tolerance = LaunchConfiguration('fixed_path_goal_position_entry_tolerance', default='0.008')
     fixed_path_goal_error_log_frequency = LaunchConfiguration('fixed_path_goal_error_log_frequency', default='1.0')
     fixed_path_stack_start_delay = LaunchConfiguration('fixed_path_stack_start_delay', default='3.0')
     rviz_start_delay = LaunchConfiguration('rviz_start_delay', default='5.0')
@@ -131,14 +125,12 @@ def generate_launch_description():
     is_remote_gui = PythonExpression(["'", operation_mode, "' == 'remote' and '", headless, "' == 'false'"])
 
     bringup_dir = get_package_share_directory('myworld_bringup')
-    launch_file_dir = os.path.dirname(__file__)
     myworld_dir = os.path.join(bringup_dir, 'models', 'myworld2')
     default_map = PythonExpression([
         "'", os.path.join('/userdata/map/pbstream', 'out.yaml'),
         "' if '", operation_mode, "' == 'fixed_path' else '",
         os.path.join(myworld_dir, 'myworld2.yaml'), "'"])
     map_file = LaunchConfiguration('map', default=default_map)
-    params_file = LaunchConfiguration('params_file', default=os.path.join(bringup_dir, 'params', 'myworld2.yaml'))
     rviz_config_file = os.path.join(bringup_dir, 'rviz', 'nav2_default_view.rviz')
     robot_description_file = os.path.join(bringup_dir, 'urdf', 'diffbot.urdf')
     with open(robot_description_file, 'r', encoding='utf-8') as urdf_file:
@@ -200,15 +192,9 @@ def generate_launch_description():
         'fixed_path_goal_terminal_lookahead_min_dist': fixed_path_goal_terminal_lookahead_min_dist,
         'fixed_path_goal_terminal_lookahead_max_dist': fixed_path_goal_terminal_lookahead_max_dist,
         'fixed_path_xy_goal_tolerance': fixed_path_xy_goal_tolerance,
-        'fixed_path_yaw_goal_tolerance': fixed_path_yaw_goal_tolerance,
-        'fixed_path_goal_position_hysteresis': fixed_path_goal_position_hysteresis,
         'fixed_path_rotate_to_heading_angular_vel': fixed_path_rotate_to_heading_angular_vel,
         'fixed_path_max_angular_accel': fixed_path_max_angular_accel,
         'fixed_path_rotate_to_heading_kp': fixed_path_rotate_to_heading_kp,
-        'fixed_path_goal_rotate_to_heading_angular_vel': fixed_path_goal_rotate_to_heading_angular_vel,
-        'fixed_path_goal_max_angular_accel': fixed_path_goal_max_angular_accel,
-        'fixed_path_goal_rotate_to_heading_kp': fixed_path_goal_rotate_to_heading_kp,
-        'fixed_path_goal_position_entry_tolerance': fixed_path_goal_position_entry_tolerance,
         'fixed_path_goal_error_log_frequency': fixed_path_goal_error_log_frequency,
     }
 

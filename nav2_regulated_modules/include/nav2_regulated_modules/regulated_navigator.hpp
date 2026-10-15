@@ -27,6 +27,8 @@
 #include "nav2_regulated_modules/navigation_state.hpp"
 #include "nav2_regulated_modules/planning_module.hpp"
 #include "nav2_util/lifecycle_node.hpp"
+#include "nav2_util/collision_state.hpp"
+#include "std_msgs/msg/u_int8.hpp"
 #include "nav2_msgs/msg/speed_limit.hpp"
 #include "nav_msgs/msg/odometry.hpp"
 #include "nav_msgs/msg/path.hpp"
@@ -164,12 +166,16 @@ private:
   // 清理任务状态、序号及活动 Action 句柄。
   void resetTask();
 
-  bool configured_ { false };
   bool active_ { false };
   bool planning_active_ { false };
   bool updating_path_ { false };
   bool has_last_pose_ { false };
   bool cancel_requested_ { false };
+  bool collision_state_enabled_ = false;
+  nav2_util::CollisionState collision_state_;
+  rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr collision_state_sub_;
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr collision_params_handler_;
+  bool collision_progress_paused_ = false;
   uint64_t task_generation_ { 0 };
   uint64_t plan_sequence_ { 0 };
   uint64_t follow_sequence_ { 0 };

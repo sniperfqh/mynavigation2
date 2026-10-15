@@ -228,8 +228,6 @@ void RegulatedNavigator::handleNavigationServiceAccepted(const std::shared_ptr<N
   task_.last_progress_time = task_.start_time;
   task_.last_progress_pose = geometry_msgs::msg::PoseStamped();
   task_.motion_direction = first_segment.motion_direction;
-  task_.start_yaw = start_yaw;
-  task_.goal_yaw = goal_yaw;
   // 多段速度先取最小请求值，再由本节点统一上限钳位；不改变路径方向。
   task_.requested_speed = std::numeric_limits<double>::max();
   for (const auto & segment : goal->get_goal()->navi_segment)

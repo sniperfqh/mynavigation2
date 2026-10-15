@@ -72,6 +72,38 @@ nav2_util::CallbackReturn ControllerServer::on_configure(const rclcpp_lifecycle:
 
   LOG_INFO("Configuring controller interface");
   LOG_INFO("Configuring controller plugins, local costmap and FollowPath action server");
+  nav2_util::declare_parameter_if_not_declared(node, "collision_state_enabled", rclcpp::ParameterValue(false));
+  nav2_util::declare_parameter_if_not_declared(node, "collision_state_topic", rclcpp::ParameterValue(std::string("/collision_state")));
+  nav2_util::declare_parameter_if_not_declared(node, "collision_state_timeout", rclcpp::ParameterValue(0.5));
+  get_parameter("collision_state_enabled", collision_state_enabled_);
+  const auto collision_topic = get_parameter("collision_state_topic").as_string();
+  collision_state_.configure(get_parameter("collision_state_timeout").as_double());
+  if (collision_state_enabled_ && collision_topic.empty())
+  {
+    throw std::invalid_argument("collision_state_topic must not be empty");
+  }
+  collision_params_handler_ = add_on_set_parameters_callback([](const std::vector<rclcpp::Parameter> & parameters)
+  {
+    rcl_interfaces::msg::SetParametersResult result;
+    result.successful = true;
+    for (const auto & parameter : parameters)
+    {
+      if (nav2_util::isCollisionStateParameter(parameter.get_name()))
+      {
+        result.successful = false;
+        result.reason = "collision state settings require lifecycle cleanup/configure";
+        break;
+      }
+    }
+    return result;
+  });
+  if (collision_state_enabled_)
+  {
+    collision_state_sub_ = create_subscription<std_msgs::msg::UInt8>(collision_topic, rclcpp::QoS(1).best_effort().durability_volatile(), [this](std_msgs::msg::UInt8::ConstSharedPtr msg)
+    {
+      collision_state_.update(msg->data);
+    });
+  }
 
   get_parameter("progress_checker_plugin", progress_checker_id_);
   if (progress_checker_id_ == default_progress_checker_id_) {
@@ -172,6 +204,8 @@ nav2_util::CallbackReturn ControllerServer::on_configure(const rclcpp_lifecycle:
 }
 
 nav2_util::CallbackReturn ControllerServer::on_activate(const rclcpp_lifecycle::State & /*state*/) {
+  collision_state_.reset();
+  collision_progress_paused_ = false;
   LOG_INFO("Activating");
   LOG_INFO("Activating controller server publishers, local costmap and action server");
 
@@ -197,6 +231,8 @@ nav2_util::CallbackReturn ControllerServer::on_deactivate(const rclcpp_lifecycle
   LOG_INFO("Deactivating");
 
   action_server_->deactivate();
+  collision_state_.reset();
+  collision_progress_paused_ = false;
   terminal_stability_.reset();
   terminal_stop_wait_.reset();
   ControllerMap::iterator it;
@@ -224,6 +260,10 @@ nav2_util::CallbackReturn ControllerServer::on_deactivate(const rclcpp_lifecycle
 }
 
 nav2_util::CallbackReturn ControllerServer::on_cleanup(const rclcpp_lifecycle::State & /*state*/) {
+  collision_state_sub_.reset();
+  collision_params_handler_.reset();
+  collision_state_.reset();
+  collision_progress_paused_ = false;
   terminal_stability_.reset();
   terminal_stop_wait_.reset();
   LOG_INFO("Cleaning up");
@@ -315,6 +355,7 @@ void ControllerServer::computeControl() {
 
     setPlannerPath(action_server_->get_current_goal()->path);
     progress_checker_->reset();
+    collision_progress_paused_ = false;
 
     last_valid_cmd_time_ = now();
     rclcpp::WallRate loop_rate(controller_frequency_);
@@ -399,6 +440,32 @@ void ControllerServer::setPlannerPath(const nav_msgs::msg::Path & path) {
   current_path_ = path;
 }
 
+void ControllerServer::checkProgress(geometry_msgs::msg::PoseStamped & pose)
+{
+  const auto controller = controllers_.find(current_controller_);
+  const bool fixed_path = controller != controllers_.end() && dynamic_cast<nav2_core::TerminalAwareController *>(controller->second.get()) != nullptr;
+  const bool paused = collision_state_enabled_ && fixed_path && collision_state_.snapshot().stopped();
+  if (paused)
+  {
+    if (!collision_progress_paused_)
+    {
+      LOG_INFO("collision 停车等待：暂停控制器无进展检查，保留当前路径");
+    }
+    collision_progress_paused_ = true;
+    return;
+  }
+  if (collision_progress_paused_)
+  {
+    progress_checker_->reset();
+    collision_progress_paused_ = false;
+    LOG_INFO("collision 恢复：重置控制器进度计时并继续原路径");
+  }
+  if (!progress_checker_->check(pose))
+  {
+    throw nav2_core::PlannerException("Failed to make progress");
+  }
+}
+
 void ControllerServer::computeAndPublishVelocity() {
   geometry_msgs::msg::PoseStamped pose;
 
@@ -406,9 +473,7 @@ void ControllerServer::computeAndPublishVelocity() {
     throw nav2_core::PlannerException("Failed to obtain robot pose");
   }
 
-  if (!progress_checker_->check(pose)) {
-    throw nav2_core::PlannerException("Failed to make progress");
-  }
+  checkProgress(pose);
 
   nav_2d_msgs::msg::Twist2D twist = getThresholdedTwist(odom_sub_->getTwist());
 

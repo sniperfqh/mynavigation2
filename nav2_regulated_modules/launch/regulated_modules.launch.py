@@ -3,6 +3,7 @@
 import os
 import yaml
 import sys
+import math
 
 from ament_index_python.packages import get_package_share_directory
 
@@ -40,6 +41,20 @@ def resolve_braking_margin_arguments(context):
             value = str(float(value))
         actions.append(SetLaunchConfiguration('resolved_fixed_path_' + key, value))
     return actions
+
+
+def resolve_collision_state_arguments(context):
+    with open(LaunchConfiguration('params_file').perform(context), encoding='utf-8') as stream:
+        config = yaml.safe_load(stream) or {}
+    namespace = LaunchConfiguration('namespace').perform(context)
+    config = config.get(namespace, config) if namespace else config
+    values = config.get('velocity_smoother', {}).get('ros__parameters', {})
+    topic = values.get('collision_state_topic', '/collision_state')
+    timeout = float(values.get('collision_state_timeout', 0.5))
+    if not isinstance(topic, str) or not topic.strip() or not math.isfinite(timeout) or timeout <= 0.0:
+        raise ValueError('Invalid collision state topic or timeout')
+    return [SetLaunchConfiguration('resolved_collision_state_topic', topic),
+            SetLaunchConfiguration('resolved_collision_state_timeout', str(timeout))]
 
 
 def start_velocity_diagnostics(context):
@@ -126,6 +141,15 @@ def generate_launch_description():
     remappings = [('/tf', 'tf'),('/tf_static', 'tf_static')]
 
     param_substitutions = {
+        **{node + '.ros__parameters.' + key: value
+           for node in ['controller_server', 'velocity_smoother', 'regulated_navigator']
+           for key, value in {
+               'collision_state_enabled': PythonExpression([
+                   "'", operation_mode, "' == 'fixed_path' and '",
+                   LaunchConfiguration('enable_collision_state'), "'.lower() == 'true'"]),
+               'collision_state_topic': LaunchConfiguration('resolved_collision_state_topic'),
+               'collision_state_timeout': LaunchConfiguration('resolved_collision_state_timeout'),
+           }.items()},
         'use_sim_time': use_sim_time,
         'autostart': autostart,
         'yaml_filename': map_yaml_file,
@@ -585,6 +609,9 @@ def generate_launch_description():
     ld.add_action(declare_map_yaml_cmd)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_params_file_cmd)
+    ld.add_action(DeclareLaunchArgument('enable_collision_state', default_value='false',
+                                      description='Opt in to fixed-path collision state gating before S-curve smoothing'))
+    ld.add_action(OpaqueFunction(function=resolve_collision_state_arguments))
     for key in ['goal_braking_distance_margin', 'dynamic_goal_braking_margin_enabled',
                 'goal_braking_min_distance_margin', 'goal_braking_margin_transition_speed']:
         ld.add_action(DeclareLaunchArgument('fixed_path_' + key, default_value='',

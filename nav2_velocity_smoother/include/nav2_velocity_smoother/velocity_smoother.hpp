@@ -29,6 +29,8 @@
 // spdlog wrapper for module-specific logging
 #include "spdlog_wrapper.hpp"
 #include "nav2_msgs/msg/speed_limit.hpp"
+#include "nav2_util/collision_state.hpp"
+#include "std_msgs/msg/u_int8.hpp"
 
 #include <array>
 #include <chrono>
@@ -166,6 +168,13 @@ protected:
   double target_maxvx_;
   double target_minvx_;
   bool limitv2target{false};
+  bool collision_state_enabled_ = false;
+  nav2_util::CollisionState collision_state_;
+  rclcpp::Subscription<std_msgs::msg::UInt8>::SharedPtr collision_state_sub_;
+  rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr collision_params_handler_;
+  double collision_task_speed_ = 0.0;
+  int collision_last_state_ = -1;
+  std::string collision_last_reason_;
   std::vector<double> max_accels_;
   std::vector<double> max_decels_;
   std::vector<double> deadband_velocities_;

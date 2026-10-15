@@ -197,7 +197,6 @@ void RegulatedNavigator::onPathReady(const nav_msgs::msg::Path & path)
 // 记录规划失败并依据连续失败次数触发恢复或任务失败。
 void RegulatedNavigator::handlePlanningFailure(const std::string & reason)
 {
-  task_.last_error = reason;
   ++task_.consecutive_planning_failures;
   if (updating_path_ && active_follow_goal_ && task_.consecutive_planning_failures < planning_module_.maxFailures())
   {

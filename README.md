@@ -804,6 +804,64 @@ ros2 topic echo /control_to_uart byd_custom_msgs/msg/ControlRes
 `/cmd_vel` 才转发一条 `ControlRes`。没有 `/cmd_vel` 时不会发布零速度，也不会在
 `/control_to_uart` 上产生输出。
 
+### 4.9 固定路径 collision 状态门控
+
+该功能默认关闭。固定路径运行时可在原命令中追加 `enable_collision_state:=true`；地图、`params_file` 等原有实参继续保留：
+
+```bash
+ros2 launch nav2_regulated_modules regulated_modules.launch.py \
+  operation_mode:=fixed_path enable_collision_state:=true
+```
+
+外部状态源持续发布 `/collision_state`，类型为 `std_msgs/msg/UInt8`，建议至少 10 Hz。以下命令持续发送正常状态；若已有有效任务，车辆将按原控制指令平滑运行：
+
+```bash
+ros2 topic pub --rate 10 /collision_state std_msgs/msg/UInt8 '{data: 4}'
+```
+
+| data | 含义 | 碰撞速度上限 |
+|---:|---|---|
+| 4 | 正常 | 任务生效速度的 100% |
+| 3 | 一级减速 | 任务生效速度的 65% |
+| 2 | 二级减速 | 任务生效速度的 35% |
+| 1 | 停止 | 线、角速度目标均为零 |
+| 0 | idle／初始 | 与停止相同 |
+
+任务生效速度沿用 `NavigationService` 各段 `max_speed` 的最小值和全局上限，来自原有 `speed_limit`。门控取原控制指令与碰撞上限中的较小幅值，保留前进／倒车方向。例如任务 0.4 m/s 的一级／二级目标上限为 0.26／0.14 m/s；原指令已是 0.015 m/s 时不再重复乘比例。正常状态也不抬高起步保护、曲率或终点制动产生的较小指令。
+
+线速度非零时，按实际取小的比例同步缩放角速度；原地对齐时按状态比例缩放角速度。门控之后执行闭环修正并再次约束目标，再交给 S 曲线。新上限是目标，实际输出按加减速度和 jerk 约束逐步收敛，不在状态切换时瞬间截断速度或清零加速度历史。
+
+统一配置位于 `regulated_modules.yaml` 的 `velocity_smoother.ros__parameters`：
+
+```yaml
+collision_state_enabled: false
+collision_state_topic: "/collision_state"
+collision_state_timeout: 0.5
+```
+
+launch 以运行模式和启用开关决定 `collision_state_enabled`，将平滑器配置块中的话题、超时统一注入控制服务器、平滑器和导航协调节点。功能要求 `jerk_limited_smoothing=true`；修改这些配置需重启，或先执行生命周期 cleanup 后再 configure。普通导航与遥控不启用此门控。
+
+初始未收到、非法值、接收间隔达到 0.5 s，均按 idle 平滑停车。订阅为 BEST_EFFORT、VOLATILE、KeepLast(1)，超时按本机单调时钟计算。状态恢复后仅在原任务仍有效、速度输入仍有效时继续；任务结束的 `speed_limit=0` 清除任务基准，状态 4 不会恢复已取消任务。
+
+碰撞停止期间同时暂停控制器和固定路径任务监控的无进展计时，恢复时重建进度基准，不重新装载路径或触发起步保护。取消、定位丢失及正常到点规则保持生效。原有 `use_collision_monitor` 与该功能独立，默认仍关闭；本模块不负责从激光生成碰撞状态，也不新增底盘发布者。
+
+```text
+FixedPathController → cmd_vel_nav → collision 目标门控 → S 曲线
+→ cmd_vel → controlpub → control_to_uart
+```
+
+回归脚本为 `nav2_regulated_modules/test/collision_state_runtime_test.py`。在 `nav2_ws` 中 source 环境后，显式设置非零隔离域和临时日志目录执行；脚本使用真实 ROS 节点与合成 TF／轮速，底盘输出固定重映射到 `/collision_state_test/control_to_uart`，不连接实车：
+
+```bash
+ROS_DOMAIN_ID=175 ROS_LOCALHOST_ONLY=1 \
+ROS_LOG_DIR=/tmp/collision_test/ros_logs \
+SPDLOG_WRAPPER_LOG_DIR=/tmp/collision_test/module_logs \
+python3 src/navigation2/nav2_regulated_modules/test/collision_state_runtime_test.py \
+  --output-dir /tmp/collision_test
+```
+
+组合模式追加 `--composition` 并使用另一输出目录。该测试不等于真实底盘停止距离、姿态或到点精度验收。
+
 ## 5. 外部贡献：Fork＋Pull Request
 
 本仓库公开地址：

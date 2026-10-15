@@ -14,6 +14,7 @@ find_package(nav2_core REQUIRED)
 find_package(nav2_costmap_2d REQUIRED)
 find_package(nav2_msgs REQUIRED)
 find_package(nav2_util REQUIRED)
+find_package(std_msgs REQUIRED)
 find_package(nav_msgs REQUIRED)
 find_package(pluginlib REQUIRED)
 find_package(byd_custom_msgs REQUIRED)
@@ -48,6 +49,7 @@ ament_target_dependencies(regulated_navigator_node
   geometry_msgs
   nav2_msgs
   nav2_util
+  std_msgs
   nav_msgs
   byd_custom_msgs
   tf2
@@ -102,6 +104,8 @@ ament_export_dependencies(nav2_core nav2_costmap_2d pluginlib)
 
 include(CTest)
 if(BUILD_TESTING)
+  find_package(Python3 REQUIRED COMPONENTS Interpreter)
+  add_test(NAME collision_launch_test COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/test_collision_launch.py)
   add_executable(terminal_convergence_test test/terminal_convergence_test.cpp)
   target_include_directories(terminal_convergence_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   ament_target_dependencies(terminal_convergence_test nav2_core)

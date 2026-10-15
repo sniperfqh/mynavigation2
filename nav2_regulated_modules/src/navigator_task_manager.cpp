@@ -203,6 +203,7 @@ void RegulatedNavigator::failTask(const std::string & reason)
 // 清理任务状态、序号及活动 Action 句柄。
 void RegulatedNavigator::resetTask()
 {
+  collision_progress_paused_ = false;
   if (task_.type == TaskType::NAVIGATION_SERVICE && speed_limit_pub_)
   {
     nav2_msgs::msg::SpeedLimit speed_limit;
