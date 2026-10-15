@@ -36,6 +36,7 @@ private:
   void onMotionState(const byd_custom_msgs::msg::MotionState::ConstSharedPtr message);
 
   mutable std::mutex mutex_;
+  bool legacy_velocity_logging_ = true;
   MotionStateSnapshot latest_state_;
   rclcpp::Subscription<byd_custom_msgs::msg::MotionState>::SharedPtr subscription_;
 };

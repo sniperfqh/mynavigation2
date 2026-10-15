@@ -228,7 +228,7 @@ std::string SpdlogWrapper::short_file_name(const char *path)
 
 void SpdlogWrapper::output_handler(const rcutils_log_location_t *location,
                                    int severity,
-                                   const char * /*name*/,
+                                   const char *name,
                                    rcutils_time_point_value_t timestamp,
                                    const char *format,
                                    va_list *args)
@@ -274,5 +274,5 @@ void SpdlogWrapper::output_handler(const rcutils_log_location_t *location,
         }
     }
 
-    logger->log(level, "[{} {}:{}]{} {}", short_file, func, line, ros_ts_suffix, msg);
+    logger->log(level, "[node:{}] [{} {}:{}]{} {}", name ? name : "unknown", short_file, func, line, ros_ts_suffix, msg);
 }

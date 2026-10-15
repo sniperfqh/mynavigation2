@@ -18,6 +18,7 @@ public:
   {
     const auto input_topic = declare_parameter<std::string>("input_topic", "/cmd_vel");
     output_topic_ = declare_parameter<std::string>("output_topic", "/control_to_uart");
+    legacy_velocity_logging_ = declare_parameter("legacy_velocity_logging", true);
     subscription_ = create_subscription<geometry_msgs::msg::Twist>(input_topic, rclcpp::QoS(rclcpp::KeepLast(10)).reliable().durability_volatile(), std::bind(&ControlPub::onCmdVel, this, std::placeholders::_1));
     LOG_INFO("controlpub 已启动，仅在收到有效 {} 后转发到 {}", input_topic, output_topic_);
   }
@@ -40,7 +41,7 @@ private:
     constexpr double moving_epsilon = 1e-6;
     const bool is_moving = std::abs(control_msg.v) > moving_epsilon || std::abs(control_msg.w) > moving_epsilon;
     const auto now = std::chrono::steady_clock::now();
-    if (is_moving && (!was_moving_ || now - last_output_log_time_ >= std::chrono::seconds(1)))
+    if (legacy_velocity_logging_ && is_moving && (!was_moving_ || now - last_output_log_time_ >= std::chrono::seconds(1)))
     {
       LOG_INFO("/control_to_uart 控制指令：v={:.3f}m/s，w={:.3f}rad/s", control_msg.v, control_msg.w);
       last_output_log_time_ = now;
@@ -52,6 +53,7 @@ private:
   rclcpp::Publisher<byd_custom_msgs::msg::ControlRes>::SharedPtr publisher_;
   std::mutex publisher_mutex_;
   std::string output_topic_;
+  bool legacy_velocity_logging_ = true;
   std::chrono::steady_clock::time_point last_output_log_time_;
   bool was_moving_{false};
 };

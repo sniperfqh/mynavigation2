@@ -99,8 +99,7 @@ void RegulatedNavigator::cancelTask(const std::string & reason)
     }
     active_navigation_service_goal_.reset();
   }
-  LOG_WARN("导航任务已取消：{}", reason);
-  LOG_INFO("导航任务取消收口完成，generation={}，reason={}", generation, reason);
+  LOG_WARN("导航任务已取消并完成收口，generation={}，reason={}", generation, reason);
   resetTask();
 }
 

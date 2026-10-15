@@ -159,7 +159,7 @@ def generate_launch_description():
     remote_ignition_server = ExecuteProcess(condition=IfCondition(is_remote), cmd=['ign', 'gazebo', '-r', '-s', '--headless-rendering', '-v', '3', world_only], output='screen')
 
     algorithm_arguments = {'map': map_file,
-        **{key: LaunchConfiguration(key) for key in ['enable_velocity_diagnostics', 'log_dir', 'velocity_file_log_frequency', 'velocity_console_log_frequency']},
+        **{key: LaunchConfiguration(key) for key in ['enable_velocity_diagnostics', 'enable_legacy_velocity_logs', 'log_dir', 'velocity_file_log_frequency', 'velocity_console_log_frequency']},
         'use_sim_time': use_sim_time,
         'params_file': LaunchConfiguration('noamcl_params_file'),
         'rviz_config_file': rviz_config_file,
@@ -206,6 +206,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         DeclareLaunchArgument('enable_velocity_diagnostics', default_value='true'),
+        DeclareLaunchArgument('enable_legacy_velocity_logs', default_value='false'),
         DeclareLaunchArgument('log_dir', default_value=os.environ.get('SPDLOG_WRAPPER_LOG_DIR', '/tmp/nav2_logs')),
         DeclareLaunchArgument('velocity_file_log_frequency', default_value='100.0'),
         DeclareLaunchArgument('velocity_console_log_frequency', default_value='1.0'),ign_resource_path,

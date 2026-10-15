@@ -158,6 +158,7 @@ protected:
   double odom_duration_;
   double feedback_correction_time_ = 0.1;
   bool feedback_initialized_ = false;
+  bool legacy_velocity_logging_ = true;
   std::string odom_topic_;
   bool open_loop_;
   bool stopped_{true};

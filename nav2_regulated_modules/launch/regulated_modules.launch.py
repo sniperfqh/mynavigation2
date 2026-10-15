@@ -106,6 +106,9 @@ def generate_launch_description():
     use_respawn = LaunchConfiguration('use_respawn')
     log_level = LaunchConfiguration('log_level')
     operation_mode = LaunchConfiguration('operation_mode')
+    legacy_velocity_logging = PythonExpression([
+        "'", LaunchConfiguration('enable_legacy_velocity_logs'), "'.lower() == 'true' or '",
+        LaunchConfiguration('enable_velocity_diagnostics'), "'.lower() != 'true'"])
     adaptive_goal_braking_enabled = LaunchConfiguration('adaptive_goal_braking_enabled')
     enable_localization_jump_detection = LaunchConfiguration('enable_localization_jump_detection')
     fixed_path_progress_timeout = LaunchConfiguration('fixed_path_progress_timeout')
@@ -141,6 +144,8 @@ def generate_launch_description():
     remappings = [('/tf', 'tf'),('/tf_static', 'tf_static')]
 
     param_substitutions = {
+        **{node + '.ros__parameters.legacy_velocity_logging': legacy_velocity_logging
+           for node in ['regulated_navigator', 'velocity_smoother']},
         **{node + '.ros__parameters.' + key: value
            for node in ['controller_server', 'velocity_smoother', 'regulated_navigator']
            for key, value in {
@@ -422,7 +427,8 @@ def generate_launch_description():
                 name='controlpub',
                 output='both',
                 parameters=[{'input_topic': '/cmd_vel'},
-                            {'output_topic': '/control_to_uart'}]),
+                            {'output_topic': '/control_to_uart',
+                             'legacy_velocity_logging': ParameterValue(legacy_velocity_logging, value_type=bool)}]),
             Node(
                 package='nav2_lifecycle_manager',
                 executable='lifecycle_manager',
@@ -551,7 +557,8 @@ def generate_launch_description():
         name='controlpub',
         output='both',
         parameters=[{'input_topic': '/cmd_vel'},
-                    {'output_topic': '/control_to_uart'}])
+                    {'output_topic': '/control_to_uart',
+                     'legacy_velocity_logging': ParameterValue(legacy_velocity_logging, value_type=bool)}])
 
     ## ooii
     # 外部可视化按话题动态分配 Marker；默认订阅 Stop、Slowdown 和 L1。
@@ -596,6 +603,7 @@ def generate_launch_description():
     ld = LaunchDescription()
 
     ld.add_action(DeclareLaunchArgument('enable_velocity_diagnostics', default_value='true'))
+    ld.add_action(DeclareLaunchArgument('enable_legacy_velocity_logs', default_value='false'))
     ld.add_action(DeclareLaunchArgument('log_dir', default_value=EnvironmentVariable('SPDLOG_WRAPPER_LOG_DIR', default_value='/tmp/nav2_logs')))
     ld.add_action(DeclareLaunchArgument('velocity_file_log_frequency', default_value='100.0'))
     ld.add_action(DeclareLaunchArgument('velocity_console_log_frequency', default_value='1.0'))

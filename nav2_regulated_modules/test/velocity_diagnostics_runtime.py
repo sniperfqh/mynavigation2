@@ -13,13 +13,15 @@ from nav_msgs.msg import Odometry
 from byd_custom_msgs.msg import MotionState, ControlRes, ChassisControl
 
 
-def run_case(node, mode, collision=False, feedback='/motion_state', directory=None):
+def run_case(node, mode, collision=False, feedback='/motion_state', directory=None, shared_controller=False):
     root = pathlib.Path(directory or tempfile.mkdtemp(prefix='velocity-diag-'))
     capture = root / 'console.log' if directory is None else pathlib.Path(tempfile.mktemp(prefix='velocity-console-'))
     command = [get_package_prefix('nav2_regulated_modules') + '/lib/nav2_regulated_modules/velocity_diagnostics_node', '--ros-args',
                '-p', 'operation_mode:=' + mode, '-p', 'use_collision_monitor:=' + str(collision).lower(),
                '-p', 'smoother_output_topic:=' + ('cmd_vel_collision_in' if collision else 'cmd_vel'),
                '-p', 'smoother_feedback_topic:=' + feedback, '-p', 'log_dir:=' + str(root)]
+    if shared_controller:
+        command += ['-p', 'controller_feedback_topic:=motion_state']
     publishers = [(node.create_publisher(Twist, '/cmd_vel_nav', 10), Twist()),
                   (node.create_publisher(Twist, '/cmd_vel', 10), Twist()),
                   (node.create_publisher(Twist, '/cmd_vel_collision_in', 10), Twist()),
@@ -38,6 +40,7 @@ def run_case(node, mode, collision=False, feedback='/motion_state', directory=No
                     raise RuntimeError('DDS discovery timeout: ' + str(capture))
                 rclpy.spin_once(node, timeout_sec=0.05)
             start = time.monotonic()
+            assert publishers[4][0].get_subscription_count() == 1, 'MotionState source subscribed more than once'
             while time.monotonic() - start < 3.2:
                 elapsed = time.monotonic() - start
                 speed = 0.3 if elapsed < 1 else -0.3 if elapsed < 2 else float('nan') if 2.8 < elapsed < 3.0 else 0.0
@@ -48,6 +51,7 @@ def run_case(node, mode, collision=False, feedback='/motion_state', directory=No
                         msg.twist.twist.linear.x = speed
                     elif isinstance(msg, MotionState):
                         msg.v_car = speed
+                        msg.v_lift, msg.lift_height, msg.w_shelf, msg.yaw_shelf = .1, .2, .3, .4
                     elif isinstance(msg, ChassisControl):
                         msg.linear_velocity = speed
                         msg.op = 1
@@ -73,15 +77,22 @@ def run_case(node, mode, collision=False, feedback='/motion_state', directory=No
     for value in ('vx=0.300000', 'vx=-0.300000', 'vx=0.000000'):
         assert value in text, value
     stage = 'remote_out' if mode == 'remote' else 'controller_out/smoother_in'
-    samples = [float(x) for x in re.findall(r'\[debug\] velocity ros_time=([\d.]+) mode=' + mode + ' stage=' + stage, text)]
+    samples = [float(x) for x in re.findall(r'\[debug\] velocity ros_time=([\d.]+) mode=' + mode + ' schema=2', text)]
     hz = (len(samples)-1)/(samples[-1]-samples[0])
     assert 95 < hz < 105, hz
-    summaries = [line.split('[info] ', 1)[1] for line in console.splitlines() if '[info] velocity ' in line]
+    summaries = [line.split('[info] ', 1)[1] for line in console.splitlines() if '[info] velocity ros_time=' in line]
     assert all(line in text for line in summaries)
     assert 4 <= sum('stage=' + stage + ' ' in line for line in summaries) <= 20
     assert ('stage=collision_out/final_cmd' in text) == collision
     assert ('stage=chassis_control_in' in text) == (mode != 'remote')
     assert ('stage=controller_out/smoother_in' in text) == (mode != 'remote')
+    frames = [line for line in text.splitlines() if '[debug] velocity ros_time=' in line]
+    assert all(line.count('topic=/motion_state ') == 1 for line in frames)
+    assert 'v_lift=0.100000 lift_height=0.200000 w_shelf=0.300000 yaw_shelf=0.400000' in text
+    if mode != 'remote' and feedback.lstrip('/') == 'motion_state':
+        assert 'smoother_feedback,chassis_feedback' in text
+    if shared_controller:
+        assert 'stage=controller_feedback,smoother_feedback,chassis_feedback' in text
     print('PASS', mode, collision, feedback, 'file_hz=', round(hz, 2), root)
 
 
@@ -104,12 +115,14 @@ def run_rotation():
 
 
 if __name__ == '__main__':
+    assert int(os.environ.get('ROS_DOMAIN_ID', '0')) != 0, 'Use an isolated nonzero ROS_DOMAIN_ID'
     rclpy.init()
     node = rclpy.create_node('velocity_diagnostics_test')
     try:
         run_case(node, 'fixed_path')
         run_case(node, 'autonomous', True, '/odom')
         run_case(node, 'remote')
+        run_case(node, 'fixed_path', feedback='motion_state', shared_controller=True)
         run_case(node, 'fixed_path', directory='/proc/velocity-diagnostics-test')
         run_rotation()
     finally:

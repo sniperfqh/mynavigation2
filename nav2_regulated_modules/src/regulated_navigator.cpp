@@ -65,6 +65,7 @@ RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : na
   declare_parameter("smoothed_cmd_vel_topic", "cmd_vel");
   declare_parameter("velocity_odom_topic", "/odometry");
   declare_parameter("velocity_log_frequency", 1.0);
+  declare_parameter("legacy_velocity_logging", true);
   declare_parameter<std::string>("speed_limit_topic", "speed_limit");
   declare_parameter<std::string>("chassis_input_topic", "/downstream/chassis_control");
   declare_parameter<std::string>("chassis_output_topic", "/control_to_uart");
@@ -252,9 +253,12 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   }
   stop_cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>(get_parameter("stop_cmd_vel_topic").as_string(), rclcpp::SystemDefaultsQoS());
   const auto velocity_qos = rclcpp::QoS(rclcpp::KeepLast(10)).best_effort();
-  controller_velocity_sub_ = create_subscription<geometry_msgs::msg::Twist>(controller_cmd_vel_topic_, velocity_qos, std::bind(&RegulatedNavigator::onControllerVelocity, this, std::placeholders::_1));
-  smoothed_velocity_sub_ = create_subscription<geometry_msgs::msg::Twist>(smoothed_cmd_vel_topic_, velocity_qos, std::bind(&RegulatedNavigator::onSmoothedVelocity, this, std::placeholders::_1));
-  velocity_odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(velocity_odom_topic_, velocity_qos, std::bind(&RegulatedNavigator::onVelocityOdometry, this, std::placeholders::_1));
+  if (get_parameter("legacy_velocity_logging").as_bool())
+  {
+    controller_velocity_sub_ = create_subscription<geometry_msgs::msg::Twist>(controller_cmd_vel_topic_, velocity_qos, std::bind(&RegulatedNavigator::onControllerVelocity, this, std::placeholders::_1));
+    smoothed_velocity_sub_ = create_subscription<geometry_msgs::msg::Twist>(smoothed_cmd_vel_topic_, velocity_qos, std::bind(&RegulatedNavigator::onSmoothedVelocity, this, std::placeholders::_1));
+    velocity_odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(velocity_odom_topic_, velocity_qos, std::bind(&RegulatedNavigator::onVelocityOdometry, this, std::placeholders::_1));
+  }
   speed_limit_pub_ = this->create_publisher<nav2_msgs::msg::SpeedLimit>( speed_limit_topic_, rclcpp::QoS(10));
 
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
@@ -262,8 +266,11 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   const auto feedback_period = std::chrono::duration<double>(1.0 / feedback_frequency_);
   feedback_timer_ = create_wall_timer(std::chrono::duration_cast<std::chrono::milliseconds>(feedback_period), std::bind(&RegulatedNavigator::publishFeedback, this));
   monitor_timer_ = create_wall_timer(200ms, std::bind(&RegulatedNavigator::monitorTask, this));
-  const auto velocity_log_period = std::chrono::duration<double>(1.0 / velocity_log_frequency_);
-  velocity_log_timer_ = create_wall_timer(std::chrono::duration_cast<std::chrono::milliseconds>(velocity_log_period), std::bind(&RegulatedNavigator::logVelocityChain, this));
+  if (get_parameter("legacy_velocity_logging").as_bool())
+  {
+    const auto velocity_log_period = std::chrono::duration<double>(1.0 / velocity_log_frequency_);
+    velocity_log_timer_ = create_wall_timer(std::chrono::duration_cast<std::chrono::milliseconds>(velocity_log_period), std::bind(&RegulatedNavigator::logVelocityChain, this));
+  }
 
   LOG_INFO("独立规控导航器配置完成，operation_mode={}，定位跳变保护={}，平移阈值={:.3f}m，旋转阈值={:.3f}rad，速度日志={}Hz，反馈={}，控制器输出={}，平滑器输出={}", operation_mode, enable_localization_jump_detection_ ? "启用" : "关闭", max_translation_jump_, max_rotation_jump_, velocity_log_frequency_, velocity_odom_topic_, controller_cmd_vel_topic_, smoothed_cmd_vel_topic_);
   return nav2_util::CallbackReturn::SUCCESS;

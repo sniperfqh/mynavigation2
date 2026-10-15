@@ -13,6 +13,7 @@ namespace nav2_regulated_modules
 // 订阅底盘运动状态并保存最近一次有效反馈及时间戳。
 MotionStateSubscriber::MotionStateSubscriber(nav2_util::LifecycleNode & node)
 {
+  node.get_parameter_or("legacy_velocity_logging", legacy_velocity_logging_, true);
   subscription_ = node.create_subscription<byd_custom_msgs::msg::MotionState>("/motion_state", rclcpp::SensorDataQoS(), std::bind(&MotionStateSubscriber::onMotionState, this, std::placeholders::_1));
 }
 
@@ -31,7 +32,10 @@ void MotionStateSubscriber::onMotionState(const byd_custom_msgs::msg::MotionStat
     latest_state_.receive_time = std::chrono::steady_clock::now();
     latest_state_.valid = true;
   }
-  LOG_DEBUG("收到 MotionState：v_car={}，w_car={}，v_lift={}，lift_height={}，w_shelf={}，yaw_shelf={}", message->v_car, message->w_car, message->v_lift, message->lift_height, message->w_shelf, message->yaw_shelf);
+  if (legacy_velocity_logging_)
+  {
+    LOG_DEBUG("收到 MotionState：v_car={}，w_car={}，v_lift={}，lift_height={}，w_shelf={}，yaw_shelf={}", message->v_car, message->w_car, message->v_lift, message->lift_height, message->w_shelf, message->yaw_shelf);
+  }
 }
 
 // 返回最近一次运动状态；时间戳过期时不得当作实时反馈。

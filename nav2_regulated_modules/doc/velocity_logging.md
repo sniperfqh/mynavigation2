@@ -1,5 +1,15 @@
 # 速度链日志
 
+## 统一输出约定（2026-10-15）
+
+两套入口默认启用统一诊断；文件仍为 100 Hz，每帧一行 `velocity … schema=2`，终端每秒一行摘要。按解析后的实际话题和消息类型共用采样，`stage` 保存该来源的所有角色；共享来源的计数、接收年龄和状态保持一致。MotionState 同时保留升降／货架四项反馈。快照保留来源编号、实际话题及角色，使滚动文件独立可读；时间和模式每帧仅记录一次。
+
+`enable_legacy_velocity_logs:=false` 为两套入口默认值；统一诊断开启时，导航器逐帧反馈／旧速度摘要、平滑器原始输入及 controlpub 的重复终端摘要关闭。`enable_velocity_diagnostics:=false` 自动恢复这些原有记录；显式 `enable_legacy_velocity_logs:=true` 可同时开启详细排查。独立运行这些节点时默认保留原日志。参数需重启或生命周期重新 configure，不支持热切换。
+
+S 曲线仍逐实际控制周期写入文件，每周期合并三轴为一行，保留各轴输入、反馈参考、校正目标、输出、加速度、jerk、限制及 collision 字段；controlpub 串口出口逐帧文件记录保留。任务事件、终点误差、异常与 ROS launch 双路留存保持。
+
+仅合并日志，不将周期快照变为逐消息归档，不改变控制计算或发布。独立诊断进程异常退出时不会自动切换旧日志；关闭诊断需重新启动入口。ROS 转接日志保留原 logger 名称，组件内 S 曲线显式携带节点名。
+
 `regulated_modules.launch.py` 默认启动独立 `velocity_diagnostics_node`，只订阅话题，不发布运动指令。
 
 ```bash
@@ -45,6 +55,6 @@ ROS_DOMAIN_ID=167 ROS_LOG_DIR=/tmp/velocity-diagnostics-ros python3 nav2_ws/src/
 
 普通零指令和输入超时平滑制动，强制 `immediate_stop_on_zero_command=false`；下游碰撞监控急停保持现有处理。速度上限话题降低时先平滑制动，输出不能瞬时跳到新目标。
 
-`<log_dir>/nav2_velocity_smoother/velocity_smoother.log` 在每个实际平滑周期记录 `S-curve axis`、单调时钟 dt、输入、反馈参考、校正目标、实际输出、由输出差分得到的 accel／jerk 及其限制。x/y/theta 轴编号为 0/1/2，线 jerk 单位 m/s³、角 jerk 单位 rad/s³。组件模式日志可能归入该容器首先初始化的共享 logger 文件，可按 `S-curve axis` 检索。原速度链文件 100 Hz 和终点误差 1 Hz 保留。
+`<log_dir>/nav2_velocity_smoother/velocity_smoother.log` 在每个实际平滑周期记录一条 `S-curve node=… dt=…`，三个 `[axis=…]` 块包含输入、反馈参考、校正目标、实际输出、由输出差分得到的 accel／jerk。各轴 `limits` 顺序为 max_accel／max_decel／max_accel_jerk／max_decel_jerk。x/y/theta 轴编号为 0/1/2，线 jerk 单位 m/s³、角 jerk 单位 rad/s³。组件模式日志可能归入该容器首先初始化的共享 logger 文件，可按 `S-curve node=` 检索节点身份。离线 `verify_jerk_log.py` 同时支持旧逐轴格式和新合并格式。原速度链文件 100 Hz 和终点误差 1 Hz 保留。
 
 已完成一次短时消息与一次 0.3 m/s 停车测试，报告在项目 `readme/test_reports/2026-10-10-jerk-smoother`；没有全速度及实车验收。

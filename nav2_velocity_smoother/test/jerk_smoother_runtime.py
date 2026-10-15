@@ -7,7 +7,7 @@ import signal
 import subprocess
 import time
 import rclpy
-from verify_jerk_log import verify_log
+from verify_jerk_log import verify_log, curve_rows
 from ament_index_python.packages import get_package_prefix
 from geometry_msgs.msg import Twist
 from nav_msgs.msg import Odometry
@@ -15,8 +15,10 @@ from lifecycle_msgs.srv import ChangeState
 from rcl_interfaces.srv import SetParameters
 from rclpy.parameter import Parameter
 
-root = Path('/tmp/jerk-smoother-runtime-20261010')
+assert int(os.environ.get('ROS_DOMAIN_ID', '0')) != 0, 'Use an isolated nonzero ROS_DOMAIN_ID'
+root = Path(os.environ.get('JERK_TEST_OUTPUT_DIR', '/tmp/jerk-smoother-runtime-20261010'))
 root.mkdir(exist_ok=True)
+legacy_logging = os.environ.get('JERK_TEST_LEGACY_LOGGING', 'true')
 env = os.environ.copy()
 env['SPDLOG_WRAPPER_LOG_DIR'] = str(root / 'spdlog')
 env['SPDLOG_WRAPPER_FILE_LEVEL'] = 'debug'
@@ -41,6 +43,7 @@ def await_result(future, timeout=5):
 try:
     with (root / 'console.log').open('w') as output:
         process = subprocess.Popen([executable, '--ros-args', '-p', 'smoothing_frequency:=100.0',
+                                    '-p', 'legacy_velocity_logging:=' + legacy_logging,
                                     '-p', 'jerk_limited_smoothing:=true', '-p', 'feedback:=CLOSED_LOOP',
                                     '-p', 'odom_topic:=/jerk_feedback', '-p', 'immediate_stop_on_zero_command:=true',
                                     '-r', 'cmd_vel:=/jerk_input', '-r', 'cmd_vel_smoothed:=/jerk_output'],
@@ -82,11 +85,11 @@ finally:
 assert process.returncode == 0
 log = (root / 'spdlog/nav2_velocity_smoother/velocity_smoother.log').read_text()
 assert 'S-curve enabled' in log
+assert ('Received raw cmd_vel' in log) == (legacy_logging == 'true')
 records = []
-pattern = r'S-curve axis=(\d+) dt=([\d.]+) input=([\d.-]+) feedback_reference=([\d.-]+) target=([\d.-]+) output=([\d.-]+) accel=([\d.-]+) jerk=([\d.-]+)'
-for match in re.finditer(pattern, log):
-    axis, dt, requested, feedback, target, output, accel, jerk = map(float, match.groups())
-    records.append([axis, dt, requested, feedback, target, output, accel, jerk])
+for line in log.splitlines():
+    for row in curve_rows(line):
+        records.append([row[key] for key in ['axis', 'dt', 'input', 'feedback_reference', 'target', 'output', 'accel', 'jerk']])
 validation = verify_log(root / 'spdlog/nav2_velocity_smoother/velocity_smoother.log')
 assert len(records) > 900
 assert any(x[2] > 0 for x in records) and any(x[2] < 0 for x in records)

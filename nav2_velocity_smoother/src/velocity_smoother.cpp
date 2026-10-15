@@ -52,6 +52,8 @@ nav2_util::CallbackReturn VelocitySmoother::on_configure(const rclcpp_lifecycle:
 
   // Smoothing metadata
   declare_parameter_if_not_declared(node, "smoothing_frequency", rclcpp::ParameterValue(20.0));
+  declare_parameter_if_not_declared(node, "legacy_velocity_logging", rclcpp::ParameterValue(true));
+  node->get_parameter("legacy_velocity_logging", legacy_velocity_logging_);
   declare_parameter_if_not_declared(node, "feedback", rclcpp::ParameterValue(std::string("OPEN_LOOP")));
   declare_parameter_if_not_declared(node, "scale_velocities", rclcpp::ParameterValue(false));
   declare_parameter_if_not_declared(node, "immediate_stop_on_zero_command", rclcpp::ParameterValue(false));
@@ -270,7 +272,10 @@ void VelocitySmoother::inputCommandCallback(const geometry_msgs::msg::Twist::Sha
 
   command_ = msg;
   last_command_time_ = now();
-  LOG_DEBUG("Received raw cmd_vel linear=({:.3f}, {:.3f}) angular_z={:.3f}", msg->linear.x, msg->linear.y, msg->angular.z);
+  if (legacy_velocity_logging_)
+  {
+    LOG_DEBUG("Received raw cmd_vel linear=({:.3f}, {:.3f}) angular_z={:.3f}", msg->linear.x, msg->linear.y, msg->angular.z);
+  }
 }
 
 geometry_msgs::msg::Twist VelocitySmoother::feedbackReference(const geometry_msgs::msg::Twist & feedback) const
@@ -424,6 +429,8 @@ void VelocitySmoother::smootherTimer() {
       }
     }
     std::array<double, 3> output;
+    std::string curve_log;
+    const bool curve_logging = spdlog::default_logger()->should_log(spdlog::level::debug);
     for (size_t i = 0; i < 3; ++i)
     {
       const double low = i == 0 ? std::max(min_velocities_[i], target_minvx_) : min_velocities_[i];
@@ -447,15 +454,20 @@ void VelocitySmoother::smootherTimer() {
       const double old_acceleration = jerk_profiles_[i].acceleration();
       output[i] = jerk_profiles_[i].advance(previous[i], target, dt, max_accels_[i], -max_decels_[i], max_accel_jerks_[i], max_decel_jerks_[i], min_velocities_[i], max_velocities_[i]);
       const double acceleration = jerk_profiles_[i].acceleration();
-      if (collision_state_enabled_)
+      if (curve_logging)
       {
-        LOG_DEBUG("S-curve collision axis={} dt={:.9f} raw={:.9f} selected={:.9f} feedback_reference={:.9f} target={:.9f} output={:.9f} accel={:.9f} jerk={:.9f} state={} age={:.6f} task={:.6f} cap={:.6f}", i, dt, raw_requested[i], requested[i], reference[i], target, output[i], acceleration, (acceleration - old_acceleration) / dt, collision.effective, collision.age, collision_task_speed_, collision_task_speed_ * collision.ratio());
-      }
-      else
-      {
-        LOG_DEBUG("S-curve axis={} dt={:.9f} input={:.9f} feedback_reference={:.9f} target={:.9f} output={:.9f} accel={:.9f} jerk={:.9f} max_accel={} max_decel={} max_accel_jerk={} max_decel_jerk={}", i, dt, requested[i], reference[i], target, output[i], acceleration, (acceleration - old_acceleration) / dt, max_accels_[i], max_decels_[i], max_accel_jerks_[i], max_decel_jerks_[i]);
+        if (collision_state_enabled_)
+        {
+          curve_log += fmt::format(" [axis={} raw={:.9f} selected={:.9f} feedback_reference={:.9f} target={:.9f} output={:.9f} accel={:.9f} jerk={:.9f}", i, raw_requested[i], requested[i], reference[i], target, output[i], acceleration, (acceleration - old_acceleration) / dt);
+        }
+        else
+        {
+          curve_log += fmt::format(" [axis={} input={:.9f} feedback_reference={:.9f} target={:.9f} output={:.9f} accel={:.9f} jerk={:.9f}", i, requested[i], reference[i], target, output[i], acceleration, (acceleration - old_acceleration) / dt);
+        }
+        curve_log += fmt::format(" limits=({},{},{},{})]", max_accels_[i], max_decels_[i], max_accel_jerks_[i], max_decel_jerks_[i]);
       }
     }
+    LOG_DEBUG("S-curve node={} dt={:.9f} collision={} state={} age={:.6f} task={:.6f} cap={:.6f}{}", get_node_base_interface()->get_fully_qualified_name(), dt, collision_state_enabled_, collision.effective, collision.age, collision_task_speed_, collision_task_speed_ * collision.ratio(), curve_log);
     cmd_vel->linear.x = output[0];
     cmd_vel->linear.y = output[1];
     cmd_vel->angular.z = output[2];

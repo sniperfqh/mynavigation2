@@ -119,7 +119,7 @@ def generate_launch_description():
             'container_name': container_name,
             'use_respawn': use_respawn,
             'log_level': log_level,
-            **{key: LaunchConfiguration(key) for key in ['enable_velocity_diagnostics', 'log_dir', 'velocity_file_log_frequency', 'velocity_console_log_frequency']},
+            **{key: LaunchConfiguration(key) for key in ['enable_velocity_diagnostics', 'enable_legacy_velocity_logs', 'log_dir', 'velocity_file_log_frequency', 'velocity_console_log_frequency']},
             'fixed_path_goal_braking_distance_margin': fixed_path_goal_braking_distance_margin,
             'operation_mode': operation_mode,
             'enable_localization_jump_detection': enable_localization_jump_detection,
@@ -129,6 +129,7 @@ def generate_launch_description():
 
     return LaunchDescription([
         DeclareLaunchArgument('enable_velocity_diagnostics', default_value='true'),
+        DeclareLaunchArgument('enable_legacy_velocity_logs', default_value='false'),
         DeclareLaunchArgument('log_dir', default_value=os.environ.get('SPDLOG_WRAPPER_LOG_DIR', '/tmp/nav2_logs')),
         DeclareLaunchArgument('velocity_file_log_frequency', default_value='100.0'),
         DeclareLaunchArgument('velocity_console_log_frequency', default_value='1.0'),

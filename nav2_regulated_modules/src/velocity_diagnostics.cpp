@@ -62,8 +62,9 @@ public:
       {
         addTwist("collision_out/final_cmd", "cmd_vel");
       }
-      auto chassis = addStage("chassis_control_in", declare_parameter("chassis_input_topic", std::string("/downstream/chassis_control")));
-      subscriptions_.push_back(create_subscription<byd_custom_msgs::msg::ChassisControl>(chassis->topic, rclcpp::SensorDataQoS(), [this, chassis](byd_custom_msgs::msg::ChassisControl::ConstSharedPtr msg)
+      const auto chassis_topic = declare_parameter("chassis_input_topic", std::string("/downstream/chassis_control"));
+      auto chassis = addStage("chassis_control_in", chassis_topic, "ChassisControl");
+      subscriptions_.push_back(create_subscription<byd_custom_msgs::msg::ChassisControl>(chassis_topic, rclcpp::SensorDataQoS(), [this, chassis](byd_custom_msgs::msg::ChassisControl::ConstSharedPtr msg)
       {
         chassis->op = msg->op;
         update(chassis, msg->linear_velocity, msg->angular_velocity);
@@ -71,21 +72,18 @@ public:
       const auto chassis_output = declare_parameter("chassis_output_topic", std::string("/control_to_uart"));
       if (chassis_output != "/control_to_uart")
       {
-        auto stage = addStage("chassis_control_out", chassis_output);
-        subscriptions_.push_back(create_subscription<byd_custom_msgs::msg::ControlRes>(stage->topic, rclcpp::SensorDataQoS(), [this, stage](byd_custom_msgs::msg::ControlRes::ConstSharedPtr msg)
-        {
-          update(stage, msg->v, msg->w);
-        }));
+        addControlRes("chassis_control_out", chassis_output);
       }
       addFeedback("controller_feedback", controller_feedback);
       addFeedback("smoother_feedback", feedback_topic);
     }
     addFeedback("chassis_feedback", "/motion_state");
-    auto uart = addStage(mode_ == "remote" ? "remote_out" : "uart_out", "/control_to_uart");
-    subscriptions_.push_back(create_subscription<byd_custom_msgs::msg::ControlRes>(uart->topic, rclcpp::SensorDataQoS(), [this, uart](byd_custom_msgs::msg::ControlRes::ConstSharedPtr msg)
+    addControlRes(mode_ == "remote" ? "remote_out" : "uart_out", "/control_to_uart");
+    for (size_t i = 0; i < stages_.size(); ++i)
     {
-      update(uart, msg->v, msg->w);
-    }));
+      const auto & stage = stages_[i];
+      log_->info("velocity source id={} stage={} topic={} type={}", i, stage->name, stage->topic, stage->type);
+    }
     file_timer_ = create_wall_timer(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(1.0 / file_hz)), [this]()
     {
       snapshot(spdlog::level::debug);
@@ -100,6 +98,12 @@ private:
   {
     std::string name;
     std::string topic;
+    std::string type;
+    bool subscribed = false;
+    double v_lift = 0.0;
+    double lift_height = 0.0;
+    double w_shelf = 0.0;
+    double yaw_shelf = 0.0;
     double v = 0.0;
     double w = 0.0;
     int op = -1;
@@ -107,11 +111,21 @@ private:
     bool finite = false;
     std::chrono::steady_clock::time_point received;
   };
-  std::shared_ptr<Stage> addStage(const std::string & name, const std::string & topic)
+  std::shared_ptr<Stage> addStage(const std::string & name, const std::string & topic, const std::string & type)
   {
+    const auto resolved = get_node_topics_interface()->resolve_topic_name(topic);
+    for (const auto & existing : stages_)
+    {
+      if (existing->topic == resolved && existing->type == type)
+      {
+        existing->name += "," + name;
+        return existing;
+      }
+    }
     auto stage = std::make_shared<Stage>();
     stage->name = name;
-    stage->topic = topic;
+    stage->topic = resolved;
+    stage->type = type;
     stages_.push_back(stage);
     return stage;
   }
@@ -125,7 +139,12 @@ private:
   }
   void addTwist(const std::string & name, const std::string & topic)
   {
-    auto stage = addStage(name, topic);
+    auto stage = addStage(name, topic, "Twist");
+    if (stage->subscribed)
+    {
+      return;
+    }
+    stage->subscribed = true;
     subscriptions_.push_back(create_subscription<geometry_msgs::msg::Twist>(topic, rclcpp::SensorDataQoS(), [this, stage](geometry_msgs::msg::Twist::ConstSharedPtr msg)
     {
       update(stage, msg->linear.x, msg->angular.z);
@@ -133,12 +152,22 @@ private:
   }
   void addFeedback(const std::string & name, const std::string & topic)
   {
-    auto stage = addStage(name, topic);
-    if (topic.substr(topic.find_last_of('/') + 1) == "motion_state")
+    const bool motion = topic.substr(topic.find_last_of('/') + 1) == "motion_state";
+    auto stage = addStage(name, topic, motion ? "MotionState" : "Odometry");
+    if (stage->subscribed)
+    {
+      return;
+    }
+    stage->subscribed = true;
+    if (motion)
     {
       subscriptions_.push_back(create_subscription<byd_custom_msgs::msg::MotionState>(topic, rclcpp::SensorDataQoS(), [this, stage](byd_custom_msgs::msg::MotionState::ConstSharedPtr msg)
       {
         update(stage, msg->v_car, msg->w_car);
+        stage->v_lift = msg->v_lift;
+        stage->lift_height = msg->lift_height;
+        stage->w_shelf = msg->w_shelf;
+        stage->yaw_shelf = msg->yaw_shelf;
       }));
     }
     else
@@ -149,16 +178,37 @@ private:
       }));
     }
   }
+  void addControlRes(const std::string & name, const std::string & topic)
+  {
+    auto stage = addStage(name, topic, "ControlRes");
+    if (stage->subscribed)
+    {
+      return;
+    }
+    stage->subscribed = true;
+    subscriptions_.push_back(create_subscription<byd_custom_msgs::msg::ControlRes>(topic, rclcpp::SensorDataQoS(), [this, stage](byd_custom_msgs::msg::ControlRes::ConstSharedPtr msg)
+    {
+      update(stage, msg->v, msg->w);
+    }));
+  }
   void snapshot(spdlog::level::level_enum level)
   {
     const auto steady = std::chrono::steady_clock::now();
     const auto ros_time = now().seconds();
-    for (const auto & stage : stages_)
+    std::string frame;
+    for (size_t i = 0; i < stages_.size(); ++i)
     {
+      const auto & stage = stages_[i];
       const double age = stage->count ? std::chrono::duration<double>(steady - stage->received).count() : -1.0;
       const auto status = !stage->count ? "missing" : !stage->finite ? "invalid" : age > stale_seconds_ ? "stale" : "valid";
-      log_->log(level, "velocity ros_time={:.9f} mode={} stage={} topic={} vx={:.6f} wz={:.6f} count={} age={:.6f} status={} op={}", ros_time, mode_, stage->name, stage->topic, stage->v, stage->w, stage->count, age, status, stage->op);
+      frame += fmt::format(" [src={} stage={} topic={} vx={:.6f} wz={:.6f} count={} age={:.6f} status={} op={}", i, stage->name, stage->topic, stage->v, stage->w, stage->count, age, status, stage->op);
+      if (stage->type == "MotionState")
+      {
+        frame += fmt::format(" v_lift={:.6f} lift_height={:.6f} w_shelf={:.6f} yaw_shelf={:.6f}", stage->v_lift, stage->lift_height, stage->w_shelf, stage->yaw_shelf);
+      }
+      frame += "]";
     }
+    log_->log(level, "velocity ros_time={:.9f} mode={} schema=2{}", ros_time, mode_, frame);
   }
   // 单线程执行器串行执行订阅和采样，无需占用控制节点的锁。
   std::string mode_;
