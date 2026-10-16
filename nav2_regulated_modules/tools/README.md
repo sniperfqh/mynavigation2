@@ -1,4 +1,21 @@
-# fixed_path 停车效率实验
+# fixed_path 测试与验收工具
+
+## 工具选择
+
+| 工具 | 环境与行为 | 说明 |
+|---|---|---|
+| [collision_action_test.py](collision_action_test.py) | 连接已有仿真，发送自身 Action 并发布状态 | periodic／cruise 均 50 Hz；前进／倒车、CSV、曲线和响应分类见 [COLLISION_TEST.md](COLLISION_TEST.md) |
+| [action_only_speed_sweep.py](action_only_speed_sweep.py) | 连接已有环境执行速度矩阵 | 有预设参数和端点校验，不是任意场景通用客户端；见[分开验收](../doc/action_only_acceptance.md) |
+| [stationary_acceptance.py](stationary_acceptance.py) | 纯窗口评估辅助 | 分别计算速度停稳、定位覆盖和采样误差 |
+| [run_speed_case.py](run_speed_case.py) | 在隔离域启动／复位仿真实验、发送任务 | 会改变自己实验环境；使用前阅读下文实验几何与条件 |
+
+先在 nav2_ws 构建并加载环境。周期工具默认 schedule=cruise、return-direction=forward；要周期切换并倒车返回，须显式传 `--schedule periodic --return-direction backward`。周期状态为 4→3→2→1→0，默认保持 4／3／3／3／3 秒，不等待达速，不在换程重置。
+
+周期工具退出会发布停止并取消自身 UUID，不能用于证明独立发布进程消失后原任务的断流停车与恢复。首次尚未收到状态为 4；收到后断流 0.5 秒停车，配置语义见[规控说明](../README.md)。
+
+本 README 下方保留隔离停车效率实验的既有协议，历史实验条件不等于当前生产默认值。历史结果与新场景的定位／速度验收应分别记录，未运行不写成通过。
+
+## 隔离停车效率实验
 
 本目录用于隔离 Gazebo 筛选与验收，不会自动覆盖生产 YAML、提交或推送。
 

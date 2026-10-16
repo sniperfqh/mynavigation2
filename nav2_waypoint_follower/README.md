@@ -1,5 +1,21 @@
 # Nav2 Waypoint Follower
 
+## 当前项目用法
+
+把路点列表编排为导航任务，并在路点执行等待、拍照或输入触发等插件。
+
+包类型：路点服务器。包名和构建依赖见 [package.xml](package.xml)，安装目标见 [CMakeLists.txt](CMakeLists.txt)。
+
+主要目录：[src/](src/)、[include/](include/)、[plugins/](plugins/)、[test/](test/)。
+
+直接依赖（清单节选，完整约束见 manifest）：`cv_bridge`、`image_transport`、`nav2_common`、`nav2_core`、`nav2_msgs`、`nav2_util`、`nav_msgs`、`pluginlib`、`rclcpp`、`rclcpp_action`、`rclcpp_lifecycle`、`spdlog_wrapper` 等。
+
+插件声明：[plugins.xml](plugins.xml)。插件由对应宿主加载，插件类名以声明 XML 为准。
+
+构建命令统一从 `nav2_ws` 执行，详见[仓库构建与包索引](../README.md)；不在包源码目录运行 colcon。本文依据当前源码描述职责，包存在、可构建或包含测试文件均不代表完成运行验收。
+
+## 原有说明与上游资料
+
 The Nav2 waypoint follower is an example application of how to use the navigation action to complete some sort of orchestrated task. In this example, that task is to take a given set of waypoints and navigate to a set of positions in the order provided in the action request. The last waypoint in the waypoint array is the final position. It was built by [Steve Macenski](https://www.linkedin.com/in/steve-macenski-41a985101/) while at [Samsung Research](https://www.sra.samsung.com/).
 
 See its [Configuration Guide Page](https://navigation.ros.org/configuration/packages/configuring-waypoint-follower.html) for additional parameter descriptions.
@@ -30,7 +46,7 @@ Neither is better than the other, it highly depends on the tasks your robot(s) a
 
 ## 中文翻译
 
-# Nav2 Waypoint Follower
+### Nav2 Waypoint Follower
 
 Waypoint Follower 是一个使用导航 Action 完成编排任务的示例应用。它接收一组航点，按请求顺序导航到各个位置，最后一个航点是终点；follow_waypoints Action 返回当前处理索引的反馈，并返回未完成的航点列表。
 

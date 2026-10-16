@@ -112,21 +112,34 @@ TEST_F(CollisionProgressTest, StopWaitsPastDeadlineAndResumeRestartsChecker)
   EXPECT_THROW(node->check(), nav2_core::PlannerException);
 }
 
-TEST_F(CollisionProgressTest, InitialInvalidAndExpiredStatePause)
+TEST_F(CollisionProgressTest, InitialAllowsProgressInvalidAndExpiredStatePause)
 {
   auto node = std::make_shared<CollisionController>();
   node->prepare();
   EXPECT_NO_THROW(node->check());
-  EXPECT_TRUE(node->paused());
+  EXPECT_FALSE(node->paused());
   node->state(255);
   EXPECT_NO_THROW(node->check());
+  EXPECT_TRUE(node->paused());
   node->state(4);
   EXPECT_NO_THROW(node->check());
+  EXPECT_FALSE(node->paused());
   std::this_thread::sleep_for(std::chrono::milliseconds(510));
   EXPECT_NO_THROW(node->check());
   EXPECT_TRUE(node->paused());
   node->state(4);
   EXPECT_NO_THROW(node->check());
+}
+
+TEST_F(CollisionProgressTest, NeverReceivedStillChecksProgressDeadline)
+{
+  auto node = std::make_shared<CollisionController>();
+  node->prepare();
+  EXPECT_NO_THROW(node->check());
+  EXPECT_FALSE(node->paused());
+  std::this_thread::sleep_for(std::chrono::milliseconds(80));
+  EXPECT_THROW(node->check(), nav2_core::PlannerException);
+  EXPECT_FALSE(node->paused());
 }
 
 TEST_F(CollisionProgressTest, DisabledOrNonterminalControllerStillTimesOut)

@@ -1,5 +1,27 @@
 # Nav2 Route Server
 
+## 当前项目用法
+
+从路网图搜索路线，并通过边评分和路线操作插件处理路线任务；不同于栅格 Planner Server。
+
+包类型：路网服务器与插件。包名和构建依赖见 [package.xml](package.xml)，安装目标见 [CMakeLists.txt](CMakeLists.txt)。
+
+主要目录：[src/](src/)、[include/](include/)、[test/](test/)。
+
+直接依赖（清单节选，完整约束见 manifest）：`angles`、`geometry_msgs`、`libnanoflann-dev`、`nav2_common`、`nav2_core`、`nav2_costmap_2d`、`nav2_msgs`、`nav2_util`、`nav_msgs`、`nlohmann-json-dev`、`pluginlib`、`rclcpp` 等。
+
+插件声明：[plugins.xml](plugins.xml)。插件由对应宿主加载，插件类名以声明 XML 为准。
+
+使用方式：在宿主服务器的插件列表和参数块中配置导出的类；仅构建本包不会自动切换当前运行控制器或规划器。
+
+### 本项目接入说明
+
+包内 test/ 是开发测试源码；历史全量构建使用 BUILD_TESTING=OFF，不代表这些测试已通过。默认规控链不因本包已安装而自动改用路网导航。
+
+构建命令统一从 `nav2_ws` 执行，详见[仓库构建与包索引](../README.md)；不在包源码目录运行 colcon。本文依据当前源码描述职责，包存在、可构建或包含测试文件均不代表完成运行验收。
+
+## 原有说明与上游资料
+
 The Route Server is a Nav2 Task server to compliment the Planner Server's free-space planning capabilities with pre-defined Navigation Route Graph planning, created by [Steve Macenski](https://www.linkedin.com/in/steve-macenski-41a985101/) at [Open Navigation](https://www.opennav.org/) with assistance from [Josh Wallace](https://www.linkedin.com/in/joshua-wallace-b4848a113/) at Locus Robotics. It can be used to:
 * Fully replace free-space planning when following a particular route closely is required (less Controller plugins' tuning to deviate or track the path closely), or
 * Augment the global planner with long-distance routing to a goal and using free-space feasible planning in a more localized fashion for the immediate 10m, 100m, etc future.
@@ -430,7 +452,7 @@ Note that there are parameters like `prune_route`, `min_prune_distance_from_star
 
 ## 中文翻译
 
-# Nav2 Route Server
+### Nav2 Route Server
 
 Route Server 用预先定义的 Navigation Route Graph 补充 Planner Server 的自由空间规划。路线图可以手工生成，也可以通过 AI、几何或概率方法生成；服务器使用基于搜索的最优算法在图中寻找有效路线，并通过插件化 Edge Scorer 根据距离、时间、Costmap、语义和应用自定义信息计算边代价。
 

@@ -17,8 +17,8 @@ namespace nav2_util
 
 struct CollisionStateSnapshot
 {
-  uint8_t raw = 0;
-  uint8_t effective = 0;
+  uint8_t raw = 4;
+  uint8_t effective = 4;
   double age = -1.0;
   bool received = false;
   bool expired = false;
@@ -54,14 +54,14 @@ public:
     std::lock_guard<std::mutex> lock(mutex_);
     timeout_ = timeout;
     received_ = false;
-    raw_ = 0;
+    raw_ = 4;
   }
 
   void reset()
   {
     std::lock_guard<std::mutex> lock(mutex_);
     received_ = false;
-    raw_ = 0;
+    raw_ = 4;
   }
 
   void update(uint8_t state, TimePoint stamp = Clock::now())
@@ -90,7 +90,7 @@ public:
 private:
   mutable std::mutex mutex_;
   double timeout_ = 0.5;
-  uint8_t raw_ = 0;
+  uint8_t raw_ = 4;
   bool received_ = false;
   TimePoint stamp_;
 };

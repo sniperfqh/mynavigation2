@@ -1,5 +1,21 @@
 # nav2_bringup
 
+## 当前项目用法
+
+提供标准 Nav2 的导航、定位、组合节点和示例仿真启动资源。
+
+包类型：标准启动包。包名和构建依赖见 [package.xml](package.xml)，安装目标见 [CMakeLists.txt](CMakeLists.txt)。
+
+主要目录：[launch/](launch/)、[params/](params/)、[maps/](maps/)。
+
+直接依赖（清单节选，完整约束见 manifest）：`launch_ros`、`mytb3_bringup`、`nav2_common`、`navigation2`、`ros_gz_bridge`、`ros_gz_sim`、`slam_toolbox`。
+
+启动资源：[bringup_launch.py](launch/bringup_launch.py)、[cloned_multi_tb3_simulation_launch.py](launch/cloned_multi_tb3_simulation_launch.py)、[localization_launch.py](launch/localization_launch.py)、[navigation_launch.py](launch/navigation_launch.py)、[rviz_launch.py](launch/rviz_launch.py)、[slam_launch.py](launch/slam_launch.py)；其余见 launch/。执行前先加载工作空间环境，具体依赖由所选入口决定。
+
+构建命令统一从 `nav2_ws` 执行，详见[仓库构建与包索引](../README.md)；不在包源码目录运行 colcon。本文依据当前源码描述职责，包存在、可构建或包含测试文件均不代表完成运行验收。
+
+## 原有说明与上游资料
+
 The `nav2_bringup` package is an example bringup system for Nav2 applications.
 
 This is a very flexible example for nav2 bringup that can be modified for different maps/robots/hardware/worlds/etc. It is our expectation for an application specific robot system that you're mirroring `nav2_bringup` package and modifying it for your specific maps/robots/bringup needs. This is an applied and working demonstration for the default system bringup with many options that can be easily modified.
@@ -35,7 +51,7 @@ ros2 launch nav2_bringup cloned_multi_tb3_simulation_launch.py robots:="robot1={
 
 ## 中文翻译
 
-# nav2_bringup
+### nav2_bringup
 
 nav2_bringup 是 Nav2 应用的示例启动包，提供可按地图、机器人、硬件和仿真世界复制修改的默认 Bringup。实际机器人通常创建 robot_name_nav 包，复制本包结构后替换自己的配置和启动资产。
 

@@ -1,5 +1,25 @@
 # Nav2 Collision Monitor
 
+## 当前项目用法
+
+依据 LaserScan、PointCloud2、Range 等传感器与配置区域，对输入速度实施停车、减速或接近保护。
+
+包类型：速度过滤节点。包名和构建依赖见 [package.xml](package.xml)，安装目标见 [CMakeLists.txt](CMakeLists.txt)。
+
+主要目录：[src/](src/)、[include/](include/)、[launch/](launch/)、[params/](params/)、[test/](test/)。
+
+直接依赖（清单节选，完整约束见 manifest）：`geometry_msgs`、`libpcl-all`、`libpcl-all-dev`、`nav2_common`、`nav2_costmap_2d`、`nav2_util`、`rclcpp`、`rclcpp_components`、`sensor_msgs`、`tf2`、`tf2_geometry_msgs`、`tf2_ros`。
+
+启动资源：[collision_monitor_node.launch.py](launch/collision_monitor_node.launch.py)。执行前先加载工作空间环境，具体依赖由所选入口决定。
+
+### 本项目接入说明
+
+本包依据传感器过滤速度，与外部 `/collision_state` UInt8 门控独立。当前直接规控及 myworld_bringup 入口 `use_collision_monitor` 均默认 false，需显式启用才插入速度链；区域可视化不会产生碰撞判断。
+
+构建命令统一从 `nav2_ws` 执行，详见[仓库构建与包索引](../README.md)；不在包源码目录运行 colcon。本文依据当前源码描述职责，包存在、可构建或包含测试文件均不代表完成运行验收。
+
+## 原有说明与上游资料
+
 The Collision Monitor is a node providing an additional level of robot safety.
 It performs several collision avoidance related tasks using incoming data from the sensors, bypassing the costmap and trajectory planners, to monitor for and prevent potential collisions at the emergency-stop level.
 
@@ -68,7 +88,7 @@ The following notes could be made:
 
 ## 中文翻译
 
-# Nav2 Collision Monitor
+### Nav2 Collision Monitor
 
 Collision Monitor 是 Nav2 的速度安全监控节点。它订阅 LaserScan、PointCloud2、Range 等传感器数据，把障碍物投影到配置的 Polygon 或 Circle 区域，再依据速度限制、减速或停车规则保护机器人。
 

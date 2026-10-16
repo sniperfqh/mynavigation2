@@ -1,5 +1,25 @@
 # nav2_behavior_tree
 
+## 当前项目用法
+
+提供规划、控制、恢复、条件与流程控制 BT 节点，供 BT Navigator 装载。
+
+包类型：行为树插件库。包名和构建依赖见 [package.xml](package.xml)，安装目标见 [CMakeLists.txt](CMakeLists.txt)。
+
+主要目录：[src/](src/)、[include/](include/)、[plugins/](plugins/)、[test/](test/)。
+
+直接依赖（清单节选，完整约束见 manifest）：`behaviortree_cpp_v3`、`builtin_interfaces`、`geometry_msgs`、`lifecycle_msgs`、`nav2_common`、`nav2_msgs`、`nav2_util`、`nav_msgs`、`rclcpp`、`rclcpp_action`、`rclcpp_lifecycle`、`sensor_msgs` 等。
+
+使用方式：在宿主服务器的插件列表和参数块中配置导出的类；仅构建本包不会自动切换当前运行控制器或规划器。
+
+### 本项目接入说明
+
+BT 插件用于标准 BT 链路；无 BT 的 regulated_navigator 不通过这些插件编排任务。节点端口与 Action／Service 映射见 plugins/ 和 nav2_tree_nodes.xml。
+
+构建命令统一从 `nav2_ws` 执行，详见[仓库构建与包索引](../README.md)；不在包源码目录运行 colcon。本文依据当前源码描述职责，包存在、可构建或包含测试文件均不代表完成运行验收。
+
+## 原有说明与上游资料
+
 This module is used by the nav2_bt_navigator to implement a ROS2 node that executes navigation Behavior Trees for either navigation or autonomy systems. The nav2_behavior_tree module uses the [Behavior-Tree.CPP library](https://github.com/BehaviorTree/BehaviorTree.CPP) for the core Behavior Tree processing.
 
 The nav2_behavior_tree module provides:
@@ -9,7 +29,7 @@ The nav2_behavior_tree module provides:
 
 See its [Configuration Guide Page](https://navigation.ros.org/configuration/packages/configuring-bt-xml.html) for additional parameter descriptions and a list of XML nodes made available in this package. Also review the [Nav2 Behavior Tree Explanation](https://navigation.ros.org/behavior_trees/index.html) pages explaining more context on the default behavior trees and examples provided in this package. A [tutorial](https://navigation.ros.org/plugin_tutorials/docs/writing_new_bt_plugin.html) is also provided to explain how to create a simple BT plugin.
 
-See the [Navigation Plugin list](https://navigation.ros.org/plugins/index.html) for a list of the currently known and available planner plugins. 
+See the [Navigation Plugin list](https://navigation.ros.org/plugins/index.html) for a list of the currently known and available planner plugins.
 
 ## The bt_action_node Template and the Behavior Tree Engine
 
@@ -67,7 +87,7 @@ For more information about the behavior tree nodes that are available in the def
 
 ## 中文翻译
 
-# nav2_behavior_tree
+### nav2_behavior_tree
 
 该模块被 nav2_bt_navigator 使用，用于实现执行导航或自主系统行为树的 ROS 2 节点。核心行为树处理由 Behavior-Tree.CPP 库提供。
 

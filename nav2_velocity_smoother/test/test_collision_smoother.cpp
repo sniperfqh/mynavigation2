@@ -75,7 +75,7 @@ TEST_F(CollisionSmootherTest, CapsStopAndResumePreserveSCurve)
   auto node = std::make_shared<CollisionSmoother>();
   node->start();
   node->task(0.4);
-  EXPECT_DOUBLE_EQ(node->step(-1).linear.x, 0.0);
+  EXPECT_GT(node->step(-1).linear.x, 0.0);
   geometry_msgs::msg::Twist output;
   double previous_acceleration = node->acceleration();
   for (int state : {4, 3, 2, 1, 4, 0, 4})
@@ -94,6 +94,39 @@ TEST_F(CollisionSmootherTest, CapsStopAndResumePreserveSCurve)
   }
   const auto stopped_transition = node->step(1);
   EXPECT_GT(stopped_transition.linear.x, 0.1);
+  node->finish();
+}
+
+TEST_F(CollisionSmootherTest, NoInitialStateAllowsOnlyExistingTaskAndInput)
+{
+  auto node = std::make_shared<CollisionSmoother>();
+  node->start();
+  node->task(0.0);
+  EXPECT_DOUBLE_EQ(node->step(-1).linear.x, 0.0);
+  node->task(0.4);
+  geometry_msgs::msg::Twist output;
+  for (int i = 0; i < 200; ++i)
+  {
+    output = node->step(-1);
+  }
+  EXPECT_NEAR(output.linear.x, 0.4, 1e-5);
+  EXPECT_NEAR(output.angular.z, 0.2, 1e-5);
+  for (int i = 0; i < 200; ++i)
+  {
+    output = node->step(0);
+  }
+  EXPECT_NEAR(output.linear.x, 0.0, 1e-5);
+  for (int i = 0; i < 200; ++i)
+  {
+    output = node->step(3);
+  }
+  EXPECT_NEAR(output.linear.x, 0.26, 1e-5);
+  node->expire();
+  for (int i = 0; i < 200; ++i)
+  {
+    output = node->step(-1);
+  }
+  EXPECT_NEAR(output.linear.x, 0.0, 1e-5);
   node->finish();
 }
 

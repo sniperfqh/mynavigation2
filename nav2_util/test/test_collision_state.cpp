@@ -6,7 +6,8 @@ TEST(CollisionState, InitialStatesTimeoutInvalidAndRecovery)
 {
   nav2_util::CollisionState cache;
   const auto origin = nav2_util::CollisionState::Clock::now();
-  EXPECT_TRUE(cache.snapshot(origin).stopped());
+  EXPECT_FALSE(cache.snapshot(origin).stopped());
+  EXPECT_EQ(cache.snapshot(origin).effective, 4);
   EXPECT_STREQ(cache.snapshot(origin).reason(), "initial");
   for (uint8_t state = 0; state <= 4; ++state)
   {
@@ -24,8 +25,48 @@ TEST(CollisionState, InitialStatesTimeoutInvalidAndRecovery)
   EXPECT_DOUBLE_EQ(cache.snapshot(origin).ratio(), 0.65);
   cache.reset();
   EXPECT_FALSE(cache.snapshot(origin).received);
+  EXPECT_EQ(cache.snapshot(origin).effective, 4);
   EXPECT_THROW(cache.configure(0.0), std::invalid_argument);
   EXPECT_THROW(cache.configure(std::numeric_limits<double>::quiet_NaN()), std::invalid_argument);
+}
+
+TEST(CollisionState, NeverReceivedDefaultPersistsAndResetRestoresInitial)
+{
+  nav2_util::CollisionState cache;
+  const auto origin = nav2_util::CollisionState::Clock::now();
+  for (int phase = 0; phase < 3; ++phase)
+  {
+    const auto initial = cache.snapshot(origin + std::chrono::hours(1));
+    EXPECT_EQ(initial.raw, 4);
+    EXPECT_EQ(initial.effective, 4);
+    EXPECT_FALSE(initial.received);
+    EXPECT_FALSE(initial.expired);
+    EXPECT_FALSE(initial.stopped());
+    EXPECT_DOUBLE_EQ(initial.age, -1.0);
+    EXPECT_DOUBLE_EQ(initial.ratio(), 1.0);
+    EXPECT_STREQ(initial.reason(), "initial");
+    cache.update(1, origin);
+    EXPECT_TRUE(cache.snapshot(origin).stopped());
+    if (phase == 0)
+    {
+      cache.configure(0.5);
+    }
+    else
+    {
+      cache.reset();
+    }
+  }
+  for (uint8_t state = 0; state <= 4; ++state)
+  {
+    cache.update(state, origin);
+    EXPECT_EQ(cache.snapshot(origin).effective, state);
+    const auto expired = cache.snapshot(origin + std::chrono::milliseconds(500));
+    EXPECT_EQ(expired.effective, 0);
+    EXPECT_TRUE(expired.received);
+    EXPECT_TRUE(expired.expired);
+    EXPECT_TRUE(expired.stopped());
+    EXPECT_STREQ(expired.reason(), "timeout");
+  }
 }
 
 TEST(CollisionState, TaskBasedCapsDirectionsCurvatureAndNoRepeatedScaling)

@@ -617,8 +617,8 @@ def generate_launch_description():
     ld.add_action(declare_map_yaml_cmd)
     ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_params_file_cmd)
-    ld.add_action(DeclareLaunchArgument('enable_collision_state', default_value='false',
-                                      description='Opt in to fixed-path collision state gating before S-curve smoothing'))
+    ld.add_action(DeclareLaunchArgument('enable_collision_state', default_value='true',
+                                      description='Enable fixed-path collision state gating before S-curve smoothing (default on)'))
     ld.add_action(OpaqueFunction(function=resolve_collision_state_arguments))
     for key in ['goal_braking_distance_margin', 'dynamic_goal_braking_margin_enabled',
                 'goal_braking_min_distance_margin', 'goal_braking_margin_transition_speed']:

@@ -7,221 +7,59 @@ This package owns the `myworld2` launch flow.
   package.
 - Use `entry.launch.py` as the public entry point.
 
-## 中文翻译
+## 当前入口与前提
 
-# myworld_bringup
+[entry.launch.py](launch/entry.launch.py) 提供 Ignition Gazebo 仿真、机器人内部 TF、传感器桥接与三模式规控包装；当前不启动 AMCL，不发布 Gazebo 底盘定位 TF。外部定位须提供新鲜 `map→base_link`，本包不替代定位。
 
-该包负责 myworld2 场景的 Launch 流程。场景专用 Launch 文件放在 launch/，地图、模型、RViz 和 URDF 资源放在本包中；公开入口是 entry.launch.py。
-
-## 启动模式
-
-默认自主模式和固定路径模式均由 `nav2_regulated_modules` 的统一入口负责规划、控制、平滑和底盘输出：
-
-```bash
-ros2 launch myworld_bringup entry.launch.py operation_mode:=autonomous
-```
-
-自主模式由 `regulated_navigator` 接收标准导航 Action，调用统一的 Planner、Smoother 和
-Controller 接口；固定路径模式由同一个 `regulated_navigator` 接收
-`byd_custom_msgs/action/NavigationService`，把 `NaviSegment[]` 生成的 Path 交给
-Controller Server。两种模式都不再在本包内重复实现算法节点：
+先在 `nav2_ws` 构建并加载环境，再运行一个入口：
 
 ```bash
 ros2 launch myworld_bringup entry.launch.py \
-  operation_mode:=fixed_path \
-  use_rviz:=true
+  operation_mode:=fixed_path headless:=true use_rviz:=true \
+  enable_collision_state:=true use_collision_monitor:=false
 ```
 
-无图形环境中可以关闭 RViz 和 Ignition GUI：
+`operation_mode` 默认 autonomous，也可选 fixed_path 或 remote。自主／固定路径委托 nav2_regulated_modules；remote 使用 ChassisControl→Twist 仿真网关，不启动导航控制链。已有同场景运行时不重复启动。
 
-```bash
-ros2 launch myworld_bringup entry.launch.py \
-  operation_mode:=fixed_path \
-  use_rviz:=false \
-  headless:=true
-```
+## 默认资源与参数覆盖
 
-自主和固定路径模式的 Controller Server、Velocity Smoother 默认均为 `100 Hz`；
-遥控网关默认以 `100 Hz` 输出 `/cmd_vel`。Gazebo OdometryPublisher 的里程计发布频率为
-`100 Hz`，经桥接得到 `/odom`；`odom_to_motion_state.py` 收到每条里程计后发布一条
-保留原时间戳的 `/motion_state`，不定时重复旧反馈。仿真控制器及速度平滑器仍从
-`/odom` 读取反馈，实际墙钟频率随仿真实时因子变化。
+| 项目 | entry 当前生效选择 |
+|---|---|
+| 地图 | fixed_path 使用 `/userdata/map/pbstream/out.yaml`；其他模式使用 models/myworld2/myworld2.yaml，可用 `map` 覆盖 |
+| 世界 | models/myworld2/world_only.sdf，可用 `world_file` 覆盖 |
+| 参数 | params/myworld2.yaml，可用 `params_file` 覆盖，再由入口生成外部定位适配参数 |
+| 时间 | `use_sim_time=false`，使用系统时间；设 true 恢复仿真时钟桥接 |
+| 界面 | `headless=true`，`use_rviz=true` |
+| collision | fixed_path 默认启用外部状态门控；Collision Monitor 默认 false、区域可视化默认 true |
+| 启动延迟 | fixed_path 栈 3 s、RViz 5 s；延迟不保证外部定位已就绪 |
 
-遥控仿真使用独立的 `remote` 模式。该模式只启动 Gazebo、传感器桥接和
-`chassis_control_to_twist`，不启动 AMCL、Planner、Controller、Velocity Smoother、
-`regulated_navigator` 或 `controlpub`，保证 `/cmd_vel` 只有遥控网关一个控制源：
+地图参数声明的描述字符串仍提到 myworld3，但实际默认表达式为上表的 `/userdata/map/pbstream/out.yaml`，本文以执行代码为准。`ign_partition` 默认按 ROS_DOMAIN_ID 与启动 PID 生成；外部 Ignition 工具需连接相同 partition。
 
-```bash
-ros2 launch myworld_bringup entry.launch.py \
-  operation_mode:=remote \
-  use_rviz:=false \
-  headless:=false
-```
-
-遥控网关以 Reliable／Volatile QoS 订阅
-`/downstream/chassis_control` 的 `byd_custom_msgs/msg/ChassisControl`，把前进、后退、
-左转和右转分别映射为 `/cmd_vel` 的正／负线速度和正／负角速度。遥控端应以
-`20-50 Hz` 连续发布；超过 `0.5 s` 没有新消息时，网关发布一次零速度并清除当前命令。
-换向或直行／旋转切换时会先按加速度约束减速到零，再执行新命令。
-
-例如以 `20 Hz` 持续前进：
-
-```bash
-ros2 topic pub -r 20 \
-  /downstream/chassis_control \
-  byd_custom_msgs/msg/ChassisControl \
-  "{op: 0, linear_velocity: 0.2, angular_velocity: 0.0, acceleration: 0.5}"
-```
-
-原地左转：
-
-```bash
-ros2 topic pub -r 20 \
-  /downstream/chassis_control \
-  byd_custom_msgs/msg/ChassisControl \
-  "{op: 2, linear_velocity: 0.0, angular_velocity: 0.4, acceleration: 1.0}"
-```
-
-显式停车：
-
-```bash
-ros2 topic pub --once \
-  /downstream/chassis_control \
-  byd_custom_msgs/msg/ChassisControl \
-  "{op: 0, linear_velocity: 0.0, angular_velocity: 0.0, acceleration: 0.5}"
-```
-
-`ChassisControl` 当前一次只能表示直行或原地旋转，不能同时表达非零线速度和角速度。
-网关默认将线速度限制在 `0.3 m/s`、角速度限制在 `0.3 rad/s`；可在 YAML 中配置
-`max_linear_velocity`、`max_angular_velocity`，或直接启动节点时通过 `--ros-args -p 参数名:=值` 覆盖。非法数值、未知
-`op` 或多个 `/cmd_vel` Publisher 会触发停车并等待新的有效遥控命令。
-
-自主与固定路径模式的统一算法链为：
+## 反馈与速度链
 
 ```text
-/navigate_to_pose 或 /navigation_service -> regulated_navigator
-  -> Planner/Smoother（自主模式） -> FollowPath -> /cmd_vel_nav
-  -> velocity_smoother（/motion_state 闭环） -> /cmd_vel -> Gazebo DiffDrive
-  -> controlpub -> /control_to_uart
+Gazebo /odom → ROS 桥接重映射 → /odometry (Odometry)
+  → odom_to_motion_state.py → /motion_state (MotionState，继承 Header)
+外部定位 → map→base_link；Robot State Publisher → 机器人内部静态 TF
+NavigationService → regulated_navigator → FollowPath → /cmd_vel_nav
+  → velocity_smoother → /cmd_vel → Gazebo DiffDrive
+  → controlpub → /control_to_uart
 ```
 
-固定路径的终点判定、速度平滑、MotionState 闭环、ChassisControl 监听和
-`/control_to_uart` 输出均由 `nav2_regulated_modules` 封装；本包只提供仿真环境及其
-输入适配。固定路径 `FixedPathGoalChecker` 的平面距离容差为 `10 mm`，位置稳定周期为 `5`；航向误差只做诊断，
-不参与终点停车或成功判定。`FixedPathController` 固定路径速度默认由启动参数限制为 `1.5 m/s`；接近终点时按
-`0.25 m/s^2` 减速度、`0.1 s` 反应时间和 `0.1 m` 制动裕量平滑减速，终点前最低保持 `0.01 m/s` 微量接近，
-继续直接跟踪到位置容差，进入位置容差或越过终点平面后锁存线、角速度为零，并保留锁存瞬间的跟踪航向误差作为诊断。
-`fixed_path` 模式同时启用 Velocity Smoother 的全零命令立即停车，仅在到点锁存后绕过减速度平滑，避免残余角速度造成停车后旋转；其他模式仍按原加减速度限制平滑停车。
+控制器和导航器读取 `/odometry`；平滑器闭环读取 `/motion_state`。入口适配将旧 `/odom` 参数统一到新话题，不再以旧 README 的 `/odom` 作为 ROS 侧反馈。默认控制／平滑频率及 Gazebo 里程计配置为 100 Hz，实际墙钟接收频率需要单独测量。
 
-可调启动参数如下：
+系统时间模式重写桥接传感器和必要时间戳，不发布仿真 `/clock`；暂停 Gazebo 时系统时间上的超时继续。外部定位必须使用一致时间基准。定位跳变取消保护默认 false，TF 丢失保护仍存在。
 
-```text
-enable_localization_jump_detection          默认 false
-fixed_path_max_linear_velocity            默认 1.5 m/s
-fixed_path_approach_velocity_scaling_dist 默认 0.80 m
-fixed_path_goal_linear_deceleration       默认 0.25 m/s^2
-fixed_path_goal_final_approach_velocity   默认 0.01 m/s
-fixed_path_goal_braking_reaction_time     默认 0.10 s
-fixed_path_goal_braking_distance_margin   默认 0.10 m
-fixed_path_goal_terminal_lookahead_dist   默认 0.20 m
-fixed_path_goal_terminal_lookahead_reference_speed 默认 0.75 m/s
-fixed_path_goal_terminal_lookahead_speed_gain 默认 0.10 s
-fixed_path_goal_terminal_lookahead_min_dist 默认 0.15 m
-fixed_path_goal_terminal_lookahead_max_dist 默认 0.25 m
-fixed_path_stack_start_delay              默认 3.00 s
-rviz_start_delay                          默认 5.00 s
-ign_partition                             默认按 ROS_DOMAIN_ID 和启动进程 PID 唯一生成
-```
+## 固定路径任务
 
-定位跳变停车保护默认关闭，相邻 `map -> base_link` 位姿平移／旋转跳变不会取消控制或发布停车命令；
-TF 丢失超过 `localization_timeout` 的停车与恢复保护仍然保留。需要恢复定位跳变停车时传入
-`enable_localization_jump_detection:=true`。
+`/navigation_service` 类型为 `byd_custom_msgs/action/NavigationService`。直线与贝塞尔的 `max_speed` 均为有限正数；同任务所有段方向一致，1 前进、2 倒车，速度符号由方向决定。任务不重置机器人位姿。
 
-例如限制固定路径专用控制器的巡航速度和终点前减速距离：
+起点距离、航向与起步保护可能导致先转向或低速接近，不能假定 Action 接受后立即达到 1.5 m/s。当前 fixed_path 使用专用目标检查器，终点航向只作诊断；停车入口、目标容差与独立定位精度分开评价。具体参数以传入 YAML 与 Launch 重写为准，见[规控包](../nav2_regulated_modules/README.md)。
+
+以下单段命令保留旧示例字段，**坐标来自历史地图**，发送前须核对当前地图、通行区域、定位和起点，不作为当前出生位姿说明：
 
 ```bash
-ros2 launch myworld_bringup entry.launch.py \
-  operation_mode:=fixed_path \
-  fixed_path_max_linear_velocity:=1.5 \
-  fixed_path_approach_velocity_scaling_dist:=0.8 \
-  fixed_path_goal_linear_deceleration:=0.25
-```
-
-`odom_to_motion_state` 把 Gazebo 的 `/odom` 转换为 `/motion_state`，供
-Velocity Smoother 和底盘闭环使用；Controller Server 与 `regulated_navigator` 保持
-读取仿真原生的 `nav_msgs/msg/Odometry` `/odom`。
-
-固定路径与标准导航现在都使用原 `world_only.sdf` 仓库场景和
-`localization_launch.py` 的 AMCL。TF 所有权保持为：AMCL 发布 `map -> odom`，
-Gazebo 发布 `odom -> base_footprint`，Robot State Publisher 发布机器人内部静态 TF；
-固定路径模式不再启动 `fixed_path_localization_launch.py` 的静态 `map -> odom`。
-Gazebo 出生位姿与 AMCL 参数中的初始位姿保持一致，并设置
-`always_reset_initial_pose: true`，避免 Lifecycle 重启时沿用旧定位状态。
-
-为避免 RViz 在 AMCL 和传感器 TF 尚未就绪时显示首帧，固定路径控制节点默认延迟
-`3 s` 启动，RViz 默认延迟 `5 s` 启动。Gazebo 原生 `gpu_lidar` 以 `base_scan`
-为坐标系发布 `/scan`，再由 `ros_gz_bridge` 桥接给 AMCL、代价地图和 RViz；Gazebo
-`VisualizeLidar` 可订阅同一雷达话题显示扫描射线。独立 Gazebo Server 使用
-`--headless-rendering` 生成 GPU 雷达数据，图形客户端只负责显示。RViz 对 `/scan` 及
-全局、局部体素点云只保留最新一帧，避免图形界面初始化期间积压旧时间戳数据并在 TF
-就绪后集中重放。这两个延迟只影响启动显示和初始化顺序，不改变固定路径、速度或终端
-控制参数。
-
-每次启动还会按 `ROS_DOMAIN_ID` 和当前 Launch PID 自动生成唯一 `IGN_PARTITION`。
-这样即使另一套 Gazebo 没有正常退出，新 Launch 的桥接也不会接入旧世界的 `/odom`、
-`/clock` 和 `/odom/tf`。联调外部 Ignition 工具时可显式传入
-`ign_partition:=myworld_debug`，并在工具终端设置同名 `IGN_PARTITION`。
-
-`entry.launch.py` 默认使用真实系统时间（`use_sim_time:=false`）。Gazebo 桥接的
-`/odom`、`/scan`、关节、IMU 和相机消息采用桥接发布时间的 Unix 时间戳；
-`/motion_state` 继承 `/odom.header`。Gazebo 动态 TF 经 `/_gazebo/tf` 转发后逐个
-改写时间戳，AMCL、Robot State Publisher、导航和 RViz 使用同一系统时钟。
-`/tf_static` 保留静态变换时间语义；AMCL 的 TF 预发布时间容差保留。
-系统时间模式不发布仿真 `/clock`，暂停 Gazebo 时导航超时仍继续计时。
-
-需要原仿真时间模式时显式指定 `use_sim_time:=true`：恢复 `/clock` 桥接、原始
-Gazebo 消息时间戳及动态 TF 直接桥接。新模式耗时按系统时间统计，不能直接与历史
-仿真秒耗时混用；Unix 秒数来自实际系统时钟，不固定为某个数字前缀。
-
-自主与固定路径仿真模式启动 `controlpub`，仅把统一规控链的 `/cmd_vel` 转换为
-`/control_to_uart`。`regulated_navigator` 仍监听 `/downstream/chassis_control`；没有
-收到该话题时，不会由 ChassisControl 分支向 `/control_to_uart` 发布控制消息。
-
-## 固定路径示例
-
-固定模式 Gazebo 机器人出生 `x/y` 为 `(-2.8, -1.7)`。Action 到达后，
-`regulated_navigator` 根据路径首段切线和 `motion_direction` 自动计算车辆车头：
-前进使用 `node1 -> node2`，倒车使用其反向航向。两种 Action 都不调用 Gazebo
-`set_pose`、不发布 `/initialpose`，车辆初始 `x/y/yaw` 均保持不变；`FixedPathController`
-先检查 `1.20 m` 起点总距离安全门；首次横向误差不超过 `0.20 m` 且运动方向航向误差
-严格小于 `15°` 时直接跟踪；首次横向误差较大时先原地对齐到 `±3°`，在达标的同一控制周期进入低速跟踪，不再等待停稳或插入额外零速帧。严格对齐的角速度按完整航向误差计算，避免接近 `3°` 门槛时指令过早趋零。
-前进以车头、后退以车辆反向与路径切线计算航向误差，随后分别输出正／负线速度。固定路径
-旋转上限为 `0.4 rad/s`、角加速度上限为 `0.8 rad/s²`。原仓库世界中的斜向视觉通道
-中心线左右边界各为 `0.40 m`。
-
-若首次起点横向误差大于 `0.20 m`、且起点总距离仍在 `1.20 m` 容差内，
-`FixedPathController` 会将起步纵向速度指令幅值限制在 `0.30 m/s`；前进和倒车均适用，
-Action 另有更低限速时仍以更低值为准。车辆相对当前最近有效路径段的横向误差不超过
-`0.20 m`，且按前进车头或倒车反向轴计算的航向误差处于 `±20°` 内，连续满足 10 个控制周期
-后解除本条路径的起步限速，不因后续定位抖动再次进入。两套默认配置均提供
-`start_offset_speed_limit`、`start_speed_release_yaw_tolerance` 和
-`start_speed_release_stable_cycles` 参数；`0.30 m/s` 是控制器速度指令上限，
-不替代真实底盘的物理限速与现场验收。
-
-固定路径要求 Action `max_speed` 为有限正数，`SpeedLimit` 只传递正的绝对速度上限；多段路径先取各段最小值，
-再由 `regulated_navigator.fixed_path_max_speed` 将最终速度钳位到 `1.5 m/s`，超限 Goal 不拒绝但按上限执行；
-`motion_direction=1`／`2` 由全部路径点姿态编码为前进／倒车车体朝向，控制器据此输出
-正／负线速度。终点车头航向同样按末段路径切线和运动方向计算后交给
-`stopped_goal_checker` 比较。固定路径分支由统一的 `regulated_navigator` 处理。启动
-固定路径模式并等待 Lifecycle 节点进入 active 后发送：
-
-仿真中的 Velocity Smoother 直接从标准 `/odom` 读取闭环速度，避免额外接口转换导致
-反馈缺失后输出长期停在单周期增量；实车 `/motion_state` 仍由 `OdomSmoother` 原生支持，
-保持 `v_car -> linear.x`、`w_car -> angular.z` 的映射，不切换为 OPEN_LOOP。
-
-```bash
-ros2 action send_goal --feedback \
-  /navigation_service \
+ros2 action send_goal --feedback /navigation_service \
   byd_custom_msgs/action/NavigationService \
   "{task_id: 'myworld_fixed_path_001', navi_segment: [{segment_type: 1, segment_name: 'diagonal_corridor', segment_id: 'segment_001', node1: {x: -2.8, y: -1.7, z: 0.0}, node2: {x: 1.91, y: -4.83, z: 0.0}, control_pos1: {x: -0.933333, y: -2.933333, z: 0.0}, control_pos2: {x: 0.933333, y: -4.166667, z: 0.0}, max_load_speed: 0.0, max_speed: 0.20, motion_direction: 2, dwell_time: 0}]}"
 ```
@@ -256,32 +94,24 @@ ros2 action send_goal --feedback \
 
 `segment_type: 1` 的控制点由路径生成代码根据直线起终点重新计算，因此这里填零；
 `segment_type: 2` 按 `node1 → control_pos1 → control_pos2 → node2` 生成曲线。
-若刚执行过上面的单段任务，机器人已不在本示例起点附近，应重新启动仿真并确认起始位姿后再发送。
+该几何来自旧实验，不对应当前默认地图和出生位置；仅在核对地图与起始位姿后使用，不能通过重启假定机器人会回到这些坐标。
 此命令仅提供协议与几何连续的输入示例，未据此验证地图通行或最终到点精度。
 
-检查 Action、Lifecycle 和速度链：
+
+## 周期状态、日志与只读检查
+
+[collision Action 例子](../nav2_regulated_modules/tools/COLLISION_TEST.md) 以 50 Hz 独立周期发布状态，可设置两程前进／倒车。工具端点来自实验，需按地图核对。首次无状态默认为 4；收到后的断流达到 0.5 秒停车，不等同于 Collision Monitor 的传感器保护。
 
 ```bash
-ros2 action info /navigation_service
 ros2 lifecycle get /controller_server
 ros2 lifecycle get /velocity_smoother
 ros2 lifecycle get /regulated_navigator
 ros2 param get /regulated_navigator operation_mode
-ros2 topic echo /fixed_path_plan --once
-ros2 topic echo /cmd_vel_nav
-ros2 topic echo /cmd_vel
-ros2 topic echo /odom
+ros2 topic info /collision_state --verbose
+ros2 topic echo /odometry --once
+ros2 topic echo /motion_state --once
 ```
 
-要验证同一条路径前进，只需把上面 Action 中的 `task_id` 改成新的任务号，并将
-`motion_direction: 2` 改为 `motion_direction: 1`；Action 不改写车辆初始位姿，控制器
-先原地旋转到 `node1 -> node2` 的起点航向，再以正速度前进。倒车保持
-`motion_direction: 2`，控制器先原地旋转到起点切线反方向，再以负速度跟踪，并在终点
-切线反方向停车。
+UART 空闲时可能不周期发零速，停稳需要新鲜轮速等证据。统一日志参数见[速度日志](../nav2_regulated_modules/doc/velocity_logging.md)。独立状态源启停的最新验收未完成，不能由本 README 推断通过。
 
-最终验收应以 `map -> base_footprint` 的误差为准，不要用存在 `map -> odom` 偏置的
-原始 `/odom` 位置直接替代地图坐标。需要检查底盘闭环时，另行查看
-`/downstream/chassis_control`、`/motion_state` 和 `/control_to_uart`。
-
-一个 Action 可以包含多段连续路径，但当前要求所有分段使用相同 `motion_direction`；
-整条路径限速取各段正 `max_speed` 的最小值，并受 `1.5 m/s` 全局上限约束。前进／倒退混合路径会被明确拒绝。
+场景资源见 [models/](models/)、[params/](params/)、[urdf/](urdf/)、[rviz/](rviz/)，依赖与安装见 [package.xml](package.xml)、[CMakeLists.txt](CMakeLists.txt)。

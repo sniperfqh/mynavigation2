@@ -32,8 +32,10 @@ class CollisionLaunchTest(unittest.TestCase):
             path.write_text(yaml.safe_dump(config))
             context = LaunchContext()
             context.launch_configurations.update(params_file=str(path), operation_mode=mode,
-                                                  enable_collision_state=str(enabled).lower(), namespace=namespace,
+                                                  namespace=namespace,
                                                   use_composition=str(composition).lower())
+            if enabled is not None:
+                context.launch_configurations['enable_collision_state'] = str(enabled).lower()
             description = module.generate_launch_description()
             for action in description.entities:
                 if isinstance(action, DeclareLaunchArgument):
@@ -56,6 +58,16 @@ class CollisionLaunchTest(unittest.TestCase):
                         self.assertEqual(parameters['collision_state_enabled'], mode == 'fixed_path' and enabled)
                         self.assertEqual(parameters['collision_state_topic'], '/test/collision')
                         self.assertEqual(parameters['collision_state_timeout'], 0.7)
+
+    def test_default_and_explicit_disable(self):
+        for mode in ['fixed_path', 'autonomous', 'remote']:
+            for composition in [False, True]:
+                for enabled in [None, False]:
+                    with self.subTest(mode=mode, composition=composition, enabled=enabled):
+                        result = self.resolve(mode, enabled, composition=composition)
+                        for node in ['controller_server', 'velocity_smoother', 'regulated_navigator']:
+                            self.assertEqual(result[node]['ros__parameters']['collision_state_enabled'],
+                                             mode == 'fixed_path' and enabled is None)
 
 
 if __name__ == '__main__':

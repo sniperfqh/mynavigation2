@@ -1,5 +1,25 @@
 # Nav2 Simple (Python3) Commander
 
+## 当前项目用法
+
+提供 BasicNavigator 及导航、路径跟踪、路点任务的 Python 示例与应用演示。
+
+包类型：Python 客户端库。包名和构建依赖见 [package.xml](package.xml)，安装目标见 [setup.py](setup.py)。
+
+主要目录：[launch/](launch/)、[params/](params/)、[models/](models/)、[test/](test/)。
+
+直接依赖（清单节选，完整约束见 manifest）：`action_msgs`、`aws_robomaker_small_warehouse_world`、`geometry_msgs`、`lifecycle_msgs`、`nav2_msgs`、`nav_msgs`、`rclpy`、`robot_state_publisher`、`ros_gz_bridge`、`sensor_msgs`、`turtlebot3`。
+
+启动资源：[assisted_teleop_example_launch.py](launch/assisted_teleop_example_launch.py)、[follow_path_example_launch.py](launch/follow_path_example_launch.py)、[inspection_demo_launch.py](launch/inspection_demo_launch.py)、[localization_launch.py](launch/localization_launch.py)、[nav_through_poses_example_launch.py](launch/nav_through_poses_example_launch.py)、[nav_to_pose_example_launch.py](launch/nav_to_pose_example_launch.py)；其余见 launch/。执行前先加载工作空间环境，具体依赖由所选入口决定。
+
+### 本项目接入说明
+
+客户端实现为 nav2_simple_commander/robot_navigator.py。示例入口以 setup.py 中 console_scripts 为准；运行导航示例会发送实际任务，需已有可用导航、定位及反馈。
+
+构建命令统一从 `nav2_ws` 执行，详见[仓库构建与包索引](../README.md)；不在包源码目录运行 colcon。本文依据当前源码描述职责，包存在、可构建或包含测试文件均不代表完成运行验收。
+
+## 原有说明与上游资料
+
 中文注解：该包提供 Nav2 的 Python 简化调用接口，让应用代码可以用同步风格 API 调用导航、规划、恢复行为和代价地图服务。
 
 ## Overview
@@ -132,13 +152,13 @@ The `nav2_simple_commander` has a few examples to highlight the API functions av
 
 The `nav2_simple_commander` has a few demonstrations to highlight a couple of simple autonomy applications you can build using the `nav2_simple_commander` API:
 
-- `demo_security.py` - A simple security robot application, showing how to have a robot follow a security route using Navigate Through Poses to do a patrol route, indefinitely. 
+- `demo_security.py` - A simple security robot application, showing how to have a robot follow a security route using Navigate Through Poses to do a patrol route, indefinitely.
 - `demo_picking.py` - A simple item picking application, showing how to have a robot drive to a specific shelf in a warehouse to either pick an item or have a person place an item into a basket and deliver it to a destination for shipping using Navigate To Pose.
 - `demo_inspection.py` - A simple shelf inspection application, showing how to use the Waypoint Follower and task executors to take pictures, RFID scans, etc of shelves to analyze the current shelf statuses and locate items in the warehouse.
 
 ---
 
-# Nav2 Simple Commander 中文翻译
+### Nav2 Simple Commander 中文翻译
 
 ## 概述
 
@@ -263,7 +283,7 @@ ros2 run nav2_simple_commander demo_security
 
 ---
 
-# 本项目源码结构详细解析
+### 本项目源码结构详细解析
 
 本节以当前仓库代码为准，重点解释 `launch/` 和 Python 包目录
 `nav2_simple_commander/`。前面的上游说明用于快速查 API，本节用于读源码、改启动链路和
@@ -900,7 +920,7 @@ partition，手动启动 bridge 或 Gazebo 时必须处于同一个 `IGN_PARTITI
 
 ## 中文翻译
 
-# Nav2 Simple Python Commander
+### Nav2 Simple Python Commander
 
 Simple Commander 是面向 Python 应用的 Nav2 高层封装。它把 NavigateToPose、NavigateThroughPoses、FollowWaypoints、FollowPath、ComputePath、SmoothPath 和相关 Service 封装成同步风格的客户端 API，使脚本可以用少量代码发送目标、等待结果、取消任务、读取反馈和查询导航状态。
 

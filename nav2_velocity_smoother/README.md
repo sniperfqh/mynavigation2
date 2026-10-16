@@ -1,9 +1,27 @@
 # Velocity Smoother
 
+## 当前项目用法
+
+处理控制速度输入，执行开环／闭环平滑及本项目可选 jerk 限制与 collision 目标门控。
+
+包类型：速度平滑节点。包名和构建依赖见 [package.xml](package.xml)，安装目标见 [CMakeLists.txt](CMakeLists.txt)。
+
+主要目录：[src/](src/)、[include/](include/)、[test/](test/)。
+
+直接依赖（清单节选，完整约束见 manifest）：`geometry_msgs`、`nav2_common`、`nav2_util`、`rclcpp`、`rclcpp_components`、`spdlog_wrapper`、`std_msgs`。
+
+### 本项目接入说明
+
+本项目 YAML 启用 `jerk_limited_smoothing`，通用节点内置默认仍为 false。固定路径 collision 门控位于 S 曲线目标生成前；初始未收到状态为 4，收到后达到 0.5 秒超时按 0 处理。`/motion_state` 使用 MotionState 的 `v_car/w_car`；Odometry 类型反馈从 twist 读取。目标限速不等于实际速度瞬时跳变，配置改变需生命周期重新配置。
+
+构建命令统一从 `nav2_ws` 执行，详见[仓库构建与包索引](../README.md)；不在包源码目录运行 colcon。本文依据当前源码描述职责，包存在、可构建或包含测试文件均不代表完成运行验收。
+
+## 原有说明与上游资料
+
 The ``nav2_velocity_smoother`` is a package containing a lifecycle-component node for smoothing velocities sent by Nav2 to robot controllers.
 The aim of this package is to implement velocity, acceleration, and deadband smoothing from Nav2 to reduce wear-and-tear on robot motors and hardware controllers by smoothing out the accelerations/jerky movements that might be present with some local trajectory planners' control efforts.
 
-It supports differential drive and omnidirectional robot platforms primarily, but is applicable to ackermann as well with some interpretations of ``Twist``. It was built by [Steve Macenski](https://www.linkedin.com/in/steve-macenski-41a985101/) while at [Samsung Research](https://www.sra.samsung.com/). 
+It supports differential drive and omnidirectional robot platforms primarily, but is applicable to ackermann as well with some interpretations of ``Twist``. It was built by [Steve Macenski](https://www.linkedin.com/in/steve-macenski-41a985101/) while at [Samsung Research](https://www.sra.samsung.com/).
 
 See its [Configuration Guide Page](https://navigation.ros.org/configuration/packages/configuring-velocity-smoother.html) for additional parameter descriptions.
 
@@ -98,7 +116,7 @@ Deadband velocities are minimum thresholds, below which we set its value to `0`.
 
 ## 中文翻译
 
-# Velocity Smoother
+### Velocity Smoother
 
 nav2_velocity_smoother 是一个 Lifecycle Component 节点，用于平滑 Nav2 发给底盘控制器的速度。它通过速度、加速度和死区约束减少电机磨损以及局部规划器产生的突变加速度。
 

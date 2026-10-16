@@ -1,5 +1,23 @@
 # Nav2 Regulated Pure Pursuit Controller
 
+## 当前项目用法
+
+提供受曲率、代价与目标接近约束的 Pure Pursuit 路径跟踪控制器。
+
+包类型：控制插件。包名和构建依赖见 [package.xml](package.xml)，安装目标见 [CMakeLists.txt](CMakeLists.txt)。
+
+主要目录：[src/](src/)、[include/](include/)、[test/](test/)。
+
+直接依赖（清单节选，完整约束见 manifest）：`geometry_msgs`、`nav2_common`、`nav2_core`、`nav2_costmap_2d`、`nav2_msgs`、`nav2_util`、`pluginlib`、`rclcpp`、`tf2`、`tf2_geometry_msgs`。
+
+插件声明：[nav2_regulated_pure_pursuit_controller.xml](nav2_regulated_pure_pursuit_controller.xml)。插件由对应宿主加载，插件类名以声明 XML 为准。
+
+使用方式：在宿主服务器的插件列表和参数块中配置导出的类；仅构建本包不会自动切换当前运行控制器或规划器。
+
+构建命令统一从 `nav2_ws` 执行，详见[仓库构建与包索引](../README.md)；不在包源码目录运行 colcon。本文依据当前源码描述职责，包存在、可构建或包含测试文件均不代表完成运行验收。
+
+## 原有说明与上游资料
+
 This is a controller (local trajectory planner) that implements a variant on the pure pursuit algorithm to track a path. This variant we call the Regulated Pure Pursuit Algorithm, due to its additional regulation terms on collision and linear speed. It also implements the basics behind the Adaptive Pure Pursuit algorithm to vary lookahead distances by current speed. It was developed by [Shrijit Singh](https://www.linkedin.com/in/shrijitsingh99/) and [Steve Macenski](https://www.linkedin.com/in/steve-macenski-41a985101/) while at [Samsung Research](https://www.sra.samsung.com/) as part of the Nav2 working group.
 
 Code based on a simplified version of this controller is referenced in the [Writing a New Nav2 Controller](https://navigation.ros.org/plugin_tutorials/docs/writing_new_nav2controller_plugin.html) tutorial.
@@ -156,7 +174,7 @@ Currently, there is no rotate to goal behaviors, so it is expected that the path
 
 The choice of lookahead distances are highly dependent on robot size, responsiveness, controller update rate, and speed. Please make sure to tune this for your platform, although the `regulated` features do largely make heavy tuning of this value unnecessary. If you see wiggling, increase the distance or scale. If it's not converging as fast to the path as you'd like, decrease it.
 
-# Nav2 受控纯追踪控制器
+### Nav2 受控纯追踪控制器
 
 这是一个控制器（局部轨迹规划器），实现了纯追踪（Pure Pursuit）算法的一个变体用于跟踪路径。我们称之为受控纯追踪（Regulated Pure Pursuit）算法，因为它在碰撞和线速度上增加了调节项。它还实现了自适应纯追踪（Adaptive Pure Pursuit）的基础，以根据当前速度调整前视距离。此算法由 Shrijit Singh 与 Steve Macenski 在 Samsung Research 的 Nav2 工作组开发。
 
@@ -249,7 +267,7 @@ https://navigation.ros.org/configuration/packages/configuring-regulated-pp.html
 
 ## 中文翻译
 
-# Nav2 受控纯追踪控制器
+### Nav2 受控纯追踪控制器
 
 这是一个用于跟踪路径的局部轨迹控制器。它在普通 Pure Pursuit 上增加碰撞和线速度调节，并根据当前速度调整 lookahead 距离，支持差分、步态、Ackermann 和有限能力的全向机器人。
 

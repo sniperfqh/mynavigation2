@@ -1,4 +1,19 @@
 ### Background on lifecycle enabled nodes
+
+## 当前项目用法
+
+按配置顺序启动、激活、停用和监视生命周期节点，并通过 bond 检测连接状态。
+
+包类型：生命周期管理节点。包名和构建依赖见 [package.xml](package.xml)，安装目标见 [CMakeLists.txt](CMakeLists.txt)。
+
+主要目录：[src/](src/)、[include/](include/)、[test/](test/)。
+
+直接依赖（清单节选，完整约束见 manifest）：`bondcpp`、`diagnostic_updater`、`geometry_msgs`、`lifecycle_msgs`、`nav2_common`、`nav2_msgs`、`nav2_util`、`rclcpp_action`、`rclcpp_lifecycle`、`spdlog_wrapper`、`std_msgs`、`std_srvs` 等。
+
+构建命令统一从 `nav2_ws` 执行，详见[仓库构建与包索引](../README.md)；不在包源码目录运行 colcon。本文依据当前源码描述职责，包存在、可构建或包含测试文件均不代表完成运行验收。
+
+## 原有说明与上游资料
+
 Using ROS2’s managed/lifecycle nodes feature allows the system startup to ensure that all required nodes have been instantiated correctly before they begin their execution. Using lifecycle nodes also allows nodes to be restarted or replaced on-line. More details about managed nodes can be found on [ROS2 Design website](https://design.ros2.org/articles/node_lifecycle.html). Several nodes in Nav2, such as map_server, planner_server, and controller_server, are lifecycle enabled. These nodes provide the required overrides of the lifecycle functions: ```on_configure()```, ```on_activate()```, ```on_deactivate()```, ```on_cleanup()```, ```on_shutdown()```, and ```on_error()```.
 
 See its [Configuration Guide Page](https://navigation.ros.org/configuration/packages/configuring-lifecycle.html) for additional parameter descriptions.

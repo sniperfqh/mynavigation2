@@ -2,7 +2,7 @@
 
 `myagv_keyboard_control` 是 MYAGV 底盘终端键盘直控包。节点按照固定周期直接发布
 `byd_custom_msgs/msg/ControlRes` 到 `/control_to_uart`，接口与 `controlpub` 的最终输出一致。
-按键只改变目标速度，节点按照线速度和角速度加减速限制生成连续的周期输出。
+按键只改变目标速度，节点按照线速度、角速度及 jerk 限制生成连续的周期输出。
 
 ## 一、目录结构
 
@@ -15,9 +15,7 @@ myagv_keyboard_control/
 └── package.xml
 ```
 
-## 中文翻译
-
-# myagv_keyboard_control
+## 补充说明
 
 该包提供终端键盘遥控节点。目录中分别存放 Launch、参数、C++ 控制节点和接口资源。控制节点把方向键转换为目标速度，按照加速度限制逐步逼近实际输出，并发布项目约定的底盘速度消息。
 
@@ -62,12 +60,14 @@ w_rotation  固定为 0.0
 
 ## 三、运行方法
 
+以下命令从已构建的 `nav2_ws` 执行。
+
 节点必须在可交互终端中运行。Launch 会把启动 Shell 的实际 `/dev/pts/*` 设备传给节点，
 因此既支持直接运行，也支持从 `nav2_regulated_modules` 的 `remote` 分支启动：
 
 ```bash
 source /opt/ros/humble/setup.bash
-source /home/byd/Documents/zpy_ws/project/nav2_demo/nav2_ws/install/setup.bash
+source install/local_setup.bash
 ros2 launch myagv_keyboard_control keyboard_control.launch.py
 ```
 
@@ -91,6 +91,8 @@ ros2 run myagv_keyboard_control myagv_keyboard_control_node --ros-args \
 ```
 
 ## 四、参数
+
+下表为 C++ 节点内置默认值；Launch 加载 [keyboard_control.yaml](config/keyboard_control.yaml) 后，`linear_speed=1.0`、`command_timeout=0.1`，并仍受 `max_linear_speed=0.3` 与 `max_angular_speed=0.3` 限幅。节点直接运行而未传 YAML 时 `command_timeout=0.5`。加速度及角速度另有对应 jerk 参数，见源码声明。
 
 | 参数 | 默认值 | 说明 |
 | --- | ---: | --- |

@@ -1,5 +1,21 @@
 # Map Server
 
+## 当前项目用法
+
+提供地图加载、发布、保存及 Costmap Filter 信息服务。
+
+包类型：地图服务节点。包名和构建依赖见 [package.xml](package.xml)，安装目标见 [CMakeLists.txt](CMakeLists.txt)。
+
+主要目录：[src/](src/)、[include/](include/)、[launch/](launch/)、[test/](test/)。
+
+直接依赖（清单节选，完整约束见 manifest）：`graphicsmagick`、`launch_ros`、`launch_testing`、`nav2_common`、`nav2_msgs`、`nav2_util`、`nav_msgs`、`rclcpp`、`rclcpp_lifecycle`、`spdlog_wrapper`、`std_msgs`、`tf2` 等。
+
+启动资源：[map_saver_server.launch.py](launch/map_saver_server.launch.py)。执行前先加载工作空间环境，具体依赖由所选入口决定。
+
+构建命令统一从 `nav2_ws` 执行，详见[仓库构建与包索引](../README.md)；不在包源码目录运行 colcon。本文依据当前源码描述职责，包存在、可构建或包含测试文件均不代表完成运行验收。
+
+## 原有说明与上游资料
+
 The `Map Server` provides maps to the rest of the Nav2 system using both topic and
 service interfaces. Map server will expose maps on the node bringup, but can also change maps using a `load_map` service during run-time, as well as save maps using a `save_map` server.
 
@@ -142,7 +158,7 @@ $ ros2 service call /map_saver/save_map nav2_msgs/srv/SaveMap "{map_topic: map, 
 ```
 
 
-# Map Server（中文翻译）
+### Map Server（中文翻译）
 
 `Map Server` 为 Nav2 系统的其余部分提供地图，支持话题和服务接口。Map server 在节点启动时会发布地图，也可以在运行时通过 `load_map` 服务更换地图，或通过 `save_map` 服务保存地图。
 
@@ -251,7 +267,7 @@ Similar code found with 1 license type
 
 ## 中文翻译
 
-# Map Server
+### Map Server
 
 Map Server 负责从 YAML 和图像文件加载 OccupancyGrid 地图，并通过 Map 服务和地图 Topic 提供给 Nav2。Map Saver 负责把当前地图保存为图像与 YAML。架构部分说明节点、MapIO 库、地图消息和文件格式之间的关系。
 

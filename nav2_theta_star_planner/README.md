@@ -1,4 +1,23 @@
 # Nav2 Theta Star Planner
+
+## 当前项目用法
+
+提供 Theta* 任意角路径搜索，通过栅格视线检查减少路径方向约束。
+
+包类型：规划插件。包名和构建依赖见 [package.xml](package.xml)，安装目标见 [CMakeLists.txt](CMakeLists.txt)。
+
+主要目录：[src/](src/)、[include/](include/)、[test/](test/)。
+
+直接依赖（清单节选，完整约束见 manifest）：`builtin_interfaces`、`nav2_common`、`nav2_core`、`nav2_costmap_2d`、`nav2_msgs`、`nav2_util`、`pluginlib`、`rclcpp`、`rclcpp_action`、`rclcpp_lifecycle`、`tf2_ros`。
+
+插件声明：[theta_star_planner.xml](theta_star_planner.xml)。插件由对应宿主加载，插件类名以声明 XML 为准。
+
+使用方式：在宿主服务器的插件列表和参数块中配置导出的类；仅构建本包不会自动切换当前运行控制器或规划器。
+
+构建命令统一从 `nav2_ws` 执行，详见[仓库构建与包索引](../README.md)；不在包源码目录运行 colcon。本文依据当前源码描述职责，包存在、可构建或包含测试文件均不代表完成运行验收。
+
+## 原有说明与上游资料
+
 The Theta Star Planner is a global planning plugin meant to be used with the Nav2 Planner Server. The `nav2_theta_star_planner` implements a highly optimized version of the Theta\* Planner (specifically the [Lazy Theta\* P variant](http://idm-lab.org/bib/abstracts/papers/aaai10b.pdf)) meant to plan any-angle paths using A\*. The planner supports differential-drive and omni-directional robots.
 
 See its [Configuration Guide Page](https://navigation.ros.org/configuration/packages/configuring-thetastar.html) for additional parameter descriptions.
@@ -91,7 +110,7 @@ While smoother paths can be achieved by increasing the costmap resolution (ie us
 This planner could be used in scenarios where planning speed matters over an extremely smooth path, which could anyways be handled by using a local planner/controller as mentioned above. Because of the any-angled nature of paths you can traverse environments diagonally (wherever it is allowed, eg: in a wide open region). Another use case would be when you have corridors that are misaligned in the map image, in such a case this planner would be able to give straight-line like paths as it considers line of sight and thus avoid giving jagged paths which arises with other planners because of the finite directions of motion they consider.
 
 
-# Nav2 Theta Star 规划器（中文翻译）
+### Nav2 Theta Star 规划器（中文翻译）
 
 ## 概述
 Theta Star 规划器是一个用于 Nav2 Planner Server 的全局规划插件。`nav2_theta_star_planner` 实现了高度优化的 Theta* 规划器（具体为 Lazy Theta* P 变体），用于生成任意角度路径（any-angle），避免常规 A* 的之字形路径。该规划器支持差分驱动与全向机器人。
@@ -164,7 +183,7 @@ planner_server:
 
 ## 中文翻译
 
-# Nav2 Theta Star 规划器
+### Nav2 Theta Star 规划器
 
 Theta Star 是 Nav2 的任意角度全局规划器。它在栅格上使用 Lazy Theta* 变体和 Line-of-Sight 检查，把当前节点直接连接到父节点，减少传统 A* 的折线和不必要转弯，适合开放区域、地图走廊与需要快速规划的场景。
 

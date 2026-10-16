@@ -1,5 +1,23 @@
 # Constrained Smoother
 
+## 当前项目用法
+
+通过 Ceres 优化路径的平滑性、曲率和障碍物约束，由 Smoother Server 加载。
+
+包类型：平滑插件。包名和构建依赖见 [package.xml](package.xml)，安装目标见 [CMakeLists.txt](CMakeLists.txt)。
+
+主要目录：[src/](src/)、[include/](include/)、[test/](test/)。
+
+直接依赖（清单节选，完整约束见 manifest）：`angles`、`libceres-dev`、`nav2_common`、`nav2_core`、`nav2_costmap_2d`、`nav2_msgs`、`nav2_util`、`pluginlib`、`rclcpp`。
+
+插件声明：[nav2_constrained_smoother.xml](nav2_constrained_smoother.xml)。插件由对应宿主加载，插件类名以声明 XML 为准。
+
+使用方式：在宿主服务器的插件列表和参数块中配置导出的类；仅构建本包不会自动切换当前运行控制器或规划器。
+
+构建命令统一从 `nav2_ws` 执行，详见[仓库构建与包索引](../README.md)；不在包源码目录运行 colcon。本文依据当前源码描述职责，包存在、可构建或包含测试文件均不代表完成运行验收。
+
+## 原有说明与上游资料
+
 A smoother plugin for `nav2_smoother` based on the original deprecated smoother in `nav2_smac_planner` by [Steve Macenski](https://www.linkedin.com/in/steve-macenski-41a985101/) and put into operational state by [**RoboTech Vision**](https://robotechvision.com/). Suitable for applications which need planned global path to be pushed away from obstacles and/or for Reeds-Shepp motion models.
 
 See documentation on navigation.ros.org: https://navigation.ros.org/configuration/packages/configuring-constrained-smoother.html
@@ -48,7 +66,7 @@ Note: Smoothing paths which contain multiple subsequent poses at one point (e.g.
 
 Note: Constrained Smoother is recommended to be used on a path with a bounded length. TruncatePathLocal BT Node can be used for extracting a relevant path section around robot (in combination with DistanceController to achieve periodicity)
 
-# Constrained Smoother（约束平滑器）
+### Constrained Smoother（约束平滑器）
 
 一个为 `nav2_smoother` 提供的平滑插件，基于 `nav2_smac_planner` 中已弃用的平滑器（作者 Steve Macenski），并由 RoboTech Vision 将其改造成可用状态。适用于需要将全局路径推离障碍物和/或用于 Reeds-Shepp 运动模型的场景。
 
@@ -99,7 +117,7 @@ smoother_server:
 
 ## 中文翻译
 
-# Constrained Smoother（约束平滑器）
+### Constrained Smoother（约束平滑器）
 
 这是一个供 nav2_smoother 使用的路径平滑插件，源自 nav2_smac_planner 中已弃用的平滑器实现，用于把全局路径推离障碍物，或支持 Reeds-Shepp 运动模型。插件实现 nav2_core::Smoother，由 Smoother Server 通过 Pluginlib 加载。
 

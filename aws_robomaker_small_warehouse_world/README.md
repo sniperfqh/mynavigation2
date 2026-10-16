@@ -1,12 +1,26 @@
 # AWS RoboMaker Small Warehouse World
 
+## 当前项目用法
+
+提供 AWS 小型仓库世界、模型与地图资源，用于仿真场景搭建；不实现导航控制器。
+
+包类型：资源包。包名和构建依赖见 [package.xml](package.xml)，安装目标见 [CMakeLists.txt](CMakeLists.txt)。
+
+主要目录：[launch/](launch/)、[models/](models/)、[maps/](maps/)。
+
+直接依赖（清单节选，完整约束见 manifest）：`gazebo`、`gazebo_plugins`、`gazebo_ros`。
+
+构建命令统一从 `nav2_ws` 执行，详见[仓库构建与包索引](../README.md)；不在包源码目录运行 colcon。本文依据当前源码描述职责，包存在、可构建或包含测试文件均不代表完成运行验收。
+
+## 原有说明与上游资料
+
 ![Gazebo01](docs/images/small_warehouse_gazebo.png)
 
 ## AWS Robomaker Small Warehouse World on Gzweb
 
 ![Gzweb01](docs/images/gzweb_aws_warehouse.png)
 
-This Gazebo world is well suited for organizations who are building and testing robot applications for warehouse and logistics use cases. 
+This Gazebo world is well suited for organizations who are building and testing robot applications for warehouse and logistics use cases.
 
 ## 3D Models included in this Gazebo World
 
@@ -72,10 +86,10 @@ gzserver worlds/small_warehouse.world
 - Install GzWeb by following the [official documentation](http://gazebosim.org/gzweb#install-collapse-1):
 
     **Important**:
-  * The recommended NodeJS versions are 4 up to version 8.  
+  * The recommended NodeJS versions are 4 up to version 8.
   * Watch out for [conflicting installations of Node/NodeJS](https://askubuntu.com/questions/695155/node-nodejs-have-different-version)
   * See [Troubleshooting section](http://gazebosim.org/gzweb#install-collapse-3) for other issues
-  
+
 - Deploy GzWeb
     - Approach 1: Copy all the Gazebo models from small-warehouse world to gzweb/http/client/assets/, and run the deploy script
 
@@ -100,7 +114,7 @@ gzserver worlds/small_warehouse.world
 
 ## Example: Running this world directly using ROS without a simulated robot
 
-To launch this base Gazebo world without a robot, clone this repository and run the following commands. **Note: ROS and gazebo must already be installed on the host.** 
+To launch this base Gazebo world without a robot, clone this repository and run the following commands. **Note: ROS and gazebo must already be installed on the host.**
 
 ```bash
 # build for ROS
@@ -119,7 +133,7 @@ roslaunch aws_robomaker_small_warehouse_world view_small_warehouse.launch
 
 ## 中文翻译
 
-# AWS RoboMaker 小型仓库世界
+### AWS RoboMaker 小型仓库世界
 
 这是一个用于 Gazebo 的 AWS RoboMaker 小型仓库场景，适合构建和测试仓储、物流机器人应用。文档中的图片展示了 Gazebo 和 GzWeb 中的场景效果，模型表列出了仓库中可用的货架、箱体、桌子、地面、垃圾桶、灯具和托盘车等模型。
 

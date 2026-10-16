@@ -1,16 +1,37 @@
 # Nav2 Costmap_2d
 
-The costmap_2d package is responsible for building a 2D costmap of the environment, consisting of several "layers" of data about the environment. It can be initialized via the map server or a local rolling window and updates the layers by taking observations from sensors. A plugin interface allows for the layers to be combined into the costmap and finally inflated via an inflation radius based on the robot footprint. The nav2 version of the costmap_2d package is mostly a direct ROS2 port of the ROS1 navigation stack version, with minimal noteable changes necessary due to support in ROS2. 
+## 当前项目用法
+
+组合静态、障碍、体素、膨胀等层及代价过滤器，为规划与控制提供环境代价。
+
+包类型：代价地图库与节点。包名和构建依赖见 [package.xml](package.xml)，安装目标见 [CMakeLists.txt](CMakeLists.txt)。
+
+主要目录：[src/](src/)、[include/](include/)、[plugins/](plugins/)、[test/](test/)。
+
+直接依赖（清单节选，完整约束见 manifest）：`angles`、`geometry_msgs`、`laser_geometry`、`map_msgs`、`message_filters`、`nav2_common`、`nav2_msgs`、`nav2_util`、`nav2_voxel_grid`、`nav_msgs`、`pluginlib`、`rclcpp` 等。
+
+插件声明：[costmap_plugins.xml](costmap_plugins.xml)。插件由对应宿主加载，插件类名以声明 XML 为准。
+
+构建命令统一从 `nav2_ws` 执行，详见[仓库构建与包索引](../README.md)；不在包源码目录运行 colcon。本文依据当前源码描述职责，包存在、可构建或包含测试文件均不代表完成运行验收。
+
+## 原有说明与上游资料
+
+The costmap_2d package is responsible for building a 2D costmap of the environment, consisting of several "layers" of data about the environment. It can be initialized via the map server or a local rolling window and updates the layers by taking observations from sensors. A plugin interface allows for the layers to be combined into the costmap and finally inflated via an inflation radius based on the robot footprint. The nav2 version of the costmap_2d package is mostly a direct ROS2 port of the ROS1 navigation stack version, with minimal noteable changes necessary due to support in ROS2.
 
 See its [Configuration Guide Page](https://navigation.ros.org/configuration/packages/configuring-costmaps.html) for additional parameter descriptions for the costmap and its included plugins. The [tutorials](https://navigation.ros.org/tutorials/index.html) and [first-time setup guides](https://navigation.ros.org/setup_guides/index.html) also provide helpful context for working with the costmap 2D package and its layers. A [tutorial](https://navigation.ros.org/plugin_tutorials/docs/writing_new_costmap2d_plugin.html) is also provided to explain how to create costmap plugins.
 
-See the [Navigation Plugin list](https://navigation.ros.org/plugins/index.html) for a list of the currently known and available planner plugins. 
+See the [Navigation Plugin list](https://navigation.ros.org/plugins/index.html) for a list of the currently known and available planner plugins.
 
 ## To visualize the voxels in RVIZ:
+
 - Make sure `publish_voxel_map` in `voxel_layer` param's scope is set to `True`.
 - Open a new terminal and run:
-  ```ros2 run nav2_costmap_2d nav2_costmap_2d_markers voxel_grid:=/local_costmap/voxel_grid visualization_marker:=/my_marker```
-    Here you can change `my_marker` to any topic name you like for the markers to be published on.
+
+  ```bash
+  ros2 run nav2_costmap_2d nav2_costmap_2d_markers --ros-args -r voxel_grid:=/local_costmap/voxel_grid -r visualization_marker:=/my_marker
+  ```
+
+  Here you can change `my_marker` to any topic name you like for the markers to be published on.
 
 - Then add `my_marker` to RVIZ using the GUI.
 
@@ -28,7 +49,7 @@ Costmap Filters - is a costmap layer-based instrument which provides an ability 
 
 ## 中文翻译
 
-# Nav2 Costmap 2D
+### Nav2 Costmap 2D
 
 costmap_2d 负责构建环境二维代价地图。代价地图由多个环境数据层组成，可由 Map Server 初始化静态地图，也可以使用局部滚动窗口；各层从传感器观测更新，插件接口负责合并各层，最后按照机器人足迹和膨胀半径生成障碍物代价。
 

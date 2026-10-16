@@ -123,6 +123,7 @@ def generate_launch_description():
             'fixed_path_goal_braking_distance_margin': fixed_path_goal_braking_distance_margin,
             'operation_mode': operation_mode,
             'enable_localization_jump_detection': enable_localization_jump_detection,
+            'enable_collision_state': LaunchConfiguration('enable_collision_state'),
             'fixed_path_progress_timeout': fixed_path_progress_timeout,
             'keyboard_input_device': keyboard_input_device,
         }.items())
@@ -140,6 +141,7 @@ def generate_launch_description():
         DeclareLaunchArgument('params_file', default_value=os.path.join(bringup_dir, 'params', 'myworld2.yaml'), description='ROS 2 parameters file'),
         DeclareLaunchArgument('rviz_config_file', default_value=os.path.join(bringup_dir, 'rviz', 'nav2_default_view.rviz'), description='RViz configuration file'),
         DeclareLaunchArgument('autostart', default_value='true', description='Automatically activate lifecycle nodes'),
+        DeclareLaunchArgument('enable_collision_state', default_value='true', description='Enable fixed-path external collision-state gating'),
         DeclareLaunchArgument('use_collision_monitor', default_value='true', description='Enable Collision Monitor for the simulation velocity chain'),
         DeclareLaunchArgument('use_collision_visualization', default_value='true', description='Enable Collision Monitor boundary visualization'),
         DeclareLaunchArgument('use_composition', default_value='False', description='Use composed regulated modules'),

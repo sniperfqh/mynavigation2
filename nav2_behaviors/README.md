@@ -1,5 +1,21 @@
 # Behaviors
 
+## 当前项目用法
+
+通过行为插件提供旋转、后退、等待、按航向行驶及辅助遥控等动作。
+
+包类型：行为服务器。包名和构建依赖见 [package.xml](package.xml)，安装目标见 [CMakeLists.txt](CMakeLists.txt)。
+
+主要目录：[src/](src/)、[include/](include/)、[plugins/](plugins/)、[test/](test/)。
+
+直接依赖（清单节选，完整约束见 manifest）：`geometry_msgs`、`nav2_behavior_tree`、`nav2_common`、`nav2_core`、`nav2_costmap_2d`、`nav2_msgs`、`nav2_util`、`nav_msgs`、`pluginlib`、`rclcpp`、`rclcpp_action`、`rclcpp_lifecycle` 等。
+
+插件声明：[behavior_plugin.xml](behavior_plugin.xml)。插件由对应宿主加载，插件类名以声明 XML 为准。
+
+构建命令统一从 `nav2_ws` 执行，详见[仓库构建与包索引](../README.md)；不在包源码目录运行 colcon。本文依据当前源码描述职责，包存在、可构建或包含测试文件均不代表完成运行验收。
+
+## 原有说明与上游资料
+
 The `nav2_behaviors` package implements a task server for executing behaviors.
 
 The package defines:
@@ -14,7 +30,7 @@ See its [Configuration Guide Page](https://navigation.ros.org/configuration/pack
 
 See the [Navigation Plugin list](https://navigation.ros.org/plugins/index.html) for a list of the currently known and available planner plugins.
 
-# 行为
+### 行为
 
 `nav2_behaviors` 包实现了一个用于执行行为的任务服务器。
 
@@ -32,6 +48,6 @@ See the [Navigation Plugin list](https://navigation.ros.org/plugins/index.html) 
 
 ## 中文翻译
 
-# Behaviors／行为
+### Behaviors／行为
 
 该包提供 Nav2 行为插件，例如旋转、等待、前进、后退和清理等恢复或辅助动作。行为由 Behavior Server 通过 Pluginlib 加载，并在 Lifecycle 生命周期中完成配置、激活、停用和清理。具体行为插件负责自己的 Action 处理、周期更新、速度命令和碰撞检查；服务器负责共享 TF、Costmap、足迹和 Action 编排。

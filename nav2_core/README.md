@@ -1,5 +1,21 @@
 # Nav2 Core
 
+## 当前项目用法
+
+定义 GlobalPlanner、Controller、Smoother、Behavior、GoalChecker 等 Nav2 插件基类。
+
+包类型：插件接口库。包名和构建依赖见 [package.xml](package.xml)，安装目标见 [CMakeLists.txt](CMakeLists.txt)。
+
+主要目录：[include/](include/)。
+
+直接依赖（清单节选，完整约束见 manifest）：`geometry_msgs`、`nav2_common`、`nav2_costmap_2d`、`nav2_util`、`nav_msgs`、`pluginlib`、`rclcpp`、`rclcpp_lifecycle`、`std_msgs`、`tf2_ros`。
+
+使用方式：在宿主服务器的插件列表和参数块中配置导出的类；仅构建本包不会自动切换当前运行控制器或规划器。
+
+构建命令统一从 `nav2_ws` 执行，详见[仓库构建与包索引](../README.md)；不在包源码目录运行 colcon。本文依据当前源码描述职责，包存在、可构建或包含测试文件均不代表完成运行验收。
+
+## 原有说明与上游资料
+
 This package hosts the abstract interface (virtual base classes) for plugins to be used with the following:
 - global planner (e.g., `nav2_navfn_planner`)
 - controller (e.g., path execution controller, e.g `nav2_dwb_controller`)
@@ -14,7 +30,7 @@ The purposes of these plugin interfaces are to create a separation of concern fr
 
 ## 中文翻译
 
-# Nav2 Core
+### Nav2 Core
 
 该包定义 Nav2 插件使用的抽象接口（虚基类），覆盖全局规划器、局部控制器、路径平滑器、Goal Checker、行为插件、Progress Checker、航点任务执行器以及规划和控制异常。
 
