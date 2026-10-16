@@ -1,3 +1,5 @@
+# Launch 参数路由测试：构造临时 YAML 与上下文，核对类型、显式覆盖和仿真包装转发。
+# 生成描述与临时参数文件不等于启动 ROS 节点，空覆盖必须保留原 YAML 值。
 import importlib.util
 from pathlib import Path
 import tempfile
@@ -14,7 +16,9 @@ KEYS = ['goal_braking_distance_margin', 'dynamic_goal_braking_margin_enabled',
         'goal_braking_min_distance_margin', 'goal_braking_margin_transition_speed']
 
 
+# 组织本文件的回归场景；各 test_ 方法构造输入并断言预期，不把模拟样本当作现场证据。
 class MarginLaunchTest(unittest.TestCase):
+    # 构造临时参数文件与 LaunchContext 并执行解析，返回已生成的节点参数以便断言。
     def resolve(self, config, overrides):
         with tempfile.TemporaryDirectory() as directory:
             source = Path(directory) / 'params.yaml'
@@ -31,12 +35,14 @@ class MarginLaunchTest(unittest.TestCase):
                                    convert_types=True).perform(context)
             return yaml.safe_load(Path(output).read_text())['controller_server']['ros__parameters']['FixedPathController']
 
+    # 验证 YAML 中裕量数值与布尔类型不被空覆盖改变。
     def test_yaml_values_preserved_and_typed(self):
         values = dict(zip(KEYS, [.12, False, .04, .4]))
         result = self.resolve({'controller_server': {'ros__parameters': {'FixedPathController': values}}}, {})
         self.assertEqual(result, values)
         self.assertIs(type(result[KEYS[1]]), bool)
 
+    # 验证显式 Launch 覆盖优先于 YAML，并保持输出的目标类型。
     def test_explicit_override_wins(self):
         values = dict(zip(KEYS, [.12, False, .04, .4]))
         result = self.resolve({'controller_server': {'ros__parameters': {'FixedPathController': values}}},
@@ -46,12 +52,15 @@ class MarginLaunchTest(unittest.TestCase):
         self.assertEqual(result[KEYS[2]], .05)
         self.assertEqual(result[KEYS[3]], .4)
 
+    # 模拟空实参穿过仿真包装，底层继续采用 YAML 默认。
     def test_simulation_empty_override_keeps_yaml(self):
         self.check_simulation_route('', .12)
 
+    # 模拟显式裕量穿过仿真包装，确认并非仅声明而未转发。
     def test_simulation_explicit_override_forwarded(self):
         self.check_simulation_route('.2', .2)
 
+    # 解析仿真包装转发给规控入口的参数，确认空覆盖保留 YAML，显式值真正下传。
     def check_simulation_route(self, override, expected):
         from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
         from launch.utilities import perform_substitutions, normalize_to_list_of_substitutions
@@ -75,6 +84,7 @@ class MarginLaunchTest(unittest.TestCase):
             result = self.resolve(config, {KEYS[0]: forwarded['fixed_path_goal_braking_distance_margin']})
             self.assertEqual(result[KEYS[0]], expected)
 
+    # 无法识别的布尔覆盖必须报错，不能被非空字符串当作 true。
     def test_invalid_boolean_rejected(self):
         with self.assertRaises(ValueError):
             self.resolve({}, {KEYS[1]: 'invalid'})

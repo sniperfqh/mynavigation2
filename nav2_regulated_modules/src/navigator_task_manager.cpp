@@ -1,4 +1,5 @@
-// 任务管理与恢复。处理任务切换、状态清理、恢复尝试和最终结果。
+// 任务结束、抢占、恢复资源与代次清理。子 Goal 的取消请求是异步发送的。
+// 本文件重置句柄或报告上层终态，不等于等待下游取消完成；停车请求和实际停稳需由独立证据区分。
 
 #include "nav2_regulated_modules/regulated_navigator.hpp"
 
@@ -8,7 +9,8 @@
 namespace nav2_regulated_modules
 {
 
-// 取消仍在执行的下游规划、平滑或跟踪 Action 目标。
+// 对已持有句柄发送 async_cancel_goal，再重置本地句柄；可选递增轮次使旧回调失效。
+// 未等待取消响应／结果，不能称为下游全部终止；尚未拿到句柄的请求也不由这些分支直接取消。
 void RegulatedNavigator::cancelSubGoals(const bool invalidate_callbacks)
 {
   const bool had_compute_pose = active_compute_pose_goal_ != nullptr;
@@ -21,6 +23,7 @@ void RegulatedNavigator::cancelSubGoals(const bool invalidate_callbacks)
     ++follow_sequence_;
   }
   planning_active_ = false;
+  // 本函数只取消当前已持有的句柄；异步取消发送后立即 reset，不阻塞等待下游结果。
   if (active_compute_pose_goal_)
   {
     compute_pose_client_->async_cancel_goal(active_compute_pose_goal_);
@@ -47,7 +50,8 @@ void RegulatedNavigator::cancelSubGoals(const bool invalidate_callbacks)
   }
 }
 
-// 取消当前任务，通知客户端并输出停车指令。
+// 进入取消状态、废弃旧回调、请求停车，再按上层句柄状态返回 canceled 或 abort。
+// 只有客户端正在取消的句柄报告 canceled；一般内部取消走 abort，随后清空任务。
 void RegulatedNavigator::cancelTask(const std::string & reason)
 {
   if (task_.type == TaskType::NONE)
@@ -103,7 +107,8 @@ void RegulatedNavigator::cancelTask(const std::string & reason)
   resetTask();
 }
 
-// 在新目标接管前终止旧任务并隔离旧回调。
+// 新任务接管前使旧规划／跟踪轮次失效，发出取消与停车请求并 abort 旧上层任务。
+// 该流程不等待机械停稳，不应在注释中描述为已经完成安全控制权握手。
 void RegulatedNavigator::preemptCurrentTask()
 {
   if (task_.type == TaskType::NONE)
@@ -138,7 +143,8 @@ void RegulatedNavigator::preemptCurrentTask()
   resetTask();
 }
 
-// 向客户端报告任务成功并清理在途资源。
+// 向当前对应 Action 报告成功；固定路径另发 progress=1、finish=true 后清理任务。
+// 上层成功由下游结果触发，不直接证明外部精度验收、定位覆盖或真实底盘制动距离合格。
 void RegulatedNavigator::succeedTask()
 {
   const auto generation = task_.generation;
@@ -172,7 +178,8 @@ void RegulatedNavigator::succeedTask()
   resetTask();
 }
 
-// 向客户端报告失败原因并清理在途资源。
+// 废弃子 Goal 并向现有上层句柄报告失败，再清理任务快照。
+// 此函数自身没有调用 stopRobot；停车效果不能从函数名或本地状态归零推断。
 void RegulatedNavigator::failTask(const std::string & reason)
 {
   const auto generation = task_.generation;
@@ -199,10 +206,12 @@ void RegulatedNavigator::failTask(const std::string & reason)
   resetTask();
 }
 
-// 清理任务状态、序号及活动 Action 句柄。
+// 清除任务与诊断历史；固定路径结束时发布 0 SpeedLimit 清除该任务基准。
+// 0 在插件接口中的语义与 collision_task_speed 清理需区分，不代表独立停车命令。
 void RegulatedNavigator::resetTask()
 {
   collision_progress_paused_ = false;
+  // 固定路径结束清除该任务的限速基准；这条消息不代替 stopRobot 的 Twist 零命令。
   if (task_.type == TaskType::NAVIGATION_SERVICE && speed_limit_pub_)
   {
     nav2_msgs::msg::SpeedLimit speed_limit;

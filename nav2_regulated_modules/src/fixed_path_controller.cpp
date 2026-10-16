@@ -1,4 +1,17 @@
-// 固定路径控制器实现。按运动方向计算起点对齐、前视跟踪和终点停车指令。
+// 固定路径控制实现：一次调用根据路径、位姿、速度和 GoalChecker 输出一帧 TwistStamped。
+// 先检查起点与反馈，再处理方向化几何、起步保护及终点制动；停止锁存后不再执行终点旋转。
+// 实际底盘速度还经过速度平滑与下游适配，插件返回零命令不等于已有实测停稳证据。
+//
+// 功能参数：纵向制动、末端收敛和距离裕量分别配置。
+// 1. adaptive_goal_braking_enabled：false 使用固定减速度制动，true 使用自适应制动。
+//    固定减速度制动使用反应距离和单调命令；自适应制动使用速度相关包络及 jerk 约束。
+// 2. terminal_convergence_enabled：独立决定末端前视、当前精度复核及向宿主申请连续复核的时长。
+//    它可与固定减速度制动或自适应制动分别组合。
+// 3. dynamic_goal_braking_margin_enabled：在固定减速度制动中按实测速度插值距离裕量。
+//    自适应制动的距离预留由 adaptive_goal_* 参数计算。
+// configure 声明的缺省组合依次为 false／true／true，即“固定减速度制动＋末端收敛＋动态裕量”。
+// YAML／Launch 可以覆盖缺省值；实际后台配置须读运行参数，不能从本文件推断已加载哪组值。
+// 两种制动共用起点策略、起步限速、路径方向、曲率限速和终点零速锁存，不改变 Action 接口。
 
 #include "nav2_regulated_modules/fixed_path_controller.hpp"
 #include "nav2_regulated_modules/detail/terminal_position.hpp"
@@ -23,7 +36,8 @@
 namespace nav2_regulated_modules
 {
 
-// 读取参数并建立控制器运行所需的 ROS 接口或插件资源。
+// 锁定生命周期父节点并读取插件命名空间参数，检查约束后初始化 TF、代价地图和控制周期。
+// 成员初值与 declare_parameter 默认及 YAML 覆盖可能不同；角度为 rad，距离为 m，速度为 m/s。
 void FixedPathController::configure(const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent, std::string name, std::shared_ptr<tf2_ros::Buffer> tf, std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros)
 {
   auto node = parent.lock();
@@ -61,10 +75,15 @@ void FixedPathController::configure(const rclcpp_lifecycle::LifecycleNode::WeakP
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_stop_entry_tolerance", rclcpp::ParameterValue(0.0));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_braking_reaction_time", rclcpp::ParameterValue(0.1));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_braking_distance_margin", rclcpp::ParameterValue(0.1));
+  // 固定减速度制动的裕量开关：true 在 low→high 间随绝对车速连续插值；false 固定使用 high。
+  // low/high 分别为 goal_braking_min_distance_margin／goal_braking_distance_margin，单位 m。
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".dynamic_goal_braking_margin_enabled", rclcpp::ParameterValue(true));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_braking_min_distance_margin", rclcpp::ParameterValue(0.03));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".goal_braking_margin_transition_speed", rclcpp::ParameterValue(0.3));
+  // 纵向算法选择：false 使用固定减速度算法；true 使用下方 adaptive_goal_* 参数。
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".adaptive_goal_braking_enabled", rclcpp::ParameterValue(false));
+  // 末端收敛与上述选择正交：true 使用实测速度算末端前视、混合前视并逐周期复核精度。
+  // getTerminalStableDuration() 同时向 Controller Server 返回 1 s；false 返回 0，不申请这层连续复核。
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".terminal_convergence_enabled", rclcpp::ParameterValue(true));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".adaptive_goal_max_deceleration", rclcpp::ParameterValue(1.0));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".adaptive_goal_jerk_limit", rclcpp::ParameterValue(2.0));
@@ -122,7 +141,7 @@ void FixedPathController::configure(const rclcpp_lifecycle::LifecycleNode::WeakP
   node->get_parameter(plugin_name_ + ".alignment_stable_cycles", alignment_stable_cycles_);
   node->get_parameter(plugin_name_ + ".transform_tolerance", transform_tolerance_);
   node->get_parameter("controller_frequency", controller_frequency);
-  // 任一旧模式共用参数不满足正值、有限值或上下界关系时拒绝配置；终点前视也不能超出基础前视。
+  // 两分支均执行这组公共参数检查，各字段按下方实际条件校验；终点基础前视不能大于常规基础前视。
   if (base_linear_velocity_ <= 0.0 || lookahead_dist_ <= 0.0 || min_lookahead_dist_ <= 0.0 || max_lookahead_dist_ < min_lookahead_dist_ || start_position_tolerance_ <= 0.0 || direct_tracking_lateral_tolerance_ < 0.0 || direct_tracking_max_yaw_error_ <= 0.0 || direct_tracking_max_yaw_error_ > M_PI_2 || initial_yaw_tolerance_ <= 0.0 || initial_yaw_tolerance_ >= direct_tracking_max_yaw_error_ || rotate_to_heading_angular_vel_ <= 0.0 || max_angular_accel_ <= 0.0 || rotate_to_heading_kp_ <= 0.0 || min_approach_linear_velocity_ <= 0.0 || min_approach_linear_velocity_ > base_linear_velocity_ || approach_velocity_scaling_dist_ <= 0.0 || !std::isfinite(goal_linear_deceleration_) || goal_linear_deceleration_ <= 0.0 || !std::isfinite(goal_final_approach_velocity_) || goal_final_approach_velocity_ < 0.0 || !std::isfinite(goal_braking_reaction_time_) || goal_braking_reaction_time_ < 0.0 || !std::isfinite(goal_braking_distance_margin_) || goal_braking_distance_margin_ < 0.0 || !std::isfinite(goal_terminal_lookahead_dist_) || goal_terminal_lookahead_dist_ <= 0.0 || goal_terminal_lookahead_dist_ > lookahead_dist_ || !std::isfinite(goal_terminal_lookahead_reference_speed_) || goal_terminal_lookahead_reference_speed_ <= 0.0 || !std::isfinite(goal_terminal_lookahead_speed_gain_) || goal_terminal_lookahead_speed_gain_ < 0.0 || !std::isfinite(goal_terminal_lookahead_min_dist_) || goal_terminal_lookahead_min_dist_ <= 0.0 || !std::isfinite(goal_terminal_lookahead_max_dist_) || goal_terminal_lookahead_max_dist_ < goal_terminal_lookahead_min_dist_ || goal_terminal_lookahead_dist_ < goal_terminal_lookahead_min_dist_ || goal_terminal_lookahead_dist_ > goal_terminal_lookahead_max_dist_ || goal_error_log_frequency_ <= 0.0 || alignment_stable_cycles_ < 1 || transform_tolerance_ < 0.0 || controller_frequency <= 0.0)
   {
     throw nav2_core::PlannerException("FixedPathController parameters are invalid");
@@ -142,7 +161,8 @@ void FixedPathController::configure(const rclcpp_lifecycle::LifecycleNode::WeakP
   }
   LOG_INFO("连续制动裕量：enabled={}，minimum={:.3f}m，high={:.3f}m，transition={:.3f}m/s，adaptive_branch={}", dynamic_goal_braking_margin_enabled_, goal_braking_min_distance_margin_, goal_braking_distance_margin_, goal_braking_margin_transition_speed_, adaptive_goal_braking_enabled_);
   control_duration_ = 1.0 / controller_frequency;
-  // 仅在显式启用新制动路径时校验专属参数；关闭时不改变旧配置的接受条件。
+  // 只有自适应制动启用时，才校验其专属减速度／jerk／接近速度／延迟／距离裕量。
+  // 关闭自适应后仍会执行前面的公共检查和已启用动态裕量的检查，并非跳过所有制动参数校验。
   if (adaptive_goal_braking_enabled_ && (!std::isfinite(adaptive_goal_max_deceleration_) || adaptive_goal_max_deceleration_ <= 0.0 || adaptive_goal_max_deceleration_ > 1.0 || !std::isfinite(adaptive_goal_jerk_limit_) || adaptive_goal_jerk_limit_ <= 0.0 || !std::isfinite(adaptive_goal_approach_speed_) || adaptive_goal_approach_speed_ <= 0.0 || !std::isfinite(adaptive_goal_response_time_) || adaptive_goal_response_time_ < 0.0 || !std::isfinite(adaptive_goal_distance_margin_) || adaptive_goal_distance_margin_ < 0.0))
   {
     throw nav2_core::PlannerException("FixedPathController adaptive braking parameters are invalid");
@@ -151,7 +171,8 @@ void FixedPathController::configure(const rclcpp_lifecycle::LifecycleNode::WeakP
   LOG_INFO("固定路径起步限速配置：每条路径保护距离={:.3f}m，限速={:.3f}m/s，解除横向误差≤{:.3f}m，航向误差≤{:.3f}rad，连续周期={}", start_speed_limit_distance_, start_offset_speed_limit_, direct_tracking_lateral_tolerance_, start_speed_release_yaw_tolerance_, start_speed_release_stable_cycles_);
 }
 
-// 释放插件资源并复位控制器内部阶段与路径状态。
+// 清空路径、起步／制动历史和共享依赖，供后续重新 configure。
+// 不直接发布 Twist，也不证明底盘停稳。
 void FixedPathController::cleanup()
 {
   std::lock_guard<std::mutex> lock(mutex_);
@@ -163,6 +184,7 @@ void FixedPathController::cleanup()
   goal_tangent_index_ = 0;
   stable_cycles_ = 0;
   start_strategy_evaluated_ = false;
+  // 策略只按首次横向偏差选择；航向条件随后各分支再判断，不能把两者写成同一个首次布尔条件。
   direct_start_tracking_ = false;
   goal_braking_active_ = false;
   terminal_stop_latched_ = false;
@@ -176,13 +198,14 @@ void FixedPathController::cleanup()
   error_log_initialized_ = false;
 }
 
-// 记录插件激活事件；此函数不单独建立订阅或输出速度。
+// 记录插件已激活；插件由 Controller Server 调度，不能独立启动导航。
 void FixedPathController::activate()
 {
   LOG_INFO("固定路径控制器已激活，plugin={}", plugin_name_);
 }
 
-// 将控制阶段设为停止并锁存终点停车，后续计算不再继续跟踪旧路径。
+// 将内部阶段切到 STOPPED 并锁存停止请求，不从这里发布速度。
+// 真正的零速输出仍由后续调用与 Controller Server 收口负责。
 void FixedPathController::deactivate()
 {
   std::lock_guard<std::mutex> lock(mutex_);
@@ -194,7 +217,8 @@ void FixedPathController::deactivate()
   LOG_INFO("固定路径控制器已停用，plugin={}", plugin_name_);
 }
 
-// 装入新的跟踪路径；重置此前路径索引、终点锁存及进度数据。
+// 接收至少两点的完整 Path，复位最近点、起步保护与终点锁存，提取有效首末切线。
+// 通过首点姿态与路径切线区分前进／倒车；新路径会重新开始起步保护，不继承旧任务状态。
 void FixedPathController::setPlan(const nav_msgs::msg::Path & path)
 {
   std::lock_guard<std::mutex> lock(mutex_);
@@ -268,7 +292,9 @@ void FixedPathController::setPlan(const nav_msgs::msg::Path & path)
   LOG_INFO("固定路径已装载，frame={}，路径点数={}，方向={}，起点切线={:.6f}rad，终点切线={:.6f}rad", global_plan_.header.frame_id, global_plan_.poses.size(), direction_sign_ > 0 ? "forward" : "backward", start_path_yaw_, goal_path_yaw_);
 }
 
-// 根据当前位姿与路径阶段生成速度指令；各安全边界可使输出归零。
+// 本周期从路径坐标系位姿、实测 Twist 和 GoalChecker 容差生成控制目标。
+// 执行顺序：起点对齐／保护 → 终点几何／锁停 → 前视曲率 → 纵向制动 → 方向化 Twist。
+// 已锁停时提前返回零命令；PlannerException 交给宿主按 failure_tolerance 等策略处理。
 geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(const geometry_msgs::msg::PoseStamped & pose, const geometry_msgs::msg::Twist & velocity, nav2_core::GoalChecker * goal_checker)
 {
   std::lock_guard<std::mutex> lock(mutex_);
@@ -285,7 +311,7 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
   }
   geometry_msgs::msg::Pose pose_tolerance;
   geometry_msgs::msg::Twist velocity_tolerance;
-  // 目标检查器提供当前位置和停稳速度门槛；读取失败时无法安全判定终点。
+  // 目标检查器提供位置容差与停稳速度阈值；读取失败时不继续计算本周期控制命令。
   if (!goal_checker->getTolerances(pose_tolerance, velocity_tolerance))
   {
     throw nav2_core::PlannerException("FixedPathController failed to read StoppedGoalChecker tolerances");
@@ -297,13 +323,17 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
   {
     throw nav2_core::PlannerException("FixedPathController stop entry tolerance exceeds goal tolerance");
   }
+  // 两种制动共用停车入口：entry>0 用独立入口，entry=0 沿用 GoalChecker 的 XY 容差。
+  // 正入口不得大于 XY 容差；例如入口 8 mm、精度半径 10 mm 时，停车门槛比精度门槛更靠近终点。
+  // 该入口用于锁停及制动距离预留，不会把 GoalChecker 的精度半径改成 8 mm。
   const double stop_tolerance = goal_stop_entry_tolerance_ > 0.0 ? goal_stop_entry_tolerance_ : goal_xy_tolerance;
   // 拒绝非有限或负容差，避免后续停车锁存和停稳判定失去边界。
   if (!std::isfinite(goal_xy_tolerance) || !std::isfinite(linear_stopped_velocity) || !std::isfinite(angular_stopped_velocity) || goal_xy_tolerance <= 0.0 || linear_stopped_velocity < 0.0 || angular_stopped_velocity < 0.0)
   {
     throw nav2_core::PlannerException("FixedPathController requires valid position and stopped-velocity tolerances");
   }
-  // 新制动路径依赖实测速度；只有启用该路径时才对无效反馈执行零速保护。
+  // 自适应制动或末端收敛任一启用时，拒绝非有限线／角速度并返回零命令。
+  // 自适应关闭且末端收敛开启时，同样执行此零速保护。
   if ((adaptive_goal_braking_enabled_ || terminal_convergence_enabled_) && (!std::isfinite(velocity.linear.x) || !std::isfinite(velocity.angular.z)))
   {
     LOG_ERROR("固定路径里程计速度无效，输出零速保护");
@@ -411,31 +441,40 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
       start_speed_guard_.resetStability();
     }
   }
+  // 速度幅值取基础上限、任务限速、当前起步上限三者最小值；方向符号在输出末尾才附加。
   const double effective_linear_limit = std::min(std::min(base_linear_velocity_, speed_limit_), start_speed_guard_.active() ? start_offset_speed_limit_ : base_linear_velocity_);
   LOG_DEBUG("固定路径起步速度链：保护={}，任务限速={:.6f}，有效上限={:.6f}", start_speed_guard_.active(), speed_limit_, effective_linear_limit);
   const auto & goal_position = global_plan_.poses.back().pose.position;
   const double goal_delta_x = robot_pose.pose.position.x - goal_position.x;
   const double goal_delta_y = robot_pose.pose.position.y - goal_position.y;
+  // 终点纵向投影 = 位置误差向量 · 末段单位切线；投影≥0 表示到达或越过末段终点平面。
   const double terminal_projection = goal_delta_x * terminal_tangent_x_ + goal_delta_y * terminal_tangent_y_;
   // 只有已跟踪到末段且沿末段切线越过终点平面，才视为纵向越界。
   const bool goal_plane_crossed = nearest_index_ >= goal_tangent_index_ && terminal_projection >= 0.0;
   const double remaining = remainingDistance(nearest_index_, robot_pose);
   const double effective_remaining = std::max(remaining - stop_tolerance, 0.0);
-  // 旧模式只取运动方向上的正速度；新模式取绝对值，避免反向残余速度低估停车距离。
+  // 【速度基准】两分支均以非负幅值计算制动，倒车符号在最终 Twist 输出处添加。
+  // adaptive_goal_braking_enabled=false：max(0, 任务方向×实测线速度)，反向残余运动按 0 计。
+  // 自适应：abs(实测线速度)，把反向残余运动也计入停车距离；此选择与末端收敛开关无关。
   const double current_linear_velocity = adaptive_goal_braking_enabled_ ? std::abs(velocity.linear.x) : std::max(0.0, static_cast<double>(direction_sign_) * velocity.linear.x);
-  // 自适应关闭时不调用新包络；旧模式仍以固定减速度计算制动距离。
+  // 【停车距离】固定减速度制动先计算 v²÷(2×goal_linear_deceleration_)，触发判断时再加反应距离。
+  // 自适应调用纯函数：先将速度 0.2～1.5 m/s 映射为减速度，再以不超过 0.4 m/s² 的规划减速度估距。
+  // 自适应预留 = 停车入口 + adaptive 距离裕量 + v×响应时间 + v×规划减速度÷(2×jerk 上限)。
+  // 自适应停车距离 = v²÷(2×规划减速度) + 自适应预留，speed_limit 再由剩余可用距离反推。
+  // speed_profile.deceleration 参与包络规划及日志；后续积分器实际传入的是 adaptive_goal_max_deceleration_。
   const auto speed_profile = adaptive_goal_braking_enabled_ ? calculateFixedPathSpeedProfile(current_linear_velocity, remaining, effective_linear_limit, adaptive_goal_max_deceleration_, adaptive_goal_jerk_limit_, adaptive_goal_response_time_, adaptive_goal_distance_margin_, stop_tolerance, adaptive_goal_approach_speed_) : FixedPathSpeedProfile{0.0, 0.0, 0.0};
   const double stopping_distance = adaptive_goal_braking_enabled_ ? speed_profile.stopping_distance : current_linear_velocity * current_linear_velocity / (2.0 * goal_linear_deceleration_);
+  // 【末端前视】收敛开启用实测速度幅值，关闭用当前有效任务上限；不是按自适应制动开关选择。
   const double expected_linear_velocity = terminal_convergence_enabled_ ? std::abs(velocity.linear.x) : std::max(0.0, effective_linear_limit);
   // 末段前视随有效速度变化，但始终限制在配置的最小和最大距离之间。
   const double dynamic_terminal_lookahead_distance = std::clamp(goal_terminal_lookahead_dist_ + goal_terminal_lookahead_speed_gain_ * (expected_linear_velocity - goal_terminal_lookahead_reference_speed_), goal_terminal_lookahead_min_dist_, goal_terminal_lookahead_max_dist_);
-  // 进入 XY 容差或越过终点平面都会触发零速锁存，避免继续向前驶离终点。
+  // 进入配置停车入口（未指定时用 XY 容差）或越过末段终点平面时锁停，准确性仍按 XY 容差另算。
   const auto terminal_position = detail::terminalPosition(goal_distance, goal_xy_tolerance, goal_stop_entry_tolerance_, goal_plane_crossed, terminal_stop_latched_, terminal_position_accurate_);
   const bool terminal_condition_reached = terminal_position.stopped;
   // 首次触发终点条件时锁存停车；位置是否准确单独记录，不把越界误报为到点成功。
   if (!terminal_stop_latched_ && terminal_condition_reached)
   {
-    // 新模式若在明显非低速状态触发终点保护，记录异常以区分正常制动与安全停车。
+    // 自适应分支以 >0.02 m/s 触发诊断警告；两分支仍执行相同锁停，警告本身不改变速度算法。
     if (adaptive_goal_braking_enabled_ && current_linear_velocity > 0.02)
     {
       LOG_WARN("固定路径终点在非低速状态下触发安全停车，实测线速度={:.4f}m/s", current_linear_velocity);
@@ -446,10 +485,11 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
     phase_ = Phase::STOPPED;
     LOG_INFO("固定路径终点停车已锁存，原因={}，位置误差={:.4f}m，终点纵向投影={:.4f}m，锁存跟踪航向误差={:.3f}rad（{:.2f}deg），停车后不再旋转", goal_distance <= stop_tolerance ? "within_tolerance" : "goal_plane_crossed", goal_distance, terminal_projection, terminal_tracking_yaw_error_, terminal_tracking_yaw_error_ * 180.0 / M_PI);
   }
-  // 旧模式允许停车后再次进入位置容差时单向锁存精度，兼容已有成功判定。
+  // 【停车后的精度】收敛开启时按当前 XY 误差复核；仅有正入口时采用 terminalPosition 的精度结果。
+  // 入口为 0 且收敛关闭时，下面的 else if 将“已进入精度半径”单向锁存为 true。
   else if (terminal_stop_latched_ && (goal_stop_entry_tolerance_ > 0.0 || terminal_convergence_enabled_))
   {
-    // 实验入口启用时逐周期复核当前验收半径，不保留历史准确状态。
+    // 收敛开启直接重算当前位置；收敛关闭且入口为正时，辅助函数也不继承历史准确状态。
     terminal_position_accurate_ = terminal_convergence_enabled_ ? goal_distance <= goal_xy_tolerance : terminal_position.accurate;
   }
   else if (terminal_stop_latched_ && !terminal_position_accurate_ && goal_distance <= goal_xy_tolerance)
@@ -457,15 +497,19 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
     terminal_position_accurate_ = true;
     LOG_INFO("固定路径停车后位置精度已进入容差并单向锁存，位置误差={:.4f}m，位置容差={:.4f}m", goal_distance, goal_xy_tolerance);
   }
-  // 已停车锁存后持续输出零速；停稳后的精度复核和2秒成功兜底由控制服务器处理。
+  // 两分支一旦锁停便保持零速且不再转向；锁停后位置漂出容差不会重新开始跟踪。
+  // 收敛开启时，连续 1 s 精度复核及停稳 2 s 后的超限成功兜底由 Controller Server 实现。
+  // 兜底还需满足宿主的新鲜反馈／定位等条件；本插件返回零命令不直接返回 Action 成功。
   if (terminal_stop_latched_)
   {
-    // 新模式逐周期复核当前 XY 误差，不沿用曾短暂经过容差时的历史位置。
+    // 自适应分支在这里再次重算精度，即使 terminal_convergence_enabled=false 也会执行。
+    // 此处覆盖前面的历史锁存结果，使自适应分支始终以当前 XY 误差作为准确性依据。
     if (adaptive_goal_braking_enabled_)
     {
       // 位置精度使用当前位姿，而非越过终点瞬间的锁存结果。
       terminal_position_accurate_ = goal_distance <= goal_xy_tolerance;
-      // 已停稳仍在容差外时明确报告失败，由控制服务器终止当前 FollowPath。
+      // 当前 XY 超容差且纵向速度已低于停稳门槛时抛异常；此条件本身未检查角速度停稳。
+      // 异常先交宿主按 failure_tolerance 处理；容忍时间耗尽可能先结束任务，不能保证等到 2 s 成功兜底。
       if (!terminal_position_accurate_ && current_linear_velocity <= linear_stopped_velocity)
       {
         throw nav2_core::PlannerException("Fixed path stopped beyond terminal position tolerance");
@@ -477,6 +521,8 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
   const double nominal_lookahead_distance = std::clamp(std::max(lookahead_dist_, std::abs(velocity.linear.x) * lookahead_time_), min_lookahead_dist_, max_lookahead_dist_);
   // 远离终点按速度选常规前视；接近终点时收缩到不小于末段动态前视的距离。
   const double normal_lookahead_distance = std::min(nominal_lookahead_distance, std::max(dynamic_terminal_lookahead_distance, goal_distance));
+  // 收敛关闭直接使用 normal；开启时在距终点 0.5→0.1 m 区间平滑混合到末端前视。
+  // 该开关同时影响横向几何和精度复核，但不会替换上面的纵向制动算法。
   const double lookahead_distance = terminal_convergence_enabled_ ? detail::terminalLookahead(normal_lookahead_distance, dynamic_terminal_lookahead_distance, goal_distance) : normal_lookahead_distance;
   auto carrot = selectCarrot(nearest_index_, lookahead_distance);
   carrot.header.frame_id = global_plan_.header.frame_id;
@@ -489,6 +535,7 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
   }
   const double carrot_distance_squared = local_carrot.pose.position.x * local_carrot.pose.position.x + local_carrot.pose.position.y * local_carrot.pose.position.y;
   // 前视点几乎与车体重合时曲率分母趋零，改用零曲率避免速度命令发散。
+  // 车体坐标中的 Pure Pursuit 曲率 κ=2y÷(x²+y²)，单位 1/m；分母过小时使用零曲率。
   const double curvature = carrot_distance_squared > 1e-6 ? 2.0 * local_carrot.pose.position.y / carrot_distance_squared : 0.0;
   double linear_magnitude = effective_linear_limit;
   // 弯道曲率非零时再受最大角速度约束，直线段保持原线速度上限。
@@ -496,16 +543,20 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
   {
     linear_magnitude = std::min(linear_magnitude, rotate_to_heading_angular_vel_ / std::abs(curvature));
   }
+  // 【固定减速度制动裕量】动态开启时按 abs(v)÷transition 从 low 插值到 high，达到过渡速度后固定 high。
+  // 动态关闭、速度无效或选择自适应时，辅助函数返回 high；braking_reaction_distance 用于固定减速度制动。
   const double effective_braking_margin = detail::brakingMargin(dynamic_goal_braking_margin_enabled_, adaptive_goal_braking_enabled_, velocity.linear.x, goal_braking_min_distance_margin_, goal_braking_distance_margin_, goal_braking_margin_transition_speed_);
   const double braking_reaction_distance = current_linear_velocity * goal_braking_reaction_time_ + effective_braking_margin;
-  // 新模式使用含响应延迟和 jerk 预留的停车距离；旧模式沿用固定减速度加反应裕量。
+  // 【进入制动】effective_remaining 已扣除停车入口，两分支都与 approach_velocity_scaling_dist_ 取较大值。
+  // 固定减速度制动触发距离 = max(接近距离, 基础停车距离 + v×goal_braking_reaction_time_ + 距离裕量)。
+  // 自适应制动触发距离 = max(接近距离, 已含 adaptive_goal_* 预留的停车距离)。
   const double braking_activation_distance = adaptive_goal_braking_enabled_ ? std::max(approach_velocity_scaling_dist_, stopping_distance) : std::max(approach_velocity_scaling_dist_, stopping_distance + braking_reaction_distance);
   // 首次进入减速区才锁定制动状态与当前命令，防止剩余距离波动反复切换阶段。
   if (!goal_braking_active_ && effective_remaining <= braking_activation_distance)
   {
     goal_braking_active_ = true;
     last_braking_command_magnitude_ = linear_magnitude;
-    // 新路径初始化 jerk 限制器的减速度和时间戳，后续周期连续推进。
+    // 自适应首次进入制动时初始化 jerk 积分历史；setPlan 还会在每条新 Path 开始前清理历史。
     if (adaptive_goal_braking_enabled_)
     {
       last_braking_deceleration_ = 0.0;
@@ -514,14 +565,17 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
     }
     else
     {
-      // 旧路径不维护 jerk 状态，继续使用既有制动参数和日志语义。
+      // 固定减速度制动在此记录阶段切入；加减速平滑由下游速度平滑器执行。
       LOG_INFO("固定路径进入终点平滑制动，剩余距离={:.4f}m，当前速度={:.4f}m/s，制动距离={:.4f}m，目标减速度={:.3f}m/s^2", remaining, current_linear_velocity, stopping_distance, goal_linear_deceleration_);
     }
   }
   // 只有制动阶段才改变纵向目标速度；此前由限速及曲率约束控制。
   if (goal_braking_active_)
   {
-    // 显式启用时采用实测车速包络和逐周期 jerk 限制。
+    // 【自适应输出】包络先给目标速度，再由上一命令、上一减速度和 dt 逐步逼近。
+    // helper 中请求减速度 = clamp((上一命令−目标速度)÷dt, 0, adaptive 最大减速度)。
+    // 下一减速度限制在“上一减速度±jerk×dt”内，输出 = max(目标速度, 上一命令−下一减速度×dt)。
+    // 包络目标增大时，max(目标速度, 积分速度) 允许输出随之增大。
     if (adaptive_goal_braking_enabled_)
     {
       const auto update_time = clock_->now();
@@ -546,10 +600,12 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
         }
       }
       // 限定时间步长，防止长时间调度间隔一次性放大命令变化。
+      // 积分步长限制为 5～100 ms；ROS 时钟冻结时使用名义周期，回跳则在前面清制动状态并请求零速。
       dt = std::clamp(dt, 0.005, 0.1);
       const double braking_target = std::min(linear_magnitude, speed_profile.speed_limit);
       double next_deceleration = 0.0;
-      // 按减速度及 jerk 双重约束逼近目标；输出再与曲率速度上限取小值。
+      // 这里传最大减速度参数，而非 speed_profile.deceleration，不能把日志值当成本次积分器硬上限。
+      // jerk 约束针对正常制动积分；曲率／任务限速可再裁剪，终点锁停／异常零速也不经过这层积分。
       const double braking_command = advanceFixedPathBrakingSpeed(last_braking_command_magnitude_, braking_target, last_braking_deceleration_, adaptive_goal_max_deceleration_, adaptive_goal_jerk_limit_, dt, next_deceleration);
       linear_magnitude = std::min(linear_magnitude, braking_command);
       last_braking_command_magnitude_ = linear_magnitude;
@@ -558,7 +614,9 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
     }
     else
     {
-      // 旧路径先扣除反应距离，再按 v²=2ad 求允许的终点线速度。
+      // 【固定减速度制动输出】可用距离 = max(0, 剩余路程−停车入口−反应距离)，各项单位为 m。
+      // 目标幅值 = min(当前几何上限, √(2×固定减速度×可用距离))，尚未到停车入口时再保留微量接近速度。
+      // 此处直接计算目标，不在插件内按 jerk 积分；下游平滑器负责自己的加减速约束。
       const double braking_distance_remaining = std::max(effective_remaining - braking_reaction_distance, 0.0);
       double braking_target = std::min(linear_magnitude, std::sqrt(2.0 * goal_linear_deceleration_ * braking_distance_remaining));
       // 尚未进入位置容差时保留配置的微量接近速度，避免提前完全停住。
@@ -566,7 +624,7 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
       {
         braking_target = std::min(linear_magnitude, std::max(braking_target, goal_final_approach_velocity_));
       }
-      // 旧制动阶段只允许目标速度单调下降，避免定位抖动导致二次加速。
+      // 取上一命令与当前目标的较小值，使制动命令幅值单调下降。
       linear_magnitude = detail::boundedBrakingCommand(last_braking_command_magnitude_, braking_target);
       last_braking_command_magnitude_ = linear_magnitude;
     }
@@ -576,12 +634,14 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
   command.header.frame_id = costmap_ros_->getBaseFrameID();
   command.header.stamp = clock_->now();
   // 路径方向决定纵向命令正负；曲率再映射为受上限约束的角速度。
+  // 最终加上方向符号：前进为正，倒车为负；ω=v×κ，随后角速度再限幅。
   command.twist.linear.x = static_cast<double>(direction_sign_) * linear_magnitude;
   command.twist.angular.z = std::clamp(command.twist.linear.x * curvature, -rotate_to_heading_angular_vel_, rotate_to_heading_angular_vel_);
   return command;
 }
 
-// 更新控制器允许速度；区分百分比限制与绝对速度限制。
+// 按 percentage 区分百分比与绝对上限，结果不能超过 base_linear_velocity。
+// NO_SPEED_LIMIT 表示恢复基础上限，非有限／负值被忽略；不在这里生成制动曲线。
 void FixedPathController::setSpeedLimit(const double & speed_limit, const bool & percentage)
 {
   std::lock_guard<std::mutex> lock(mutex_);
@@ -601,21 +661,23 @@ void FixedPathController::setSpeedLimit(const double & speed_limit, const bool &
   speed_limit_ = percentage ? base_linear_velocity_ * std::clamp(speed_limit / 100.0, 0.0, 1.0) : std::min(base_linear_velocity_, speed_limit);
 }
 
-// 读取终点停车锁存状态；锁存后不再输出继续跟踪命令。
+// 在锁内返回停车锁存位；锁存只说明控制器持续要求零速，不说明轮速已为零。
 bool FixedPathController::isTerminalStopLatched()
 {
   std::lock_guard<std::mutex> lock(mutex_);
   return terminal_stop_latched_;
 }
 
-// 只检查终点位置精度，供任务成功判定使用。
+// 在锁内返回控制器维护的位置状态，终点收敛分支可逐周期复核该值。
+// 该布尔值不包含独立采样窗覆盖率或实际物理定位误差。
 bool FixedPathController::isTerminalPositionAccurate()
 {
   std::lock_guard<std::mutex> lock(mutex_);
   return terminal_position_accurate_;
 }
 
-// 通过 TF 把输入位姿转换到指定坐标系；转换异常时返回 false。
+// 同坐标系直接复制，否则通过 TF 在 transform_tolerance（s）内转换。
+// 变换失败返回 false，调用方不得用未变换坐标继续计算。
 bool FixedPathController::transformPose(const std::string & frame, const geometry_msgs::msg::PoseStamped & input, geometry_msgs::msg::PoseStamped & output) const
 {
   // 坐标系已一致时直接复制，避免不必要的 TF 查询及时间外推失败。
@@ -639,7 +701,8 @@ bool FixedPathController::transformPose(const std::string & frame, const geometr
   }
 }
 
-// 从当前路径搜索区间选出距机器人最近的轨迹点索引。
+// 只在当前 nearest_index 及其之后搜索最近离散点，避免进度倒退。
+// 输出是路径索引而非弧长；同距离候选保留先遇点。
 std::size_t FixedPathController::findNearestIndex(const geometry_msgs::msg::PoseStamped & robot_pose)
 {
   std::size_t best_index = nearest_index_;
@@ -658,7 +721,8 @@ std::size_t FixedPathController::findNearestIndex(const geometry_msgs::msg::Pose
   return best_index;
 }
 
-// 估算当前位姿至路径终点的剩余行程。
+// 当前位置到选定路径点的距离加上后续折线长度，单位 m。
+// 这与到终点的直线距离不同，弯道与偏离路径时不能混用。
 double FixedPathController::remainingDistance(const std::size_t start_index, const geometry_msgs::msg::PoseStamped & robot_pose) const
 {
   double distance = poseDistance(robot_pose, global_plan_.poses[start_index]);
@@ -670,7 +734,8 @@ double FixedPathController::remainingDistance(const std::size_t start_index, con
   return distance;
 }
 
-// 按前视距离选择路径目标点，必要时对末段进行受限延长。
+// 从 start_index 向前累计离散弧长，返回首个达到前视距离的路径点。
+// 若余下路径不够长，沿末段单位切线外推；外推只服务曲率计算，不改变业务终点。
 geometry_msgs::msg::PoseStamped FixedPathController::selectCarrot(const std::size_t start_index, const double lookahead_distance) const
 {
   double accumulated = 0.0;
@@ -692,7 +757,7 @@ geometry_msgs::msg::PoseStamped FixedPathController::selectCarrot(const std::siz
   return carrot;
 }
 
-// 构造全零 Twist，统一用于停车或无有效路径场景。
+// 生成带底盘坐标系和当前时钟时间戳的零 TwistStamped，不发送消息。
 geometry_msgs::msg::TwistStamped FixedPathController::zeroCommand() const
 {
   geometry_msgs::msg::TwistStamped command;
@@ -701,7 +766,8 @@ geometry_msgs::msg::TwistStamped FixedPathController::zeroCommand() const
   return command;
 }
 
-// 将航向误差换算为受角速度与加速度约束的原地转向指令。
+// 将剩余角误差同时受比例项、最大角速度及角减速度包络约束，再限制单周期角速度变化。
+// 角误差单位 rad；纵向速度保持零，控制周期从配置频率得到。
 geometry_msgs::msg::TwistStamped FixedPathController::rotateCommand(const double yaw_error, const double yaw_tolerance, const double max_angular_velocity, const double max_angular_accel, const double angular_kp, const geometry_msgs::msg::Twist & velocity) const
 {
   auto command = zeroCommand();
@@ -720,7 +786,8 @@ geometry_msgs::msg::TwistStamped FixedPathController::rotateCommand(const double
   return command;
 }
 
-// 按设定频率记录终点位置和航向误差；不改变停车判定。
+// 按 ROS 时钟限频保存终点误差、剩余路程和制动状态；时钟回跳允许重新记录。
+// 日志只观察已算出的量，不改变停车、精度或任务状态。
 void FixedPathController::logGoalErrors(const double position_error, const double yaw_error, const double goal_xy_tolerance, const double terminal_projection, const bool goal_plane_crossed, const double remaining_distance, const double current_linear_velocity, const double target_linear_velocity, const double stopping_distance, const double terminal_lookahead_distance)
 {
   const auto now = clock_->now();
@@ -735,7 +802,7 @@ void FixedPathController::logGoalErrors(const double position_error, const doubl
   LOG_INFO("固定路径终点误差：phase={}，位置误差={:.4f}m，路径剩余={:.4f}m，位置容差={:.4f}m，当前速度={:.4f}m/s，目标速度={:.4f}m/s，终点前视={:.4f}m，制动距离={:.4f}m，平滑制动={}，终点纵向投影={:.4f}m，越界={}，停车锁存={}，位置精度锁存={}，跟踪航向误差仅供诊断={:.3f}rad（{:.2f}deg）", phaseName(phase_), position_error, remaining_distance, goal_xy_tolerance, current_linear_velocity, target_linear_velocity, terminal_lookahead_distance, stopping_distance, goal_braking_active_, terminal_projection, goal_plane_crossed, terminal_stop_latched_, terminal_position_accurate_, yaw_error, yaw_error * 180.0 / M_PI);
 }
 
-// 返回当前控制阶段名称，供诊断日志辨识。
+// 将内部阶段枚举映射到稳定字符串，仅用于日志；未知值返回 UNKNOWN。
 const char * FixedPathController::phaseName(const Phase phase)
 {
   // 三个已定义控制阶段分别映射为稳定的诊断名称。
@@ -755,19 +822,19 @@ const char * FixedPathController::phaseName(const Phase phase)
   return "UNKNOWN";
 }
 
-// 将角度规约到约定区间，避免跨越正负 π 时误判。
+// 用 atan2(sin θ, cos θ) 将任意角差折回主值区间，θ 的单位为 rad。
 double FixedPathController::normalizeAngle(const double angle)
 {
   return std::atan2(std::sin(angle), std::cos(angle));
 }
 
-// 从姿态四元数提取平面航向角，单位弧度。
+// 从四元数提取绕竖直轴的平面航向，单位 rad；不验证输入所在坐标系。
 double FixedPathController::poseYaw(const geometry_msgs::msg::PoseStamped & pose)
 {
   return tf2::getYaw(pose.pose.orientation);
 }
 
-// 计算两帧位姿的平面距离，单位米。
+// 计算两个同坐标系位置的二维欧氏距离，忽略 z，单位 m。
 double FixedPathController::poseDistance(const geometry_msgs::msg::PoseStamped & first, const geometry_msgs::msg::PoseStamped & second)
 {
   return std::hypot(first.pose.position.x - second.pose.position.x, first.pose.position.y - second.pose.position.y);

@@ -1,4 +1,5 @@
-// 导航目标入口。接收标准 Action、固定路径 Action 与话题目标，处理接受、取消和反馈。
+// 标准自主导航 Action 与 goal_pose 的接入、取消标记和反馈。
+// 目标校验不执行规划；接受回调才接管任务。当前模式不匹配会拒绝／忽略入口，不会自动切换运行模式。
 
 #include "nav2_regulated_modules/regulated_navigator.hpp"
 
@@ -10,7 +11,8 @@
 namespace nav2_regulated_modules
 {
 
-// 校验单目标导航请求，拒绝与当前模式或状态不兼容的目标。
+// 仅接受 autonomous 且激活的有效单点 Pose；behavior_tree 非空会拒绝。
+// 这里只校验请求，规划发生在接受后的处理函数，不通过此函数切换启动模式。
 rclcpp_action::GoalResponse RegulatedNavigator::handlePoseGoal(const rclcpp_action::GoalUUID &, const std::shared_ptr<const NavigateToPose::Goal> goal)
 {
   if (operation_mode_ != NavigationMode::AUTONOMOUS)
@@ -26,7 +28,8 @@ rclcpp_action::GoalResponse RegulatedNavigator::handlePoseGoal(const rclcpp_acti
   return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
 
-// 校验多目标导航请求，避免空路径或冲突任务进入执行。
+// 逐点检查非空目标序列的有效性，并拒绝行为树 XML 请求。
+// 多点任务的目标数量不等于已经计算出的路径点数量。
 rclcpp_action::GoalResponse RegulatedNavigator::handlePosesGoal(const rclcpp_action::GoalUUID &, const std::shared_ptr<const NavigateThroughPoses::Goal> goal)
 {
   if (operation_mode_ != NavigationMode::AUTONOMOUS)
@@ -47,7 +50,8 @@ rclcpp_action::GoalResponse RegulatedNavigator::handlePosesGoal(const rclcpp_act
   return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
 
-// 处理单目标 Action 取消请求并传播到下游子目标。
+// 仅当句柄属于当前单点任务时置取消标记，随后由监控周期执行取消流程。
+// 返回 ACCEPT 表示接受取消请求，不是下游 FollowPath 的终态或停稳确认。
 rclcpp_action::CancelResponse RegulatedNavigator::handlePoseCancel(const std::shared_ptr<NavigatePoseHandle> goal)
 {
   if (goal == active_pose_goal_)
@@ -58,7 +62,8 @@ rclcpp_action::CancelResponse RegulatedNavigator::handlePoseCancel(const std::sh
   return rclcpp_action::CancelResponse::ACCEPT;
 }
 
-// 处理多目标 Action 取消请求并传播到下游子目标。
+// 仅为当前多点任务设置取消标记，避免旧客户端取消新任务。
+// 该回调本身不等待规划、平滑或控制子 Goal 结束。
 rclcpp_action::CancelResponse RegulatedNavigator::handlePosesCancel(const std::shared_ptr<NavigatePosesHandle> goal)
 {
   if (goal == active_poses_goal_)
@@ -69,7 +74,8 @@ rclcpp_action::CancelResponse RegulatedNavigator::handlePosesCancel(const std::s
   return rclcpp_action::CancelResponse::ACCEPT;
 }
 
-// 接管已接受的单目标任务并启动规划流程。
+// 先抢占现有任务，再递增 generation，保存目标并启动规划。
+// 旧子 Goal 以异步方式取消，旧回调靠代次过滤，不把句柄重置视为取消握手完成。
 void RegulatedNavigator::handlePoseAccepted(const std::shared_ptr<NavigatePoseHandle> goal)
 {
   preemptCurrentTask();
@@ -84,7 +90,8 @@ void RegulatedNavigator::handlePoseAccepted(const std::shared_ptr<NavigatePoseHa
   startPlanning(false);
 }
 
-// 接管已接受的多目标任务并启动规划流程。
+// 将多点目标复制到任务快照，末点作为最终目标，再发送多点规划请求。
+// 后续已通过目标可被移除，原始输入序列与当前待办序列应区分。
 void RegulatedNavigator::handlePosesAccepted(const std::shared_ptr<NavigatePosesHandle> goal)
 {
   preemptCurrentTask();
@@ -100,7 +107,8 @@ void RegulatedNavigator::handlePosesAccepted(const std::shared_ptr<NavigatePoses
   startPlanning(false);
 }
 
-// 将话题位姿目标接入同一导航任务流程。
+// 将合法 goal_pose 纳入同一自主任务状态机，但没有对应上层 Action 结果句柄。
+// 非 autonomous 或未激活时忽略；接管同样递增任务代次。
 void RegulatedNavigator::onTopicGoal(const geometry_msgs::msg::PoseStamped::SharedPtr goal)
 {
   if (operation_mode_ != NavigationMode::AUTONOMOUS)
@@ -124,7 +132,8 @@ void RegulatedNavigator::onTopicGoal(const geometry_msgs::msg::PoseStamped::Shar
   startPlanning(false);
 }
 
-// 按固定频率向活动 Action 发布当前位置与任务进度。
+// 查询当前位姿，为普通单点／多点 Action 计算时间、ETA 和剩余目标数。
+// 固定路径进度另在 FollowPath 反馈回调发布，不能把此定时器频率当作它的固定反馈频率。
 void RegulatedNavigator::publishFeedback()
 {
   if (!active_ || task_.type == TaskType::NONE)

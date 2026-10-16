@@ -1,3 +1,5 @@
+# 通过实际 Launch 解析验证 collision 开关、默认启用、显式关闭、命名空间和组合节点路由。
+# 捕获生成参数文件检查三节点一致性，不运行生命周期或底盘。
 """验证实际 launch 生成的参数文件，不启动 ROS 节点。"""
 import importlib.util
 from pathlib import Path
@@ -9,7 +11,9 @@ from launch import LaunchContext
 from launch.actions import DeclareLaunchArgument
 
 
+# 组织本文件的回归场景；各 test_ 方法构造输入并断言预期，不把模拟样本当作现场证据。
 class CollisionLaunchTest(unittest.TestCase):
+    # 构造临时参数文件与 LaunchContext 并执行解析，返回已生成的节点参数以便断言。
     def resolve(self, mode, enabled, namespace='', composition=False):
         root = Path(__file__).resolve().parents[1]
         spec = importlib.util.spec_from_file_location('collision_launch', root / 'launch/regulated_modules.launch.py')
@@ -18,6 +22,7 @@ class CollisionLaunchTest(unittest.TestCase):
         captured = []
         original = module.ParameterFile
 
+        # 暂时包装 ParameterFile 构造器收集结果，仍调用原构造器；不执行 Node 进程。
         def capture(*args, **kwargs):
             value = original(*args, **kwargs)
             captured.append(value)
@@ -46,6 +51,7 @@ class CollisionLaunchTest(unittest.TestCase):
             result = yaml.safe_load(Path(captured[0].evaluate(context)).read_text())
             return result[namespace] if namespace else result
 
+    # 在各模式、命名空间组合中核对三个节点统一的状态话题、超时和开关。
     def test_all_modes_and_namespace(self):
         for mode, enabled, namespace in [('fixed_path', True, ''), ('fixed_path', False, ''),
                                           ('autonomous', True, ''), ('remote', True, ''),
@@ -59,6 +65,7 @@ class CollisionLaunchTest(unittest.TestCase):
                         self.assertEqual(parameters['collision_state_topic'], '/test/collision')
                         self.assertEqual(parameters['collision_state_timeout'], 0.7)
 
+    # 核对默认开启仅 fixed_path 生效，显式关闭覆盖默认，组件模式同样适用。
     def test_default_and_explicit_disable(self):
         for mode in ['fixed_path', 'autonomous', 'remote']:
             for composition in [False, True]:

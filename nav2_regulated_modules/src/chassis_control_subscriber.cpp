@@ -1,4 +1,5 @@
-// 底盘控制输入实现。负责订阅、指令合法性与超时校验、S 曲线输出及停车保护。
+// 远程 ChassisControl 的事件接收和周期闭环输出。方向字段决定正负，消息速度字段按非负幅值校验。
+// 控制参考来自 MotionState；指令接收时间与反馈接收时间均使用单调时钟，不能与消息 Header 的 ROS 时间混算。
 
 #include "nav2_regulated_modules/chassis_control_subscriber.hpp"
 
@@ -15,7 +16,8 @@
 namespace nav2_regulated_modules
 {
 
-// 建立底盘控制订阅、输出发布器和定时器；参数决定指令超时与速度限幅。
+// 保存配置并建立 ChassisControl 订阅和 ControlRes 发布器；构造不启动输出定时器。
+// 两个 SCurvePlanner 各自管理线／角速度，参数单位对应 m 和 rad。
 ChassisControlSubscriber::ChassisControlSubscriber(
     nav2_util::LifecycleNode & node,
     MotionStateSubscriber & motion_state_subscriber,
@@ -48,7 +50,8 @@ ChassisControlSubscriber::ChassisControlSubscriber(
   publisher_ = node.create_publisher<byd_custom_msgs::msg::ControlRes>(config_.output_topic, qos);
 }
 
-// 解析底盘控制消息并更新目标运动状态；无效输入不应绕过安全停车。
+// 校验非负幅值、有限数与 op，将方向转换为速度符号后限幅并存入目标。
+// 非法请求只被拒绝，不刷新 last_command_tmie_；有效请求才延长指令有效期。
 void ChassisControlSubscriber::onChassisControl(const byd_custom_msgs::msg::ChassisControl::ConstSharedPtr message) {
   if (!active_) {
     LOG_WARN("忽略 Lifecycle 未激活时收到的 ChassisControl");
@@ -85,7 +88,8 @@ void ChassisControlSubscriber::onChassisControl(const byd_custom_msgs::msg::Chas
   LOG_DEBUG("收到 ChassisControl：op={}，linear_velocity={}，angular_velocity={}，acceleration={}", static_cast<unsigned int>(message->op), message->linear_velocity, message->angular_velocity, message->acceleration);
 }
 
-// 激活订阅和周期输出；重新进入运行态前清理旧指令。
+// 先清理 MotionState 和旧命令，再按 publish_rate 创建周期处理定时器。
+// 重置后需要新反馈和新有效命令才能进入远程输出。
 void ChassisControlSubscriber::activate() {
   motion_state_subscriber_.reset();
   {
@@ -98,7 +102,8 @@ void ChassisControlSubscriber::activate() {
   LOG_INFO("ChassisControl 事件驱动闭环已激活，output_topic={}", config_.output_topic);
 }
 
-// 停用控制输出并发布停车指令，防止旧目标继续生效。
+// 停用标志、清除控制状态并取消定时器；当前实现不调用 publishZero。
+// 因此不能把本函数注释写成“已发停车并停稳”，需要调用方另行收口。
 void ChassisControlSubscriber::deactivate() {
   std::lock_guard<std::mutex> lock(mutex_);
   active_ = false;
@@ -107,7 +112,7 @@ void ChassisControlSubscriber::deactivate() {
   LOG_INFO("ChassisControl 事件驱动闭环已停用");
 }
 
-// 清空控制或检查器历史状态，避免跨任务沿用上次进度。
+// 使支路 inactive、清理目标与反馈快照；本函数不取消定时器也不发布零速。
 void ChassisControlSubscriber::reset() {
   std::lock_guard<std::mutex> lock(mutex_);
   active_ = false;
@@ -115,11 +120,13 @@ void ChassisControlSubscriber::reset() {
   motion_state_subscriber_.reset();
 }
 
-// 在互斥锁下处理超时、运动状态及加减速，再发布本周期控制值。
+// 在 mutex_ 下检查激活、发布者冲突与命令超时，再推进两轴 S 曲线并发布。
+// 开始远程阶段及退出阶段会检查 MotionState；不能误写为所有中间周期都检查反馈超时。
 void ChassisControlSubscriber::processControlCommand() {
   std::lock_guard<std::mutex> lock(mutex_);
   if (!active_) {return;}
   if (!has_command_ && !is_remote_control_) {return;}
+  // 这是当前实现的输出冲突保护：检测多个发布者便清状态停发，不会主动取消导航来取得控制权。
   const auto publisher_count = node_.count_publishers(config_.output_topic);
   if (publisher_count > 1U) {
     if (!publisher_conflict_) {LOG_ERROR("检测到 {} 个 {} Publisher，停止 ChassisControl 闭环输出", publisher_count, config_.output_topic);}
@@ -132,11 +139,13 @@ void ChassisControlSubscriber::processControlCommand() {
     LOG_INFO("{} Publisher 冲突已解除，等待新的 ChassisControl", config_.output_topic);
   }
   const auto now = std::chrono::steady_clock::now();
+  // 指令超时先将目标置零，再继续 S 曲线减速；并非在这一判断里立刻截断输出。
   if(std::chrono::duration<double>(now - last_command_tmie_).count() > config_.command_timeout){
     has_command_ = false;
     target_command_.linear_velocity = 0.0;
     target_command_.angular_velocity = 0.0;
   }
+  // 首次进入远程阶段时才以新鲜 MotionState 初始化规划速度；中间连续周期按规划器状态推进。
   if (has_command_ && !is_remote_control_) {
     const auto state = motion_state_subscriber_.latestState();
     const bool state_timed_out = !state.valid || std::chrono::duration<double>(now - state.receive_time).count() > config_.motion_state_timeout;
@@ -150,7 +159,7 @@ void ChassisControlSubscriber::processControlCommand() {
     angular_planner_.init(state.angular_velocity);
     is_remote_control_ = true;
   }
-  //  开始正常控制  if (has_command_ && is_remote_control_) {
+  // 推进规划器并输出；此段没有额外的 has_command_ 条件门，超时后的零目标仍用于减速。
   linear_planner_.setDirection(target_command_.linear_velocity, target_command_.linear_acceleration);
   angular_planner_.setDirection(target_command_.angular_velocity, target_command_.angular_acceleration);
   double linear_output = linear_planner_.update();
@@ -175,14 +184,16 @@ void ChassisControlSubscriber::processControlCommand() {
   publishControl(linear_output, angular_output);
 }
 
-// 清除锁保护的控制目标与时间状态；调用方须已持有互斥锁。
+// 只清除目标、has_command 与远程阶段标志，调用方必须已持 mutex_。
+// 不重新初始化两个规划器的内部速度，也不自动发布命令。
 void ChassisControlSubscriber::clearControlStateLocked() {
   target_command_ = TargetCommand{};
   has_command_ = false;
   is_remote_control_ = false;
 }
 
-// 将限幅后的线角速度转换为底盘控制消息并发布。
+// 将线／角输出再次按远程上限钳位，升降与货架旋转置零后发布 ControlRes。
+// 输出是 ROS 控制请求，不包含 UART 写入确认或实际轮速。
 void ChassisControlSubscriber::publishControl(const double linear_velocity, const double angular_velocity) {
   byd_custom_msgs::msg::ControlRes output;
   output.v = std::clamp(linear_velocity, -config_.linear_speed_max, config_.linear_speed_max);
@@ -192,10 +203,11 @@ void ChassisControlSubscriber::publishControl(const double linear_velocity, cons
   publisher_->publish(output);
 }
 
-// 通过统一发布路径输出零线速度和零角速度。
+// 复用 publishControl 发出一帧全零底盘请求；不等待该命令执行。
 void ChassisControlSubscriber::publishZero() { publishControl(0.0, 0.0); }
 
-// 校验控制参数的数值范围及话题设置；失败时拒绝进入运行态。
+// 检查话题非空、时间／频率／规划约束和线角限速范围。
+// 本函数只返回配置有效性，不检测发布者、定位或反馈是否就绪。
 bool ChassisControlSubscriber::validateConfig() const
 {
   // 话题名称不能为空

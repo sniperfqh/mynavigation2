@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 连接现有环境的 Action 速度矩阵观察器，会发送自身导航 Goal，不启动或复位现有仿真。
+# 原始速度、定位采样和 Action 结果分开记录；停稳成立不等于定位窗口合格，缺失定位不能算精度通过。
 import json,time,math,re,subprocess,sys,os,threading,queue,datetime,uuid
 from pathlib import Path
 import rclpy
@@ -25,26 +27,36 @@ os.environ['ROS_LOG_DIR']=str(out/'ros_logs')
 (out/'runner_snapshot.py').write_bytes(Path(__file__).read_bytes())
 rclpy.init();n=Node('action_only_speed_observer');b=Buffer();tl=TransformListener(b,n)
 latest={};velocity_history=[];statuses=[];subs=[];raw=(out/'trace.jsonl').open('w');report={'acceptance_protocol':'separated_velocity_pose_v2','pose_min_coverage':.8,'pose_max_gap_s':.2,'cases':[],'planned':28,'status':'PREFLIGHT'};current=None;handle=None;result_future=None;accept_future=None;last_error_log=0
+# 建立消息队列和写盘线程，让 ROS 回调只入队，降低磁盘写入对采样的阻塞。
 class QueuedWriter:
+ # 建立消息队列和写盘线程，让 ROS 回调只入队，降低磁盘写入对采样的阻塞。
  def __init__(self,file):
   self.file=file;self.q=queue.Queue();self.thread=threading.Thread(target=self.run);self.thread.start()
+ # 按 FIFO 顺序写入原始文本；None 是结束标记，收到后关闭文件。
  def run(self):
   while True:
    value=self.q.get()
    if value is None:break
    self.file.write(value)
   self.file.close()
+ # 将原始记录入队，不在调用线程同步写盘。
  def write(self,value):self.q.put(value)
+ # 兼容调用接口的空实现；不会同步刷新后台队列，真正排空由 close 等待线程完成。
  def flush(self):pass
+ # 入队结束标记并 join 写盘线程，确保此前已排队记录完成后返回。
  def close(self):self.q.put(None);self.thread.join()
 raw=QueuedWriter(raw)
+# 后台线程持续 spin ROS；异常仅在节点仍有效时传播，不在此重启现有导航。
 def spin():
  try:rclpy.spin(n)
  except Exception:
   if rclpy.ok():raise
 spin_thread=threading.Thread(target=spin,daemon=True);spin_thread.start()
 bad_since=None
+# 将当前报告快照写到唯一结果目录，原始回调轨迹由单独队列写入。
 def save(): (out/'results.json').write_text(json.dumps(report,indent=2))
+# 按话题实际类型提取速度与原时间戳，累计原始速度历史。
+# Odometry 的位置另行记录，避免把它与 map TF 位置混成同一定位观测。
 def recv(t,m):
  latest[t]=(time.monotonic(),m)
  v,w=(m.twist.twist.linear.x,m.twist.twist.angular.z) if t=='/odometry' else ((m.v_car,m.w_car) if t=='/motion_state' else (m.linear.x,m.angular.z))
@@ -54,17 +66,22 @@ def recv(t,m):
  if t=='/odometry':
   p=m.pose.pose.position;raw.write(json.dumps([time.monotonic(),time.time(),'/odom_position',p.x,p.y,stamp])+'\n')
 for t,ty in [('/odometry',Odometry),('/motion_state',MotionState),('/cmd_vel_nav',Twist),('/cmd_vel',Twist)]:subs.append(n.create_subscription(ty,t,lambda m,t=t:recv(t,m),qos_profile_sensor_data))
+# 缓存 NavigationService 状态列表，预检时拒绝已有活动任务；不取消其他客户端任务。
 def status(m):
  global statuses
  statuses=m.status_list
 status_qos=QoSProfile(depth=10,reliability=ReliabilityPolicy.RELIABLE,durability=DurabilityPolicy.TRANSIENT_LOCAL)
 subs.append(n.create_subscription(GoalStatusArray,'/navigation_service/_action/status',status,status_qos))
 follow_status=[]
+# 缓存下游 FollowPath 状态，辅助确认后台是否已有控制任务。
 def follow_cb(m):
  global follow_status
  follow_status=m.status_list
 subs.append(n.create_subscription(GoalStatusArray,'/follow_path/_action/status',follow_cb,status_qos))
+# 短时让出执行以等待独立 spin 线程推进回调；这里自身不执行 ROS spin。
 def pump():time.sleep(.01)
+# 要求新鲜轮速与地图 TF，输出带本机／源时间戳的定位速度样本，并记录当前目标误差。
+# 连续遥测失效达阈值才抛异常；单次失效返回 None，不伪造位置或补旧样本。
 def sample():
  global bad_since,last_error_log
  now=time.monotonic();reason=None;age=None
@@ -86,8 +103,11 @@ def sample():
  bad_since=bad_since or now
  if now-bad_since>=1:raise RuntimeError('no valid telemetry for 1 s: '+reason)
  return None
+# 对单条综合样本检查反馈线角速度及命令速度门限；连续停稳仍由窗口累计。
 def stop(s):return abs(s[4])<=.01 and abs(s[5])<=.05 and abs(s[6])<=1e-6 and abs(s[7])<=1e-6
 last_settle_metrics = {}
+# 独立检查 /odometry 与 /motion_state 的接收及源时间年龄、速度门限和零命令。
+# 不依赖 map TF，因此短暂定位缺失不会自动撤销速度停稳证据。
 def velocity_stopped():
  now=time.monotonic();epoch=time.time()
  for topic in ['/odometry','/motion_state']:
@@ -101,6 +121,8 @@ def velocity_stopped():
  if '/cmd_vel' not in latest:return current is None and not any(x.status in [1,2,3] for x in statuses+follow_status)
  cmd=latest['/cmd_vel'][1]
  return abs(cmd.linear.x)<=1e-6 and abs(cmd.angular.z)<=1e-6
+# 先累计独立速度停稳，再评估最近定位窗口覆盖、最大缺帧和样本数。
+# 超时仍保留已得到的停稳证据，定位不可评价时不得发下一任务。
 def settle(seconds=12):
  global last_settle_metrics,bad_since
  end=time.monotonic()+seconds;window=StationaryAcceptance();best=None
@@ -123,11 +145,13 @@ def settle(seconds=12):
   last_settle_metrics=best
   return best['poses']
  raise RuntimeError('no independent stationary velocity window')
+# 以墙钟截止时间等待异步 Future，同时让 spin 线程继续；超时明确失败，不把未响应算成功。
 def await_future(f,seconds=5):
  end=time.monotonic()+seconds
  while not f.done() and time.monotonic()<end:pump()
  if not f.done():raise RuntimeError('service or future timeout')
  return f.result()
+# 先列出节点声明参数，再按 ParameterValue 类型提取完整快照，记录实验实际生效配置。
 def get_params(name):
  c=n.create_client(ListParameters,name+'/list_parameters');req=ListParameters.Request();req.depth=0
  if not c.wait_for_service(timeout_sec=3):raise RuntimeError('parameters unavailable '+name)
@@ -137,6 +161,7 @@ def get_params(name):
  (out/(name.strip('/')+'_runtime.yaml')).write_text(yaml.safe_dump({name:{'ros__parameters':values}},allow_unicode=True));return values
 client=ActionClient(n,NavigationService,'/navigation_service')
 cancel_client=n.create_client(CancelGoal,'/navigation_service/_action/cancel_goal')
+# 通过当前任务的精确 UUID 调用取消服务，保存返回码，避免使用 cancel-all 影响其他客户端。
 def cancel_own(reason):
  if not current:raise RuntimeError('no own goal')
  req=CancelGoal.Request();req.goal_info.goal_id.uuid=list(bytes.fromhex(current['uuid']))
@@ -144,6 +169,8 @@ def cancel_own(reason):
  res=await_future(cancel_client.call_async(req));current['cancel_reason']=reason;current['cancel_response']=res.return_code;save()
  return res
 
+# 检查起始定位窗口及起点后发送一程 Action，采集目标误差、结果和停后窗口。
+# 方向由 motion_direction 编码；本函数会让现有环境运动，不是纯离线指标计算。
 def run(start,target,speed,direction,return_leg=False):
  global current,handle,result_future,accept_future
  win=settle()
@@ -156,6 +183,7 @@ def run(start,target,speed,direction,return_leg=False):
  own_uuid=uuid.uuid4().hex;begin=time.monotonic();label=f'{speed:.1f}_{2 if return_leg else 1}'
  current={'speed':speed,'direction':direction,'return_leg':return_leg,'label':label,'goal':payload,'uuid':own_uuid,'begin_wall':begin,'begin_epoch':time.time(),'status':'WAITING_ACCEPTANCE'};report['cases'].append(current);report['status']='RUNNING';handle=None;result_future=None;save()
  raw.write(json.dumps({'event':'submit','wall':begin,'uuid':own_uuid,'goal':payload})+'\n')
+ # 在本程回调中保存 Action 反馈，帮助关联任务进度，不据此替代终点精度验收。
  def feedback(m):raw.write(json.dumps({'event':'feedback','wall':time.monotonic(),'uuid':own_uuid,'feedback':message_to_ordereddict(m.feedback)})+'\n')
  accept_future=client.send_goal_async(goal,feedback_callback=feedback,goal_uuid=UUID(uuid=list(bytes.fromhex(own_uuid))))
  print('START',len(report['cases']),label,own_uuid,flush=True)

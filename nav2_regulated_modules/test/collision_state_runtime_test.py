@@ -1,3 +1,5 @@
+# 真实规控节点配合合成 TF／轮速的隔离回归，速度输出重映射到测试命名空间。
+# 既覆盖独立进程也支持组件；初始无状态与收到后断流分别测试，不连接真实底盘。
 """隔离 ROS 域内串联真实节点与合成 TF/轮速，不连接实际底盘。"""
 import argparse
 import json
@@ -24,7 +26,9 @@ from byd_custom_msgs.msg import NaviSegment, MotionState, ControlRes
 import yaml
 
 
+# 为隔离规控节点提供合成 TF／轮速、状态输入和任务客户端，并收集输出供断言。
 class Driver(Node):
+    # 创建测试域内状态发布、遥测订阅、合成 TF／轮速及 Action 客户端；不连接生产 UART。
     def __init__(self, speed=0.4, distance=6.0):
         super().__init__('collision_runtime_driver', namespace='/collision_state_test')
         self.speed = speed
@@ -48,18 +52,23 @@ class Driver(Node):
         self.create_timer(0.1, self.status)
         self.client = ActionClient(self, NavigationService, 'navigation_service')
 
+    # 缓存控制器原始请求速度，供减速判据排除“本来就没请求更高速度”的情况。
     def raw(self, message):
         self.raw_v = message.linear.x
 
+    # 缓存最终 ControlRes 速度、接收时刻与计数，平台判据要求近期有新输出。
     def uart(self, message):
         self.v, self.w = message.v, message.w
         self.count += 1
         self.last_uart = time.monotonic()
 
+    # 按测试开关决定是否发布当前 collision 状态；关闭时用于真正制造无首条消息或断流窗口。
     def status(self):
         if self.emit_state:
             self.state_pub.publish(UInt8(data=self.state))
 
+    # 推进测试用状态并发布合成 TF／轮速／速度；保持消息时间戳与节点时钟一致。
+    # 合成反馈只验证隔离链路，不接入真实底盘。
     def tick(self):
         now = time.monotonic()
         self.x += self.v * min(now - self.previous_tick, 0.1)
@@ -86,6 +95,8 @@ class Driver(Node):
         motion.v_car, motion.w_car = self.v, self.w
         self.motion_pub.publish(motion)
 
+    # 用单调截止时间循环处理回调，条件满足才返回，超时抛异常进入收口。
+    # seconds 是墙钟秒，不是仿真 /clock 秒。
     def wait(self, predicate, timeout=8.0):
         deadline = time.monotonic() + timeout
         while time.monotonic() < deadline:
@@ -94,14 +105,17 @@ class Driver(Node):
                 return
         raise AssertionError('Timed out waiting for ROS condition')
 
+    # 在继续处理 ROS 回调的同时等待指定墙钟时长，不用阻塞睡眠假装数据持续有效。
     def hold(self, seconds):
         deadline = time.monotonic() + seconds
         self.wait(lambda: time.monotonic() >= deadline, seconds + 1.0)
 
+    # 切换状态并要求 UART 速度接近目标且连续保持 0.3 s，缺新样本重置计时。
     def plateau(self, state, velocity):
         self.state = state
         stable = [None]
 
+        # 只在最近输出满足目标容差时推进平台计时，速度不符或样本陈旧立即重置。
         def reached():
             if self.count and abs(self.v - velocity) < 0.003 and time.monotonic() - self.last_uart < 0.2:
                 stable[0] = stable[0] or time.monotonic()
@@ -113,6 +127,7 @@ class Driver(Node):
         return {'state': state, 'x': self.x, 'v': self.v, 'w': self.w,
                 'controller_v': self.raw_v, 'uart_count': self.count}
 
+    # 向隔离测试节点请求生命周期转换并检查响应；不修改生产后台生命周期。
     def lifecycle(self, name, transition):
         client = self.create_client(ChangeState, name + '/change_state')
         self.wait(lambda: client.service_is_ready(), 15.0)
@@ -123,10 +138,12 @@ class Driver(Node):
         assert future.result().success, (name, transition)
         self.destroy_client(client)
 
+    # 在隔离容器中加载所需组件，参数由生成配置展平后传递，失败时使回归退出。
     def components(self, config):
         client = self.create_client(LoadNode, 'collision_container/_container/load_node')
         self.wait(client.service_is_ready, 15.0)
 
+        # 递归将嵌套参数字典展为点分键名，用于组件参数请求，保留原始值类型。
         def flatten(values, prefix=''):
             for name, value in values.items():
                 key = prefix + name
@@ -148,6 +165,7 @@ class Driver(Node):
             assert future.result().success, future.result().error_message
         self.destroy_client(client)
 
+    # 构造本测试直线 NavigationService Goal；max_speed 保持正值，倒车由 direction 字段表达。
     def goal(self, backward=False, distance=None):
         distance = self.distance if distance is None else distance
         self.wait(self.client.server_is_ready)
@@ -164,6 +182,7 @@ class Driver(Node):
         assert handle.accepted, 'Fixed path goal rejected'
         return handle, handle.get_result_async()
 
+    # 记录或检查本测试自己持有的 Goal UUID，验证取消只作用于自身任务。
     def cancel(self, handle, result):
         future = handle.cancel_goal_async()
         self.wait(future.done)
@@ -171,6 +190,8 @@ class Driver(Node):
         assert result.result().status == 5, result.result()
 
 
+# 真实规控节点配合合成 TF／轮速的隔离回归，速度输出重映射到测试命名空间。
+# 先解析参数与检查运行前提，再按本文件流程采集／处理并写结果；异常和 finally 收口分支不应被注释描述为正常通过。
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--output-dir', required=True)

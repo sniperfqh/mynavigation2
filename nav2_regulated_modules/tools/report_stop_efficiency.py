@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 离线复核停车实验轨迹，读取普通或 gzip JSON，并将地图定位与真值旁路记录分开。
+# 最近时间样本只用于关联观测，不能当成严格同步采样或补齐缺失定位。
 """Recompute acceptance from raw traces and render the complete speed matrix."""
 import argparse
 import bisect
@@ -11,6 +13,7 @@ from pathlib import Path
 from speed_sweep_metrics import command_evidence, evaluate, first_stopped_window, motion_metrics, observed_position_valid
 
 
+# 优先读取 gzip JSON，否则读取普通 JSON；返回原有数据，不做时间插值或样本修补。
 def load(root, name):
     compressed = root / (name + '.json.gz')
     if compressed.exists():
@@ -19,6 +22,8 @@ def load(root, name):
     return json.loads((root / (name + '.json')).read_text())
 
 
+# 用二分定位目标时间左右候选，返回时间差最小者；没有候选返回 None。
+# 最近样本不等于同一传感器时间戳。
 def nearest(data, times, when):
     i = bisect.bisect_left(times, when)
     candidates = data[max(0, i - 1):min(len(data), i + 1)]
@@ -28,6 +33,8 @@ def nearest(data, times, when):
     return sample if abs(sample[0] - when) <= .05 else None
 
 
+# 读取任务结果、定位、速度、真值与 AMCL 轨迹，对每次停车窗口做离线关联与质量复核。
+# 真值误差和地图定位误差单独保留，不把一个通过项替代另一个。
 def audit_run(root):
     report = json.loads((root / 'results.json').read_text())
     poses = load(root, 'pose_trace')
@@ -67,6 +74,8 @@ def audit_run(root):
             'smoother_parameters': report.get('smoother_parameters')}
 
 
+# 离线复核停车实验轨迹，读取普通或 gzip JSON，并将地图定位与真值旁路记录分开。
+# 先解析参数与检查运行前提，再按本文件流程采集／处理并写结果；异常和 finally 收口分支不应被注释描述为正常通过。
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('progress', type=Path)

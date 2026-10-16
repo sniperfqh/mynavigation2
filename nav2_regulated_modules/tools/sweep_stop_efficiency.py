@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 隔离实验矩阵调度与基线／候选对照。每档每方向多次运行，保存可恢复的 progress.json。
+# 只有成功且样本数完整的组才比较 P95；失败重试和被拒任务不能被静默合并为完整通过批次。
 """Progressive 0.1 m/s sweep; fail closed and retain every attempt."""
 import argparse
 import json
@@ -9,11 +11,14 @@ import sys
 import time
 
 
+# 排序后按向上取整的序号取经验 P95，空数组返回 None；不对小样本做分布外推。
 def percentile95(values):
     ordered = sorted(values)
     return ordered[math.ceil(.95 * len(ordered)) - 1] if ordered else None
 
 
+# 按方向比较足量的成功基线／候选，检查末端 P95 改善和整程／成功率约束。
+# 样本不足或失败组不能被过滤后拼成宣称完整通过的一组。
 def compare(baseline, candidate, count=10):
     result = {}
     for direction in ('forward', 'reverse'):
@@ -36,6 +41,8 @@ def compare(baseline, candidate, count=10):
     return result
 
 
+# 隔离实验矩阵调度与基线／候选对照。每档每方向多次运行，保存可恢复的 progress.json。
+# 先解析参数与检查运行前提，再按本文件流程采集／处理并写结果；异常和 finally 收口分支不应被注释描述为正常通过。
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
@@ -54,13 +61,16 @@ def main():
     progress = {'phase': args.phase, 'status': 'RUNNING', 'runs': [], 'speeds': {},
                 'parameters': {k: str(v) if isinstance(v, Path) else v for k, v in vars(args).items()}}
 
+    # 先写 progress.tmp 再原子替换 progress.json，减少中断留下半份 JSON 的风险。
     def save():
         temporary = args.output / 'progress.tmp'
         temporary.write_text(json.dumps(progress, indent=2, allow_nan=False))
         temporary.replace(args.output / 'progress.json')
 
+    # 按速度计算足够路线长度，调用独立实验脚本并保留每次 attempt。
+    # 预检拒绝只在允许的场景作为候选淘汰；重试不覆盖旧证据。
     def run(label, speed, repeats, margin, creep, deceleration, reject_ok=False, seed=3407):
-        # Baseline stopping distance + acceleration and 0.5 s cruise reserves.
+        # 路线预留基线停车距离、加速距离与至少 0.5 s 巡航距离，避免短路线只测到爬升。
         length = max(2., math.ceil((speed * speed / .5 + .1 * speed + .1 + .5 * speed + .5) * 10) / 10)
         for retry in range(3):
             output = args.output / f'{label}_{speed:.1f}_attempt{retry}'

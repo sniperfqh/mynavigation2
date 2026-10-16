@@ -1,9 +1,13 @@
+// 终点稳定计时、停稳等待兜底与末段前视混合的纯回归。
+// 时间推进、采样中断和回跳均构造为数值输入，不是执行机器人运动。
 #include <cmath>
 #include <iostream>
 #include "nav2_core/terminal_stability.hpp"
 #include "nav2_core/terminal_aware_controller.hpp"
 #include "nav2_regulated_modules/detail/terminal_lookahead.hpp"
 
+// 终点稳定计时、停稳等待兜底与末段前视混合的纯回归。
+// 返回码由调用环境用于区分成功／失败，进程启动本身不能作为业务功能验收。
 int main()
 {
   nav2_core::TerminalStability stable;

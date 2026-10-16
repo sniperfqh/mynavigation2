@@ -1,4 +1,6 @@
-# 规控包主启动入口。按运行模式装配 Nav2、Collision Monitor、遥控与可视化节点，并统一参数、命名空间和生命周期。
+# 三模式规控的 Launch 装配：解析实参、重写 YAML、选择节点集合，再交给生命周期管理器激活。
+# LaunchConfiguration 是延迟求值对象；OpaqueFunction 在上下文可用后读取真实参数，不能在生成描述时当普通字符串使用。
+# 当前模式仍互斥；启用开关、参数文件值和 C++ 回退默认需分层解释。
 
 import os
 import yaml
@@ -18,7 +20,8 @@ from launch_ros.parameter_descriptions import ParameterValue
 from nav2_common.launch import RewrittenYaml
 
 
-# 装配三种运行模式的 Launch 描述；返回值仅描述启动动作，不会立即启动节点。
+# 读取 YAML 和显式 Launch 覆盖，保留布尔／浮点类型并验证裕量关系。
+# 空覆盖沿用参数文件；此处的解析结果用于后续重写，不会热改已经运行的节点。
 def resolve_braking_margin_arguments(context):
     with open(LaunchConfiguration('params_file').perform(context), encoding='utf-8') as stream:
         config = yaml.safe_load(stream) or {}
@@ -43,6 +46,8 @@ def resolve_braking_margin_arguments(context):
     return actions
 
 
+# 按命名空间读取平滑器参数块的 collision 话题与超时，校验后统一提供给三节点。
+# 超时必须是有限正数，不能只验证 YAML 中有这个键。
 def resolve_collision_state_arguments(context):
     with open(LaunchConfiguration('params_file').perform(context), encoding='utf-8') as stream:
         config = yaml.safe_load(stream) or {}
@@ -57,6 +62,8 @@ def resolve_collision_state_arguments(context):
             SetLaunchConfiguration('resolved_collision_state_timeout', str(timeout))]
 
 
+# 诊断关闭时返回空 Action 列表；开启时从同份 YAML 提取真实反馈话题。
+# 只构造 Node 描述；是否真正启动由 Launch 执行阶段决定。
 def start_velocity_diagnostics(context):
     if LaunchConfiguration('enable_velocity_diagnostics').perform(context).lower() != 'true':
         return []
@@ -86,6 +93,8 @@ def start_velocity_diagnostics(context):
                  }])]
 
 
+# 创建启动实参声明与条件 Action，并返回 LaunchDescription。
+# 这里只描述启动关系；节点创建、参数替换与生命周期激活由 Launch 执行阶段完成。
 def generate_launch_description():
     bringup_dir = get_package_share_directory('nav2_regulated_modules')
     launch_dir = os.path.dirname(__file__)
@@ -221,13 +230,13 @@ def generate_launch_description():
     # 决定是否让速度经过 Collision Monitor；同时影响速度话题路由。
     declare_use_collision_monitor_cmd = DeclareLaunchArgument(
         'use_collision_monitor',
-        default_value='false',#'false true', #ooii
+        default_value='false',# 当前直接入口默认不插入 Collision Monitor。
         description='Whether to start Collision Monitor and insert it into the velocity chain')
 
     # 默认启动碰撞区域 Marker 可视化，仍可通过启动参数关闭。
     declare_use_collision_visualization_cmd = DeclareLaunchArgument(
         'use_collision_visualization',
-        default_value='true',#'false', #ooii
+        default_value='true',# 导航模式的显示开关，不产生碰撞状态。
         description='Whether to start the Collision Monitor boundary visualizer')
 
     # 控制 Lifecycle Manager 是否自动激活受管节点。
@@ -450,7 +459,7 @@ def generate_launch_description():
                             {'node_names': ['collision_monitor']}]),
         ])
 
-    # 组合模式复用其余组件，只为显式启用的新制动策略替换速度平滑器描述。
+    # 组合部署使用以下组件列表；固定路径且自适应制动启用时，为平滑器追加 fixed_path_smoother_params。
     composable_node_descriptions = [
             ComposableNode(
                 package='nav2_planner',
@@ -560,7 +569,7 @@ def generate_launch_description():
                     {'output_topic': '/control_to_uart',
                      'legacy_velocity_logging': ParameterValue(legacy_velocity_logging, value_type=bool)}])
 
-    ## ooii
+    # 边界显示独立于碰撞判定；按配置的多边形话题生成 Marker。
     # 外部可视化按话题动态分配 Marker；默认订阅 Stop、Slowdown 和 L1。
     collision_boundary_visualizer_cmd = Node(
         condition=IfCondition(use_collision_visualization),

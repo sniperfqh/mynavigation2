@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 隔离 ROS mock 协议测试：模拟 Action、生命周期、参数、TF 与速度，驱动真实测试工具。
+# 模拟速度按状态直接合成，能验证客户端流程，不能验证真实控制器制动；必须使用非零隔离域和 localhost。
 """ROS mock-server protocol checks only; no real controller or physical speed evidence."""
 import argparse
 import json
@@ -26,7 +28,9 @@ from byd_custom_msgs.action import NavigationService
 from byd_custom_msgs.msg import ControlRes
 
 
+# 提供隔离 Action／参数／生命周期替身及合成遥测，驱动真实客户端的协议回归。
 class Mock(Node):
+    # 建立隔离 mock 服务与合成观测定时器，所有平台均由测试逻辑直接生成。
     def __init__(self):
         super().__init__('collision_action_mock')
         self.state=0; self.xy=[9.16,-4.37]; self.target=None; self.active=None
@@ -50,9 +54,11 @@ class Mock(Node):
                                  cancel_callback=self.cancel,callback_group=self.group)
         self.create_timer(.02,self.tick)
 
+    # 缓存测试工具发布的状态值，供 mock 定时器按固定比例合成速度；不调用生产 collision 算法。
     def collision(self,m):
         self.state=m.data
 
+    # 模拟预检所需参数及对应 ROS ParameterValue 类型，使真实工具执行参数一致性检查。
     def parameters(self,req,res):
         for key in req.names:
             p=ParameterValue()
@@ -67,13 +73,17 @@ class Mock(Node):
             res.values.append(p)
         return res
 
+    # 构造或请求生命周期状态；该测试中的 active 不能证明实际生产节点已经激活。
     def lifecycle(self,req,res):
         res.current_state.id=3;res.current_state.label='active';return res
 
+    # 记录或检查本测试自己持有的 Goal UUID，验证取消只作用于自身任务。
     def cancel(self,goal):
         self.cancelled.append(bytes(goal.goal_id.uuid).hex())
         return CancelResponse.ACCEPT
 
+    # mock 接受任务后保存方向、目标和起始时间，循环响应取消或完成条件。
+    # 结果来自模拟服务器，不代表真实规划和制动通过。
     def execute(self,goal):
         self.active=goal
         self.goal_started=time.monotonic()
@@ -90,6 +100,8 @@ class Mock(Node):
         goal.succeed()
         return NavigationService.Result(finish=True)
 
+    # 推进测试用状态并发布合成 TF／轮速／速度；保持消息时间戳与节点时钟一致。
+    # 合成反馈只验证隔离链路，不接入真实底盘。
     def tick(self):
         v=0.
         if self.target is not None:
@@ -116,11 +128,14 @@ class Mock(Node):
         tf.transform.translation.x,tf.transform.translation.y=self.xy
         tf.transform.rotation.w=1.;self.tf.sendTransform(tf)
 
+    # 生成仅 linear.x 非零的测试 Twist；它是 mock 的观测数据，不代表物理控制响应。
     @staticmethod
     def twist(v):
         msg=Twist();msg.linear.x=v;return msg
 
 
+# 隔离 ROS mock 协议测试：模拟 Action、生命周期、参数、TF 与速度，驱动真实测试工具。
+# 先解析参数与检查运行前提，再按本文件流程采集／处理并写结果；异常和 finally 收口分支不应被注释描述为正常通过。
 def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output-dir',type=Path,required=True)

@@ -1,4 +1,5 @@
-// 导航通用计算实现。封装姿态、距离及其他任务流程共用的计算。
+// 基础转换与二维几何实现，供目标校验、进度和日志共用。
+// 这些函数不查询 TF；计算距离前应确保两个 Pose 位于相同坐标系。
 
 #include "nav2_regulated_modules/navigation_utils.hpp"
 
@@ -11,7 +12,7 @@ namespace nav2_regulated_modules
   namespace navigation_utils
 {
 
-// 将非负秒数拆成秒和纳秒；负输入按零处理。
+// 把秒数转换为 ROS Duration 消息，不读取系统时钟；输入的业务合法性由调用方负责。
 builtin_interfaces::msg::Duration durationFromSeconds(const double seconds)
 {
   const auto safe_seconds = std::max(0.0, seconds);
@@ -21,20 +22,20 @@ builtin_interfaces::msg::Duration durationFromSeconds(const double seconds)
   return duration;
 }
 
-// 仅计算平面位置距离，不将航向和高度计入结果。
+// 对同坐标系的两点计算 XY 平面距离，单位 m；忽略高度。
 double poseDistance(const geometry_msgs::msg::PoseStamped & first, const geometry_msgs::msg::PoseStamped & second)
 {
   return std::hypot(first.pose.position.x - second.pose.position.x, first.pose.position.y - second.pose.position.y);
 }
 
-// 从姿态四元数求平面航向角，返回弧度。
+// 从四元数取平面 yaw，单位 rad，不查询 TF。
 double yawFromPose(const geometry_msgs::msg::PoseStamped & pose)
 {
   const auto & q = pose.pose.orientation;
   return std::atan2(2.0 * (q.w * q.z + q.x * q.y), 1.0 - 2.0 * (q.y * q.y + q.z * q.z));
 }
 
-// 将角度规约到 [-π, π]，避免跨越边界时产生虚假的大角度差。
+// 把角差折回主值区间，避免 ±π 边界把小误差计算成接近一整圈。
 double normalizeAngle(double angle)
 {
   while (angle > M_PI)
@@ -48,7 +49,7 @@ double normalizeAngle(double angle)
   return angle;
 }
 
-// 拒绝缺少坐标系、含非有限位置或零长度四元数的位姿。
+// 检查 frame_id、坐标与四元数的实现约束；通过并不等于目标可规划或 TF 可用。
 bool validPose(const geometry_msgs::msg::PoseStamped & pose)
 {
   const auto & p = pose.pose.position;

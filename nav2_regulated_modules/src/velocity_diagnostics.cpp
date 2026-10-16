@@ -1,4 +1,5 @@
-// 独立进程只观测速度链，不参与控制或发布运动指令。
+// 独立速度链观测进程。按“解析后的话题＋消息类型”复用订阅，再按频率输出最新值快照。
+// 快照频率不是输入接收频率；missing 的零占位不是停车，count 不增长表示没有新样本。
 #include <cmath>
 #include <filesystem>
 #include <memory>
@@ -16,6 +17,8 @@
 class VelocityDiagnostics : public rclcpp::Node
 {
 public:
+  // 校验快照频率，建立异步滚动日志与按模式选取的订阅。
+  // 文件失败仍保留终端输出，8192 条异步队列拥塞时覆盖旧记录，不能保证逐消息无丢失。
   VelocityDiagnostics() : Node("velocity_diagnostics")
   {
     const auto file_hz = declare_parameter("velocity_file_log_frequency", 100.0);
@@ -84,6 +87,7 @@ public:
       const auto & stage = stages_[i];
       log_->info("velocity source id={} stage={} topic={} type={}", i, stage->name, stage->topic, stage->type);
     }
+    // 两个墙钟定时器分别以 debug／info 级别记录同一类快照；sink 的级别门限决定文件与终端接收哪些帧。
     file_timer_ = create_wall_timer(std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::duration<double>(1.0 / file_hz)), [this]()
     {
       snapshot(spdlog::level::debug);
@@ -94,6 +98,8 @@ public:
     });
   }
 private:
+  // 一个已解析“话题＋类型”的最新快照，可合并多个业务角色；count=0 表示还没有样本。
+  // received 使用 steady_clock；v/w 与其他字段在当前单线程执行器串行更新和读取。
   struct Stage
   {
     std::string name;
@@ -111,6 +117,8 @@ private:
     bool finite = false;
     std::chrono::steady_clock::time_point received;
   };
+  // 先解析话题全名，再按“同话题＋同类型”复用 Stage，并合并其业务角色名。
+  // 复用后 count、age 与有效性来自同一订阅，防止同源被误报成不同采样。
   std::shared_ptr<Stage> addStage(const std::string & name, const std::string & topic, const std::string & type)
   {
     const auto resolved = get_node_topics_interface()->resolve_topic_name(topic);
@@ -129,6 +137,8 @@ private:
     stages_.push_back(stage);
     return stage;
   }
+  // 保存最新线／角速度、有限性和单调接收时间并递增 count。
+  // 即使非法样本也会递增计数并标为 invalid，不能将日志中的零初值当作有效反馈。
   void update(const std::shared_ptr<Stage> & stage, double v, double w)
   {
     stage->v = v;
@@ -137,6 +147,7 @@ private:
     stage->received = std::chrono::steady_clock::now();
     ++stage->count;
   }
+  // 为尚未订阅的 Stage 建立 SensorDataQoS Twist 订阅，读取 linear.x/angular.z。
   void addTwist(const std::string & name, const std::string & topic)
   {
     auto stage = addStage(name, topic, "Twist");
@@ -150,6 +161,8 @@ private:
       update(stage, msg->linear.x, msg->angular.z);
     }));
   }
+  // 按解析前话题末段是否为 motion_state 选择 MotionState 或 Odometry 读取方式。
+  // 这是当前实现的类型约定，不是通过 ROS 图自动发现消息类型。
   void addFeedback(const std::string & name, const std::string & topic)
   {
     const bool motion = topic.substr(topic.find_last_of('/') + 1) == "motion_state";
@@ -178,6 +191,7 @@ private:
       }));
     }
   }
+  // 订阅最终或支路 ControlRes，仅观察 v/w；不会向底盘回发命令。
   void addControlRes(const std::string & name, const std::string & topic)
   {
     auto stage = addStage(name, topic, "ControlRes");
@@ -191,6 +205,8 @@ private:
       update(stage, msg->v, msg->w);
     }));
   }
+  // 按来源输出最新值、count、age 和 missing／invalid／stale／valid，MotionState 另附货架反馈。
+  // age 用单调时钟，ros_time 用节点时钟；高频快照可能重复 count，不代表收到同频新数据。
   void snapshot(spdlog::level::level_enum level)
   {
     const auto steady = std::chrono::steady_clock::now();
@@ -220,6 +236,8 @@ private:
   std::shared_ptr<spdlog::async_logger> log_;
 };
 
+// 独立速度链观测进程。按“解析后的话题＋消息类型”复用订阅，再按频率输出最新值快照。
+// 返回码由调用环境用于区分成功／失败，进程启动本身不能作为业务功能验收。
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);

@@ -1,5 +1,9 @@
+// 位置停车入口与精度状态分离的回归。越界可要求停车，但容差外不能因此成为准确。
+// 同时保留 entry=0 时的旧锁存语义；测试结果不替代停后定位精度采样。
 #include "nav2_regulated_modules/detail/terminal_position.hpp"
 
+// 位置停车入口与精度状态分离的回归。越界可要求停车，但容差外不能因此成为准确。
+// 返回码由调用环境用于区分成功／失败，进程启动本身不能作为业务功能验收。
 int main()
 {
   using nav2_regulated_modules::detail::terminalPosition;

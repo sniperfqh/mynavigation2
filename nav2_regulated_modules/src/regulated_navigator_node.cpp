@@ -1,11 +1,13 @@
-// 规控节点可执行入口。初始化 ROS 与日志，使用多线程执行器运行生命周期节点并有序退出。
+// 规控协调器进程入口。创建生命周期节点并交给 ROS 执行器，业务激活由生命周期管理器触发。
+// 启动此进程不代表导航任务已开始，也不替代地图、定位、雷达和速度反馈。
 
 #include <memory>
 
 #include "nav2_regulated_modules/regulated_navigator.hpp"
 #include "rclcpp/rclcpp.hpp"
 
-// 初始化 ROS 和日志系统，以多线程执行器运行节点并在退出时释放资源。
+// 规控协调器进程入口。创建生命周期节点并交给 ROS 执行器，业务激活由生命周期管理器触发。
+// 返回码由调用环境用于区分成功／失败，进程启动本身不能作为业务功能验收。
 int main(int argc, char ** argv)
 {
   rclcpp::init(argc, argv);

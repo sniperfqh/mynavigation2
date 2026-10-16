@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 离线从 SDF／COLLADA 场景几何截取指定高度轮廓，栅格化为地图文件。
+# 模型变换、长度单位和 up_axis 影响切片位置；生成地图不代表激光残差、可通行性或导航精度已验证。
 """Experimental map from the unchanged scene's visual geometry at lidar height.
 
 Uses installed numpy/Pillow, never simulator truth or synthetic scan inputs.
@@ -18,6 +20,8 @@ import yaml
 NS = {'c': 'http://www.collada.org/2005/11/COLLADASchema'}
 
 
+# 把六维位置／欧拉角转换成 4×4 齐次变换：上部为旋转和位移，末行为齐次坐标。
+# 角度按 rad，平移单位遵循场景模型的长度约定。
 def pose_matrix(text):
     x, y, z, roll, pitch, yaw = map(float, (text or '0 0 0 0 0 0').split())
     cr, sr, cp, sp, cy, sy = math.cos(roll), math.sin(roll), math.cos(pitch), math.sin(pitch), math.cos(yaw), math.sin(yaw)
@@ -27,6 +31,8 @@ def pose_matrix(text):
     return result
 
 
+# 读取 COLLADA 顶点、索引、长度单位和 up_axis，按场景节点变换得到三角面。
+# 嵌套实例的变换顺序会影响世界坐标，不把原始 mesh 坐标直接画到地图。
 def mesh_triangles(path):
     root = ET.parse(path).getroot()
     unit = float(root.find('c:asset/c:unit', NS).get('meter', '1'))
@@ -72,6 +78,8 @@ def mesh_triangles(path):
 
     output = []
 
+    # 递归累积 COLLADA 节点的局部变换，处理 geometry 实例后继续访问子节点。
+    # parent 是上层齐次变换，不能每层重新回到单位矩阵。
     def visit(node, parent):
         transform = parent.copy()
         for child in node:
@@ -108,6 +116,8 @@ def mesh_triangles(path):
     return np.concatenate(output)
 
 
+# 只选跨越 height 平面的三角形，在线性边上求交点并产生二维切片边。
+# 严格跨越判据不会将完全共面的面自动当作轮廓。
 def slice_edges(triangles, height):
     crossing = triangles[(triangles[:, :, 2].min(1) < height) & (triangles[:, :, 2].max(1) > height)]
     for triangle in crossing:
@@ -120,6 +130,8 @@ def slice_edges(triangles, height):
             yield points
 
 
+# 离线从 SDF／COLLADA 场景几何截取指定高度轮廓，栅格化为地图文件。
+# 先解析参数与检查运行前提，再按本文件流程采集／处理并写结果；异常和 finally 收口分支不应被注释描述为正常通过。
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--world', type=Path, required=True)

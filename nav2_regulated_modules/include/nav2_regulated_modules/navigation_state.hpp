@@ -1,4 +1,5 @@
-// 导航任务共享状态定义。记录目标、路径、任务代次、恢复及运动反馈，供异步回调判断当前任务是否仍有效。
+// 导航模式、任务类别和执行阶段的共享定义；当前实现仍由启动模式决定可接受的入口。
+// generation 区分任务，规划和跟踪另有序号；三个维度配合丢弃迟到回调，不能只凭 Action 句柄非空判断当前任务。
 
 #ifndef NAV2_REGULATED_MODULES__NAVIGATION_STATE_HPP_
 #define NAV2_REGULATED_MODULES__NAVIGATION_STATE_HPP_
@@ -51,6 +52,7 @@ enum class TaskType
 struct NavigationTask
 {
   // 每接管一个新任务递增，作为异步规划及跟踪回调的有效性标识。
+  // 每次任务接管递增；旧回调携带旧值时应被忽略，不能把复用成员地址当同一任务。
   uint64_t generation { 0 };
   TaskType type { TaskType::NONE };
   NavigationState state { NavigationState::IDLE };
@@ -58,6 +60,7 @@ struct NavigationTask
   std::vector<geometry_msgs::msg::PoseStamped> goals;
   nav_msgs::msg::Path active_path;
   // 以下时间用于总耗时、重规划节流和无进展超时判断。
+  // ROS 时间用于导航耗时；暂停仿真／时钟回跳会影响此类计时，与 steady_clock 的接收超时不同。
   rclcpp::Time start_time { 0, 0, RCL_ROS_TIME };
   rclcpp::Time last_replan_time { 0, 0, RCL_ROS_TIME };
   rclcpp::Time last_progress_time { 0, 0, RCL_ROS_TIME };
@@ -69,6 +72,7 @@ struct NavigationTask
   std::string task_id;
   double total_path_length { 0.0 };
   // 固定路径请求速度与前后向标记不直接改变普通导航控制器参数。
+  // 正的任务速度基准 m/s；运动方向由 motion_direction 与路径姿态另行编码。
   double requested_speed { 0.0 };
   uint8_t motion_direction { 0 };
   float progress { 0.0F };

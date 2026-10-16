@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# 隔离固定路径速度／停车实验入口，会创建自己的仿真、参数副本、任务和复位流程。
+# 它不是连接任意后台的只读工具；真实地图 TF 用于验收，Gazebo 真值仅旁路记录，不回灌定位或控制。
 """Isolated fixed-path speed/stop experiment; Gazebo truth remains diagnostic only."""
 import argparse
 import hashlib
@@ -15,18 +17,23 @@ import uuid
 from speed_sweep_metrics import evaluate, first_window, first_stopped_window, motion_metrics, observed_position_valid, valid_path, command_evidence, LocalizationCorrectionGuard, stopped_window
 
 
+# 组织本文件的回归场景；各 test_ 方法构造输入并断言预期，不把模拟样本当作现场证据。
 class RequestTimeout(RuntimeError):
     pass
 
 
+# 组织本文件的回归场景；各 test_ 方法构造输入并断言预期，不把模拟样本当作现场证据。
 class GoalResultTimeout(RuntimeError):
     pass
 
 
+# 组织本文件的回归场景；各 test_ 方法构造输入并断言预期，不把模拟样本当作现场证据。
 class LocalizationAnomaly(RuntimeError):
     pass
 
 
+# 隔离固定路径速度／停车实验入口，会创建自己的仿真、参数副本、任务和复位流程。
+# 先解析参数与检查运行前提，再按本文件流程采集／处理并写结果；异常和 finally 收口分支不应被注释描述为正常通过。
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, required=True)
@@ -182,6 +189,8 @@ def main():
     report['configuration']['world_file'] = str(args.world_file) if args.world_file else None
     report['configuration']['map_file'] = str(args.map_file) if args.map_file else None
 
+    # 按 Odometry／MotionState／Twist／ControlRes 类型缓存接收时间与速度，保留原始字段。
+    # 不同来源分别归档，真值不进入这个控制反馈转换。
     def receive(topic, msg):
         latest[topic] = (time.monotonic(), msg)
         if topic in ('/odom', '/odometry'):
@@ -201,11 +210,13 @@ def main():
                        ('/cmd_vel_nav', Twist), ('/cmd_vel_collision_in', Twist), ('/cmd_vel', Twist)]:
         subscriptions.append(node.create_subscription(typ, topic, lambda msg, t=topic: receive(t, msg), qos_profile_sensor_data))
 
+    # 记录 AMCL 原时间戳、XY 与协方差旁路，用于定位分析；不会发布 /initialpose 或修正控制输入。
     def amcl_receive(msg):
         p = msg.pose.pose.position
         localization_trace.append([time.monotonic(), 'amcl', msg.header.stamp.sec + msg.header.stamp.nanosec * 1e-9,
                                    p.x, p.y, msg.pose.covariance[0], msg.pose.covariance[7], msg.pose.covariance[35]])
 
+    # 只记录 map／odom 相关 TF 的位移、航向和源时间戳，帮助复核定位链变动。
     def tf_receive(msg):
         for t in msg.transforms:
             if t.header.frame_id not in ('map', 'odom'):
@@ -219,6 +230,7 @@ def main():
     subscriptions.append(node.create_subscription(TFMessage, '/tf', tf_receive, qos_profile_sensor_data))
     subscriptions.append(node.create_subscription(ROSPath, '/fixed_path_plan', lambda msg: path_trace.append([time.monotonic(), msg.header.frame_id, [[p.pose.position.x, p.pose.position.y] for p in msg.poses]]), qos_profile_sensor_data))
 
+    # 仅记录目标机器人 Gazebo 真值，作为旁路对照，不参与导航器反馈。
     def truth_receive(msg):
         for t in msg.transforms:
             truth_frames.add(t.child_frame_id)
@@ -231,6 +243,8 @@ def main():
 
     from sensor_msgs.msg import LaserScan
 
+    # 按 scan_every 限制旁路保存频率，保留整束扫描及原时间戳。
+    # 不改变实际雷达驱动的发布频率。
     def scan_receive(msg):
         if scan_trace and time.monotonic() - scan_trace[-1][0] < args.scan_every:
             return
@@ -244,6 +258,8 @@ def main():
     guard = None
     parked_since = None
 
+    # 等待 Action Future 时继续采集定位；measure 开启时检测接近目标后的长期静止。
+    # 保护取消只作用于本工具 Goal，不改变生产控制器的到点规则。
     def wait(future, timeout=10., measure=False):
         nonlocal parked_since
         deadline = time.monotonic() + timeout
@@ -265,6 +281,8 @@ def main():
             raise (GoalResultTimeout('goal result deadline exceeded') if measure else RequestTimeout('ROS request timeout'))
         return future.result()
 
+    # 读取合成实验的实时反馈和 map TF；陈旧反馈先尝试短暂恢复，仍无效则拒绝样本。
+    # 返回墙钟、XY、线角速度、TF 年龄及可用的里程计／仿真时间，索引供离线指标使用。
     def sample():
         recovery_started = time.monotonic()
         received, odom = latest['/odom']
@@ -287,6 +305,7 @@ def main():
         v = odom.twist.twist
         return (time.monotonic(), p.x, p.y, v.linear.x, v.angular.z, age, op.x, op.y, stamp)
 
+    # 在指定墙钟时段内推进回调并收集完整样本，采样缺失由 sample 的约束处理。
     def collect(seconds):
         data = []
         begin = time.monotonic()

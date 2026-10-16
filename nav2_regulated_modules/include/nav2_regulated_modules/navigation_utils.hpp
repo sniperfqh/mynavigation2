@@ -1,4 +1,5 @@
-// 导航几何与状态辅助接口。封装规划和控制流程共用的轻量计算，避免不同回调产生不一致判定。
+// 导航数据转换与几何小工具。二维距离用 m，航向和角差用 rad，时长输入为秒。
+// 有效 Pose 检查是数值／结构检查，不代表坐标变换存在、定位新鲜或目标可通行。
 
 #ifndef NAV2_REGULATED_MODULES__NAVIGATION_UTILS_HPP_
 #define NAV2_REGULATED_MODULES__NAVIGATION_UTILS_HPP_
@@ -11,19 +12,19 @@ namespace nav2_regulated_modules
   namespace navigation_utils
 {
 
-// 将浮点秒数安全换算为 ROS Duration 消息，供 Action 超时字段使用。
+// 把秒数转换为 ROS Duration 消息，不读取系统时钟；输入的业务合法性由调用方负责。
 builtin_interfaces::msg::Duration durationFromSeconds(double seconds);
 
-// 计算两帧位姿的平面距离，单位米。
+// 对同坐标系的两点计算 XY 平面距离，单位 m；忽略高度。
 double poseDistance(const geometry_msgs::msg::PoseStamped & first, const geometry_msgs::msg::PoseStamped & second);
 
-// 从四元数提取平面航向角，结果单位为弧度。
+// 从四元数取平面 yaw，单位 rad，不查询 TF。
 double yawFromPose(const geometry_msgs::msg::PoseStamped & pose);
 
-// 将角度规约到约定区间，避免跨越正负 π 时误判。
+// 把角差折回主值区间，避免 ±π 边界把小误差计算成接近一整圈。
 double normalizeAngle(double angle);
 
-// 校验坐标系、位置有限值和非零四元数；无效位姿返回 false。
+// 检查 frame_id、坐标与四元数的实现约束；通过并不等于目标可规划或 TF 可用。
 bool validPose(const geometry_msgs::msg::PoseStamped & pose);
 
 }

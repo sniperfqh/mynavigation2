@@ -1,3 +1,5 @@
+# 隔离启动诊断节点并合成输入，验证来源去重、数据状态、日志频率和滚动。
+# 它会启动自己的测试进程，但不发布实际底盘运动目标；结果仅证明诊断协议。
 """可控消息集成验证；独立 ROS_DOMAIN_ID 下运行，不启动底盘。"""
 import os
 import pathlib
@@ -13,6 +15,7 @@ from nav_msgs.msg import Odometry
 from byd_custom_msgs.msg import MotionState, ControlRes, ChassisControl
 
 
+# 在独立日志目录启动诊断节点，合成各来源并检查日志字段、频率与缺失状态，结束后只清理自己的进程。
 def run_case(node, mode, collision=False, feedback='/motion_state', directory=None, shared_controller=False):
     root = pathlib.Path(directory or tempfile.mkdtemp(prefix='velocity-diag-'))
     capture = root / 'console.log' if directory is None else pathlib.Path(tempfile.mktemp(prefix='velocity-console-'))
@@ -96,6 +99,7 @@ def run_case(node, mode, collision=False, feedback='/motion_state', directory=No
     print('PASS', mode, collision, feedback, 'file_hz=', round(hz, 2), root)
 
 
+# 通过提高诊断采样频率触发滚动文件，验证大小／备份和跨文件来源标识，不测试车辆旋转。
 def run_rotation():
     root = pathlib.Path(tempfile.mkdtemp(prefix='velocity-rotation-'))
     executable = get_package_prefix('nav2_regulated_modules') + '/lib/nav2_regulated_modules/velocity_diagnostics_node'

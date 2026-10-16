@@ -1,4 +1,5 @@
-// 导航运行监控。检测定位、进度和任务状态，触发恢复或结束并记录速度链。
+// 周期检查任务取消、定位、进度与恢复。ROS 时间用于导航计时，collision 快照内部另用单调接收时间。
+// 固定路径 collision 等待暂停无进展计时，但不关闭取消与定位丢失处理；TF 查询成功不额外证明定位精度。
 
 #include "nav2_regulated_modules/regulated_navigator.hpp"
 
@@ -15,7 +16,8 @@ using namespace std::chrono_literals;
 namespace nav2_regulated_modules
 {
 
-// 取消当前子目标并进入恢复流程，避免继续执行失效路径。
+// 在恢复轮次允许时取消子 Goal、发送零速并请求清空代价地图。
+// 清图请求异步发送；等待时间到后再尝试恢复，不在此确认清图或实际停车完成。
 void RegulatedNavigator::startRecovery(const std::string & reason)
 {
   if (task_.type == TaskType::NONE)
@@ -45,7 +47,8 @@ void RegulatedNavigator::startRecovery(const std::string & reason)
   recovery_ready_time_ = now() + rclcpp::Duration::from_seconds(costmap_wait_duration_);
 }
 
-// 周期检查定位、任务进展及重规划时机，必要时停车或恢复。
+// 依次处理取消、清图等待、TF 丢失／恢复、可选跳变、进度及自主重规划。
+// collision 仅暂停固定路径无进展计时，不跳过前面的取消与定位处理。
 void RegulatedNavigator::monitorTask()
 {
   if (!active_ || task_.type == TaskType::NONE)
@@ -67,6 +70,7 @@ void RegulatedNavigator::monitorTask()
   }
   geometry_msgs::msg::PoseStamped current_pose;
   // TF 丢失与位姿突跳分开处理：持续无 TF 必停，突跳检测由独立开关控制。
+  // 当前位置查询失败进入丢失计时；成功查询后的 last_valid_tf_time 是本机当前 ROS 时间，不是 TF 源时间。
   if (!lookupCurrentPose(current_pose))
   {
     if ((now() - last_valid_tf_time_).seconds() > localization_timeout_ && task_.state != NavigationState::LOCALIZATION_LOST)
@@ -122,6 +126,7 @@ void RegulatedNavigator::monitorTask()
   // 控制期间仅以足够的 map 坐标位移刷新进度时间，静止过久进入恢复。
   if (task_.state == NavigationState::CONTROLLING)
   {
+    // 只有固定路径任务受此进度暂停影响；每周期重建进度位置／时间，恢复后不把停车时长算作卡住。
     const bool collision_wait = collision_state_enabled_ && task_.type == TaskType::NAVIGATION_SERVICE && collision_state_.snapshot().stopped();
     if (collision_wait || collision_progress_paused_)
     {
@@ -152,7 +157,8 @@ void RegulatedNavigator::monitorTask()
   }
 }
 
-// 通过 TF 获取当前车体在全局坐标系中的位姿。
+// 尝试获取最近 map→base_link 变换，成功后更新 last_valid_tf_time。
+// 当前实现没有额外按消息时间戳计算 TF 年龄；查询成功不能当作独立定位新鲜度／精度验收。
 bool RegulatedNavigator::lookupCurrentPose(geometry_msgs::msg::PoseStamped & pose)
 {
   try
@@ -172,7 +178,8 @@ bool RegulatedNavigator::lookupCurrentPose(geometry_msgs::msg::PoseStamped & pos
   }
 }
 
-// 根据机器人当前位置移除已经通过的多点目标。
+// 多点任务中按 passed_goal_radius（m）移除已接近的前置目标，至少保留末点。
+// 这是目标队列维护，不是 FollowPath 成功判定。
 void RegulatedNavigator::updatePassedGoals(const geometry_msgs::msg::PoseStamped & current_pose)
 {
   if (task_.type != TaskType::THROUGH_POSES || task_.goals.size() <= 1)

@@ -1,3 +1,5 @@
+// 最小 Pose 结构上的采样去重回归，检查浮点近重复终点被精确新终点替换。
+// 小于等于 1e-9 m 的邻点会合并，仍相隔 1e-8 m 的点必须保留，以避免误删有效路径段。
 #include <cmath>
 #include <vector>
 
@@ -15,6 +17,7 @@ struct Sample
   } pose;
 };
 
+// 测试辅助函数：将断言失败显式转成 false／异常，或构造最小采样结构；不依赖 ROS。
 Sample makeSample(double x, double y)
 {
   Sample sample;
@@ -23,6 +26,8 @@ Sample makeSample(double x, double y)
   return sample;
 }
 
+// 最小 Pose 结构上的采样去重回归，检查浮点近重复终点被精确新终点替换。
+// 返回码由调用环境用于区分成功／失败，进程启动本身不能作为业务功能验收。
 int main()
 {
   std::vector<Sample> samples;

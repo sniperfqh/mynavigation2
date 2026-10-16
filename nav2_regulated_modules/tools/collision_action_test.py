@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+# 连接已有仿真的 collision 注入与 1.5 m/s Action 例子；不直接发布底盘速度或合成定位。
+# periodic 独立按 50 Hz 切换状态，cruise 等待速度条件；只有相同区间、相同任务内的合格样本才能组成证据。
+# 退出只取消自身 UUID 并观察停稳，工具 Ctrl+C 同时改变状态与任务，不能代替独立状态源断流验收。
 """在现有仿真中周期注入 collision 状态；只取消本工具的 Action。"""
 import argparse
 import csv
@@ -9,13 +12,17 @@ import signal
 import time
 
 
+# 保存要求的连续墙钟时长 seconds，初始无起点、无上次观察时刻。
 class StageWindow:
     """单调时钟上的连续证据窗，缺帧或不满足条件立即重置。"""
+    # 保存要求的连续墙钟时长 seconds，初始无起点、无上次观察时刻。
     def __init__(self, seconds):
         self.seconds = seconds
         self.start = None
         self.previous = None
 
+    # 条件为假或观察 gap>0.25 s 时重置起点；连续有效累计到 seconds 才返回 true。
+    # now 来自单调时钟，不把长时间没观察也计作有效保持。
     def update(self, now, valid):
         if not valid or (self.previous is not None and now - self.previous > 0.25):
             self.start = None
@@ -27,15 +34,19 @@ class StageWindow:
         return now - self.start >= self.seconds
 
 
+# 要求五个状态保持时长都为有限正数，保存各段时长与整周期总长 s。
 class PeriodicSchedule:
     states = (4, 3, 2, 1, 0)
 
+    # 要求五个状态保持时长都为有限正数，保存各段时长与整周期总长 s。
     def __init__(self, durations):
         if len(durations) != 5 or any(not math.isfinite(v) or v <= 0 for v in durations):
             raise ValueError('五个状态保持时间必须为有限正数')
         self.durations = tuple(durations)
         self.period = sum(durations)
 
+    # 从 elapsed 墙钟秒计算周期号、区间号和状态；边界时刻进入下一段。
+    # 状态顺序固定 4、3、2、1、0，回调延迟不会改变周期 epoch。
     def at(self, elapsed):
         elapsed = max(0., elapsed)
         cycle = int(elapsed // self.period)
@@ -47,9 +58,11 @@ class PeriodicSchedule:
         return cycle + 1, 0, 4
 
 
+# 初始化发布次数、首尾时刻和间隔分布；没有至少两帧时不能计算实测频率。
 class PublishStats:
     bounds = (.010, .015, .025, .040, .100, float('inf'))
 
+    # 初始化发布次数、首尾时刻和间隔分布；没有至少两帧时不能计算实测频率。
     def __init__(self):
         self.count = 0
         self.first = self.last = None
@@ -57,6 +70,8 @@ class PublishStats:
         self.maximum = 0.
         self.histogram = [0] * len(self.bounds)
 
+    # 记录相邻发布调用的单调间隔，并累计到互斥的时间桶。
+    # 统计的是本机 publisher.publish 调用时序，不是端到端接收抖动。
     def add(self, now):
         if self.last is not None:
             gap = now - self.last
@@ -71,6 +86,8 @@ class PublishStats:
         self.last = now
         self.count += 1
 
+    # 实测频率 = (次数−1)÷首尾时间差，同时返回间隔极值、均值和直方图。
+    # 单帧或无帧时相关值为空，不用 configured_hz 代替测量。
     def result(self):
         span = (self.last - self.first) if self.count > 1 else 0.
         return dict(configured_hz=50., count=self.count,
@@ -81,8 +98,12 @@ class PublishStats:
                     interval_histogram=dict(zip(['≤10ms', '10–15ms', '15–25ms', '25–40ms', '40–100ms', '>100ms'], self.histogram)))
 
 
+# 以周期／状态／腿／UUID／方向／活动标志固定证据归属，并记录切入初速度。
+# 平台、停车和恢复分别维护连续窗口，不能合并不同状态区间的样本。
 class IntervalEvidence:
     """按状态区间与任务分段；观察结论绝不控制发布时序。"""
+    # 以周期／状态／腿／UUID／方向／活动标志固定证据归属，并记录切入初速度。
+    # 平台、停车和恢复分别维护连续窗口，不能合并不同状态区间的样本。
     def __init__(self, key, now, initial_v, initial_w=0.):
         self.key = key
         cycle, index, state, leg, goal_uuid, direction, active = key
@@ -97,6 +118,8 @@ class IntervalEvidence:
         self.recovery = StageWindow(.2)
         self.last_sample = None
 
+    # 仅处理当前区间内未处理的新 UART 样本；先核对数据、方向、原始需求与离终点距离，再累计平台／停车。
+    # 0.3 s 平台和 1 s 停稳分别判定，轮速停车与命令停车各自保存。
     def sample(self, stamp, uart, raw, wheel, remaining, valid):
         if stamp == self.last_sample or stamp < self.record['start']:
             return
@@ -130,6 +153,8 @@ class IntervalEvidence:
         if self.recovery.update(stamp, eligible and direction * uart[0] > .1 and direction * raw > .1):
             r['recovered'] = True
 
+    # 按窗口证据给出 PASS／FAIL／UNAVAILABLE，分别标记区间内制动与进入区间前已静止。
+    # 状态 4 未达正常平台仍是不可评价；证据不足不能强行判成碰撞响应失败。
     def finish(self, now, reason):
         r = dict(self.record, end=now, split_reason=reason)
         enough = now - r['start'] >= 2 and r['eligible_hold_s'] >= 1
@@ -148,6 +173,8 @@ class IntervalEvidence:
         return r
 
 
+# 使用方向化速度检查平台，要求直行、足够离终点且原始请求仍高于减速上限。
+# 状态 0／1 检查零线角速度，不用已进入终点制动的样本冒充 collision 减速。
 def stage_condition(state, uart, raw, remaining, direction=1):
     v, w = uart
     if not all(math.isfinite(x) for x in (*uart, raw, remaining)):
@@ -160,6 +187,8 @@ def stage_condition(state, uart, raw, remaining, direction=1):
     return abs(direction*v - cap) <= 0.05 and abs(w) <= 0.05 and direction*raw >= cap + (0.05 if state != 4 else -0.05)
 
 
+# 检查 UART 与轮速零值及有限性，轮速必须在 0.25 s 内新鲜。
+# 只有已确认自身任务终态时，才允许“最后零 UART＋持续新鲜零轮速”的静默退出证据。
 def stationary_after_terminal(now, uart, wheel, terminal):
     if uart is None or wheel is None or now-wheel[0]>.25:
         return False
@@ -169,6 +198,8 @@ def stationary_after_terminal(now, uart, wheel, terminal):
     return zero and (now-uart[0]<=.25 or terminal)
 
 
+# 从原始 CSV 读取 UART，生成不依赖绘图库的 SVG／HTML，保留正负方向和状态上限。
+# 预览可降采样，CSV 仍是完整原始证据；缺 UART 时不伪造曲线。
 def write_plot(directory):
     # Standalone SVG/HTML avoids a plotting dependency; preserve every sample in CSV.
     points = []
@@ -180,6 +211,7 @@ def write_plot(directory):
         return
     width, height = 1100, 360
     duration = max(points[-1][0], 1)
+    # 将时间和带符号速度投影为 SVG 坐标；这只生成预览点串，不改变 CSV 原始数据。
     def line(values):
         return ' '.join(f'{50 + t / duration * 1000:.1f},{175 - v / 1.7 * 140:.1f}' for t, v in values)
     # Keep the preview bounded for indefinite runs; CSV remains lossless.
@@ -197,6 +229,8 @@ def write_plot(directory):
     (directory / 'velocity.html').write_text('<!doctype html><meta charset="utf-8"><title>collision 速度曲线</title>' + svg)
 
 
+# 连接已有仿真的 collision 注入与 1.5 m/s Action 例子；不直接发布底盘速度或合成定位。
+# 先解析参数与检查运行前提，再按本文件流程采集／处理并写结果；异常和 finally 收口分支不应被注释描述为正常通过。
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output-dir', type=Path, required=True)
@@ -267,9 +301,13 @@ def main(argv=None):
     evidence = None
     publish_stats = PublishStats()
     publisher = node.create_publisher(UInt8, '/collision_state', 1)
+    # 把当前阶段事件追加到 JSONL 并刷新，时间为相对启动的单调秒。
+    # 事件日志用于还原发布／任务时序，不是 DDS 接收确认。
     def event(kind, **values):
         trace.write(json.dumps(dict(elapsed=time.monotonic()-started, kind=kind, **values))+'\n')
         trace.flush()
+    # 发布一帧 UInt8 并记录本机调用时间、状态、任务与周期。
+    # 由此统计的是发布调用频率，不是独立订阅端的实收频率。
     def publish_state():
         now = time.monotonic()
         publisher.publish(UInt8(data=state))
@@ -277,6 +315,8 @@ def main(argv=None):
         event('publish', monotonic=now, state=state, cycle=cycle_key[0], index=cycle_key[1],
               leg=leg, direction=direction, goal_uuid=bytes(goal_uuid.uuid).hex() if goal_uuid else None,
               active_goal=active_goal)
+    # 按 steady timer 触发；periodic 根据首个已接受任务的 epoch 选择状态。
+    # 延迟回调按当前经过时间跳到正确区间，不把整个周期重新从 4 开始。
     def publish_tick():
         nonlocal state, cycle_key
         if not emitting:
@@ -291,6 +331,8 @@ def main(argv=None):
                       skipped_intervals=max(0, cycle*5+index-(old[0]*5+old[1])-1) if old[0]>=0 else 0)
         publish_state()
     timer = node.create_timer(.02, publish_tick, clock=Clock(clock_type=ClockType.STEADY_TIME))
+    # 保存话题的本机接收时刻和速度，再写入带当前任务／状态标签的 CSV。
+    # 不同话题的回调时间不同，不构成严格同步控制帧。
     def receive(topic, v, w):
         latest[topic] = (time.monotonic(), v, w)
         writer.writerow([time.monotonic()-started, topic, v, w, state, leg, direction, cycle_key[0],
@@ -305,11 +347,14 @@ def main(argv=None):
         subscriptions.append(node.create_subscription(GoalStatusArray, topic+'/_action/status', lambda m,t=topic: statuses.__setitem__(t,m.status_list), qos))
     client = ActionClient(node, NavigationService, '/navigation_service')
     old_handlers = {}
+    # 仅设置中断标志，使主循环走自身取消与停稳收口；信号回调不直接销毁 ROS 节点。
     def interrupt(*_):
         nonlocal interrupted
         interrupted = True
     for sig in [signal.SIGINT, signal.SIGTERM]:
         old_handlers[sig] = signal.signal(sig, interrupt)
+    # 推进一次 ROS 回调并执行观察逻辑，必要时根据中断标志退出正常流程。
+    # cleanup 路径仍允许处理取消结果，避免收到信号后立刻失去通信能力。
     def pump(cleanup=False):
         nonlocal last_print
         rclpy.spin_once(node, timeout_sec=.01)
@@ -321,6 +366,8 @@ def main(argv=None):
             uart = latest.get('/control_to_uart')
             node.get_logger().info(f'leg={leg} collision={state} cap={direction*1.5*{4:1.,3:.65,2:.35,1:0.,0:0.}[state]:.3f} uart_v={uart[1] if uart else "missing"}')
             last_print = now
+    # 用单调截止时间循环处理回调，条件满足才返回，超时抛异常进入收口。
+    # seconds 是墙钟秒，不是仿真 /clock 秒。
     def wait(predicate, seconds, cleanup=False):
         deadline = time.monotonic()+seconds
         while time.monotonic() < deadline:
@@ -328,6 +375,8 @@ def main(argv=None):
             if predicate():
                 return
         raise TimeoutError('等待条件超时')
+    # 短期创建服务客户端，等发现与响应后返回结果，在 finally 销毁客户端。
+    # 服务完成只表示调用有返回，不证明相应机器人动作已执行。
     def call(service, service_type, request):
         c = node.create_client(service_type, service)
         try:
@@ -337,23 +386,31 @@ def main(argv=None):
             return f.result()
         finally:
             node.destroy_client(c)
+    # 读取 map→base_frame 最新 TF，检查节点时钟下的时间戳年龄并返回 XY（m）。
+    # 这是当前观测采样，不把原始 Odometry 位姿直接当地图位置。
     def pose():
         tf = buffer.lookup_transform('map', args.base_frame, Time())
         age = (node.get_clock().now().nanoseconds - Time.from_msg(tf.header.stamp).nanoseconds)/1e9
         if not -.1 <= age <= .25:
             raise RuntimeError(f'TF 年龄异常 {age:.3f}')
         return tf.transform.translation.x, tf.transform.translation.y
+    # 要求话题曾接收、接收年龄≤0.25 s 且速度有限；不单凭发布者存在判断数据有效。
     def fresh(topic):
         return topic in latest and time.monotonic()-latest[topic][0] <= .25 and all(math.isfinite(v) for v in latest[topic][1:])
+    # 要求新鲜 UART 和轮速同时满足线速度≤0.01 m/s、角速度≤0.05 rad/s。
+    # 它仅评价本次采样，连续保持由外部 StageWindow 累积。
     def stopped():
         return all(fresh(t) and abs(latest[t][1]) <= .01 and abs(latest[t][2]) <= .05 for t in ['/control_to_uart', args.odom_topic])
+    # 将已确认自身 Action 终态的标志交给退出停稳判据，不为仍活动的任务放宽 UART 新鲜度。
     def terminal_stopped():
         return stationary_after_terminal(time.monotonic(),latest.get('/control_to_uart'),
                                          latest.get(args.odom_topic),confirmed_terminal)
+    # 只更新下一次发布所用状态并记事件，不在此函数额外发送一帧。
     def set_state(value):
         nonlocal state
         state = value
         event('state', state=state, leg=leg)
+    # 结束当前“状态区间＋任务”证据，写入报告后释放窗口，避免跨区间拼接样本。
     def finish_evidence(reason):
         nonlocal evidence
         if evidence is not None:
@@ -361,6 +418,8 @@ def main(argv=None):
             report['intervals'].append(summary)
             event('interval', **summary)
             evidence=None
+    # 按周期、状态、腿、UUID、方向和活动状态切分证据，再以新鲜遥测推进判据。
+    # 观察结果不控制 periodic 的状态切换时间，短平台可记 UNAVAILABLE 而不是阻塞周期。
     def observe_periodic():
         nonlocal evidence
         if args.schedule != 'periodic' or not emitting or cycle_epoch is None or not schedule_running:
@@ -383,6 +442,8 @@ def main(argv=None):
         wheel=latest.get(args.odom_topic,(0,float('nan'),float('nan')))
         evidence.sample(uart[0]-started,uart[1:],raw[1],wheel[1:],remaining,
                         fresh('/cmd_vel_nav') and fresh(args.odom_topic) and schedule_running)
+    # 保存腿、状态区间与发布时序摘要，刷新 CSV 并生成预览。
+    # 分方向聚合必须保留 UNAVAILABLE，不能只凭 Action 成功给整项通过。
     def save():
         report['publish_timing']=publish_stats.result()
         summary={}
@@ -431,6 +492,8 @@ def main(argv=None):
         # Advertised publishers may remain silent at rest; require measured rest,
         # and reject any received nonzero command without manufacturing a zero.
         initial_rest=StageWindow(1)
+        # 起步前拒绝已收到的非零／非法指令，并要求新鲜轮速连续零速。
+        # 尚无 UART 消息本身不构成失败，因为 controlpub 空闲时可能尚未创建或不周期发布。
         def ready_at_rest():
             for topic in ['/control_to_uart','/cmd_vel']:
                 if topic in latest and (not all(math.isfinite(v) for v in latest[topic][1:]) or

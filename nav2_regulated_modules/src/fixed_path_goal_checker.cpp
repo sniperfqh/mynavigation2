@@ -1,4 +1,5 @@
-// 固定路径目标检查器实现。结合机器人位置、停止速度和控制器终点锁存状态判断 FollowPath 完成。
+// 固定路径终点检查实现。先判断位置容差或末段终点平面，再累计有限速度门限内的连续周期。
+// “位置曾触发终点”与“本周期速度已足够小”是两层条件；本插件不执行独立一秒定位覆盖率验收。
 
 #include "nav2_regulated_modules/fixed_path_goal_checker.hpp"
 
@@ -13,7 +14,8 @@
 namespace nav2_regulated_modules
 {
 
-// 读取目标位置、停车速度和稳定周期阈值，并绑定目标检查器运行上下文。
+// 从插件参数读取位置／速度阈值及连续周期；位置容差须为有限正数，停稳速度须有限非负，周期至少为 1。
+// position_stable_cycles 计的是连续控制检查次数，不是固定秒数。
 void FixedPathGoalChecker::initialize(const rclcpp_lifecycle::LifecycleNode::WeakPtr & parent, const std::string & plugin_name, const std::shared_ptr<nav2_costmap_2d::Costmap2DROS>)
 {
   auto node = parent.lock();
@@ -37,7 +39,7 @@ void FixedPathGoalChecker::initialize(const rclcpp_lifecycle::LifecycleNode::Wea
   LOG_INFO("固定路径位置 GoalChecker 配置完成，plugin={}，位置容差={:.4f}m，停止线速度={:.3f}m/s，停止角速度={:.3f}rad/s，位置稳定周期={}", plugin_name_, xy_goal_tolerance_, trans_stopped_velocity_, rot_stopped_velocity_, position_stable_cycles_);
 }
 
-// 清空控制或检查器历史状态，避免跨任务沿用上次进度。
+// 丢弃旧路径、末段切线、终点锁存和停稳计数，新任务不能继承这些历史。
 void FixedPathGoalChecker::reset()
 {
   path_ = nav_msgs::msg::Path();
@@ -49,7 +51,8 @@ void FixedPathGoalChecker::reset()
   stopped_cycles_ = 0;
 }
 
-// 装入新路径终点并重置到点稳定计数，防止旧路径状态延续。
+// 从最后一个有效非重合线段提取归一化切线，并清空先前到点状态。
+// 重复末点会向前回退；全路径没有有效末段切线时拒绝。
 void FixedPathGoalChecker::setPath(const nav_msgs::msg::Path & path)
 {
   if (path.poses.size() < 2)
@@ -84,7 +87,8 @@ void FixedPathGoalChecker::setPath(const nav_msgs::msg::Path & path)
   stopped_cycles_ = 0;
 }
 
-// 判断机器人是否到达终点位置容差或越过末段终点平面。
+// 位置在容差内，或已经靠近末段并越过终点切平面时，单向锁存 terminal_reached。
+// 未检查航向与速度，返回 true 仍不等于最终任务完成。
 bool FixedPathGoalChecker::isTerminalPositionReached(const geometry_msgs::msg::Pose & query_pose)
 {
   if (!path_valid_)
@@ -104,7 +108,8 @@ bool FixedPathGoalChecker::isTerminalPositionReached(const geometry_msgs::msg::P
   return terminal_reached_;
 }
 
-// 综合位置与停车状态判断固定路径是否完成。
+// 先更新终点几何锁存，再在平面线速度及角速度都低于门限时累计连续周期。
+// 任何运动周期清零停稳计数；满足配置周期才返回 true。
 bool FixedPathGoalChecker::isGoalReached(const geometry_msgs::msg::Pose & query_pose, const geometry_msgs::msg::Pose &, const geometry_msgs::msg::Twist & velocity)
 {
   isTerminalPositionReached(query_pose);
@@ -124,7 +129,8 @@ bool FixedPathGoalChecker::isGoalReached(const geometry_msgs::msg::Pose & query_
   return stopped_cycles_ >= position_stable_cycles_;
 }
 
-// 向 Nav2 目标检查接口提供当前距离、速度容差。
+// 通过 Nav2 接口返回 XY 半径与停止速度阈值，未使用的维度写入约定占位。
+// 输出是供控制器参考的阈值，不是当前机器人误差。
 bool FixedPathGoalChecker::getTolerances(geometry_msgs::msg::Pose & pose_tolerance, geometry_msgs::msg::Twist & velocity_tolerance)
 {
   const double invalid_field = std::numeric_limits<double>::lowest();
@@ -144,7 +150,8 @@ bool FixedPathGoalChecker::getTolerances(geometry_msgs::msg::Pose & pose_toleran
   return true;
 }
 
-// 从当前路径搜索区间选出距机器人最近的轨迹点索引。
+// 在整条保存路径中搜索离 query_pose 最近的点，用于末段越界判据。
+// 与控制器只向前搜索的最近点函数不同，此处不维护递增进度。
 std::size_t FixedPathGoalChecker::findNearestIndex(const geometry_msgs::msg::Pose & query_pose) const
 {
   std::size_t best_index = 0;

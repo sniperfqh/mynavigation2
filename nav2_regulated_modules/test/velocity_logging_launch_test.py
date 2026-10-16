@@ -1,3 +1,5 @@
+# 遍历三模式与 Collision Monitor 开关，读取诊断 Node 的已解析参数。
+# 当前顶层脚本只生成 Launch Action，不执行它们，因此不会启动节点或发运动。
 """检查三模式和碰撞监控参数路由，不启动节点。"""
 import importlib.util
 from pathlib import Path

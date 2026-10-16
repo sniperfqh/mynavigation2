@@ -1,3 +1,5 @@
+// 起步保护纯几何／状态回归：预减速、保护距离、连续达标、单向释放、前后向误差和重复端点。
+// 边界值故意取容差内外及 NaN；它验证算法分支，不代表真实底盘达速或姿态收敛。
 #include <cmath>
 #include <iostream>
 #include <vector>
@@ -7,6 +9,7 @@
 namespace
 {
 
+// 测试辅助函数：将断言失败显式转成 false／异常，或构造最小采样结构；不依赖 ROS。
 bool check(const bool condition, const char * message)
 {
   if (!condition)
@@ -19,6 +22,8 @@ bool check(const bool condition, const char * message)
 
 }  // namespace
 
+// 起步保护纯几何／状态回归：预减速、保护距离、连续达标、单向释放、前后向误差和重复端点。
+// 返回码由调用环境用于区分成功／失败，进程启动本身不能作为业务功能验收。
 int main()
 {
   using nav2_regulated_modules::detail::FixedPathStartSpeedGuard;

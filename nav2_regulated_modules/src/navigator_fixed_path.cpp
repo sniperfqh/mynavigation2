@@ -1,4 +1,5 @@
-// 固定路径准备与可视化。将任务路径转换为可跟踪轨迹，并计算弧长、前视及路径边界。
+// NavigationService 分段请求的校验、几何采样、方向编码、可视化和速度上限发布。
+// 固定路径不走全局规划／路径平滑；直线也转换为共线三次贝塞尔控制点，以复用等弧长采样流程。
 
 #include "nav2_regulated_modules/regulated_navigator.hpp"
 #include "nav2_regulated_modules/detail/path_sample.hpp"
@@ -17,7 +18,8 @@
 namespace nav2_regulated_modules
 {
 
-// 把分段任务转换为带运动方向的固定路径；非法段返回空结果。
+// 检查有限坐标、非重合端点、相邻连接与段类型，再为直线／贝塞尔生成统一采样。
+// 路径位于 global_frame，输出 z=0；按整条方向编码车头姿态，不在这里进行全程碰撞可行性验证。
 std::optional<nav_msgs::msg::Path> RegulatedNavigator::prepareFixedPath(const std::vector<byd_custom_msgs::msg::NaviSegment> & segments)
 {
   if (segments.empty())
@@ -29,6 +31,7 @@ std::optional<nav_msgs::msg::Path> RegulatedNavigator::prepareFixedPath(const st
   nav_msgs::msg::Path output;
   output.header.frame_id = global_frame_;
   output.header.stamp = now();
+  // 所有连接检查使用同一个 1 mm 距离阈值；路径 z 虽要求有限，最终按二维导航置零。
   constexpr double distance_tolerance = 1e-3;
   const auto valid_point = [](const geometry_msgs::msg::Point & point)
   {
@@ -109,6 +112,7 @@ std::optional<nav_msgs::msg::Path> RegulatedNavigator::prepareFixedPath(const st
     LOG_ERROR("导航服务生成的路径点不足两个");
     return std::nullopt;
   }
+  // 同向约束先由 Goal 校验保证；每个点写的是车体朝向，而不是直接把速度设成负值。
   const bool backward = segments.front().motion_direction == byd_custom_msgs::msg::NaviSegment::MOTION_DIRECTION_BACKWARD;
   for (std::size_t index = 0; index < output.poses.size(); ++index)
   {
@@ -134,7 +138,8 @@ std::optional<nav_msgs::msg::Path> RegulatedNavigator::prepareFixedPath(const st
   return output;
 }
 
-// 校验固定路径请求的路径、方向与速度约束。
+// 仅允许 fixed_path、节点激活、分段非空、全段同向且 max_speed 有限为正。
+// 几何连续性检查在接受后的 prepareFixedPath，故部分几何错误会以已接受后 ABORTED 结束。
 rclcpp_action::GoalResponse RegulatedNavigator::handleNavigationServiceGoal(const rclcpp_action::GoalUUID &, const std::shared_ptr<const NavigationService::Goal> goal)
 {
   if (operation_mode_ != NavigationMode::FIXED_PATH)
@@ -170,7 +175,8 @@ rclcpp_action::GoalResponse RegulatedNavigator::handleNavigationServiceGoal(cons
   return rclcpp_action::GoalResponse::ACCEPT_AND_EXECUTE;
 }
 
-// 响应固定路径任务取消并使下游跟踪停车。
+// 当前固定路径句柄才设置 cancel_requested，监控周期随后处理。
+// 返回 ACCEPT 不表示下游取消完成，finish=false 也不能替代轮速停稳证据。
 rclcpp_action::CancelResponse RegulatedNavigator::handleNavigationServiceCancel(const std::shared_ptr<NavigationServiceHandle> goal)
 {
   if (goal == active_navigation_service_goal_)
@@ -181,7 +187,8 @@ rclcpp_action::CancelResponse RegulatedNavigator::handleNavigationServiceCancel(
   return rclcpp_action::CancelResponse::ACCEPT;
 }
 
-// 接管固定路径 Action 并准备跟踪路径。
+// 构造几何路径、等待 FollowPath，再接管旧任务并计算总长与最小段限速。
+// 车头姿态由切线和方向生成，当前定位不被重置；超过全局速度上限时钳位，不因此自动拒绝 Goal。
 void RegulatedNavigator::handleNavigationServiceAccepted(const std::shared_ptr<NavigationServiceHandle> goal)
 {
   auto prepared_path = prepareFixedPath(goal->get_goal()->navi_segment);
@@ -245,7 +252,8 @@ void RegulatedNavigator::handleNavigationServiceAccepted(const std::shared_ptr<N
   sendFollowPath(*prepared_path);
 }
 
-// 发布固定路径及左右可视化边界，不参与实际控制输出。
+// 发布 Path 及左右边界、端点等 Marker，帮助观察固定路径几何。
+// 边界宽度是显示参数，不是碰撞检测区，也不限制实际行驶误差。
 void RegulatedNavigator::publishFixedPath(const nav_msgs::msg::Path & path)
 {
   if (!fixed_path_pub_ || !fixed_path_pub_->is_activated() || !fixed_path_boundaries_pub_ || !fixed_path_boundaries_pub_->is_activated())
@@ -336,7 +344,8 @@ void RegulatedNavigator::publishFixedPath(const nav_msgs::msg::Path & path)
   LOG_INFO("固定路径与科技风边界已发布到 RViz2，path_topic={}，boundaries_topic={}，frame={}，路径点数={}，左右半宽={:.2f}m", fixed_path_visualization_topic_, fixed_path_boundaries_topic_, visualization_path.header.frame_id, visualization_path.poses.size(), fixed_path_boundary_half_width_);
 }
 
-// 恢复后对当前任务重新规划或继续固定路径跟踪。
+// 固定路径复用保存的 active_path，自主任务重新进入规划。
+// 是否还属于当前有效任务由 task_ 与上层状态机决定；不从已结束任务恢复。
 void RegulatedNavigator::resumeCurrentTask()
 {
   if (task_.type == TaskType::NAVIGATION_SERVICE)
@@ -355,7 +364,8 @@ void RegulatedNavigator::resumeCurrentTask()
   startPlanning(false);
 }
 
-// 将输入路径段转换为贝塞尔曲线所需的控制点。
+// 将两端点扩成共线的四控制点，两个内点分别位于线段的三分之一和三分之二。
+// 因此同一贝塞尔采样器也能处理直线，函数名沿用既有拼写。
 void RegulatedNavigator::liner2to4point(const nav_msgs::msg::Path & input_path, nav_msgs::msg::Path & output_path)
 {
   const auto & start = input_path.poses[0].pose.position;
@@ -381,7 +391,8 @@ void RegulatedNavigator::liner2to4point(const nav_msgs::msg::Path & input_path, 
   output_path.poses.push_back(input_path.poses[1]);
 }
 
-// 计算三次贝塞尔曲线在给定参数处的位姿。
+// 以 t∈[0,1] 对四控制点求三次贝塞尔 XY 位置，z 固定为 0。
+// use_result=false 时返回单位姿态供弧长估计；true 时由一阶导数求切线航向。调用方保证四个控制点和参数有效。
 geometry_msgs::msg::PoseStamped RegulatedNavigator::bezier3(const nav_msgs::msg::Path & input_path, const double t, const bool use_result)
 {
   const double inverse_t = 1.0 - t;
@@ -412,7 +423,8 @@ geometry_msgs::msg::PoseStamped RegulatedNavigator::bezier3(const nav_msgs::msg:
   return result;
 }
 
-// 累计路径各点间的弧长，供等距采样使用。
+// 按相邻离散点二维距离累计弧长，单位 m，首点累计值为 0。
+// 这是离散近似，不是三次曲线解析弧长。
 void RegulatedNavigator::computeArcLengths(const std::vector<geometry_msgs::msg::PoseStamped> & poses, std::vector<double> & arc_lengths)
 {
   arc_lengths.assign(poses.size(), 0.0);
@@ -424,7 +436,8 @@ void RegulatedNavigator::computeArcLengths(const std::vector<geometry_msgs::msg:
   }
 }
 
-// 通过弧长表反查贝塞尔参数，实现近似等距离采样。
+// 在累计弧长表中定位目标长度，再在线性邻区间反查 t。
+// 首尾边界钳位到参数范围，重复长度区间不能用作有效除数。
 double RegulatedNavigator::findTfromArcLength(const std::vector<double> & arc_lengths, const std::vector<double> & ts, const double target_length)
 {
   if (target_length <= arc_lengths.front())
@@ -447,7 +460,8 @@ double RegulatedNavigator::findTfromArcLength(const std::vector<double> & arc_le
   return ts[lower_index] + (target_length - lower_length) / (upper_length - lower_length) * (ts[upper_index] - ts[lower_index]);
 }
 
-// 按目标间隔沿贝塞尔曲线均匀生成路径点。
+// 先密集采样估计累计弧长，再按 interval（m）反查 t 输出近似等距路径。
+// 保留精确末点并合并近重复邻点；等距指空间弧长，不是控制器时间间隔。
 void RegulatedNavigator::generateBezierUniformPoints(const nav_msgs::msg::Path & input_path, const double interval, nav_msgs::msg::Path & output_path)
 {
   output_path = nav_msgs::msg::Path();
@@ -493,7 +507,8 @@ void RegulatedNavigator::generateBezierUniformPoints(const nav_msgs::msg::Path &
   }
 }
 
-// 把任务有效速度上限发布给下游速度平滑器。
+// 为固定路径发布 percentage=false 的正绝对限速，单位 m/s。
+// 倒车方向在 Path 姿态和控制器符号中表达，不能发布负 SpeedLimit 代替方向。
 void RegulatedNavigator::publishSpeedLimit()
 {
   auto msg = nav2_msgs::msg::SpeedLimit();

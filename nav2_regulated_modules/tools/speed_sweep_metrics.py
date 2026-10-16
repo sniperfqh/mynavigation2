@@ -1,8 +1,14 @@
+# 离线速度与停车指标。样本索引、时间类型和窗口质量须与采集器一致，不能把短峰值当巡航。
+# 到点 Action、命令零速、反馈停稳、定位采样精度和蠕动耗时分别评价，避免一个通过项掩盖另一个缺失项。
 """Arrival acceptance uses a complete post-result window, never cached AMCL."""
 import math
 
 
+# 用初始 map 位姿、里程计位置和 yaw 建立二维刚性对照，limit 单位 m。
+# 该变换只用于检测后续定位修正幅度，不是新的定位输入。
 class LocalizationCorrectionGuard:
+    # 用初始 map 位姿、里程计位置和 yaw 建立二维刚性对照，limit 单位 m。
+    # 该变换只用于检测后续定位修正幅度，不是新的定位输入。
     def __init__(self, sample, yaw, limit=.20):
         self.cosine, self.sine = math.cos(yaw), math.sin(yaw)
         self.tx = sample[1] - self.cosine * sample[6] + self.sine * sample[7]
@@ -11,6 +17,8 @@ class LocalizationCorrectionGuard:
         self.consecutive = 0
         self.maximum = 0.
 
+    # 以初始刚性对照预测地图位置，记录与当前定位的偏差及连续超限次数。
+    # 连续两次超过 limit 才报告异常，单次波动不直接终止实验。
     def observe(self, sample):
         x = self.tx + self.cosine * sample[6] - self.sine * sample[7]
         y = self.ty + self.sine * sample[6] + self.cosine * sample[7]
@@ -20,6 +28,8 @@ class LocalizationCorrectionGuard:
         return self.consecutive >= 2
 
 
+# 截取从首样本起达到 duration 的最早前缀；不足时返回原样本。
+# 该函数只裁剪时间，不保证样本连续、有效或停稳。
 def first_window(samples, duration=1.0):
     if not samples:
         return samples
@@ -29,6 +39,8 @@ def first_window(samples, duration=1.0):
     return samples
 
 
+# 连续检查速度、TF 年龄与采样间隔，遇到不合格样本重置窗口。
+# 返回的是是否存在足够长合格窗，不会补齐缺帧。
 def stopped_window(samples, duration=1.0):
     window = []
     for sample in samples:
@@ -43,17 +55,21 @@ def stopped_window(samples, duration=1.0):
     return False
 
 
+# 要求至少两点、精确业务终点在容差内且相邻点非重合。
+# 它只验证采样几何，不做地图障碍碰撞检查。
 def valid_path(points, target):
     return (len(points) >= 2 and math.dist(points[-1], target) <= 1e-9
             and all(math.dist(a, b) > 1e-9 for a, b in zip(points, points[1:])))
 
 
+# 检查窗口结束前最后一条命令为零、近期命令无非零尾巴，并报告停车观察段旋转峰值。
+# 允许已发布零命令后输出静默，但缺少任何命令时不能通过。
 def command_evidence(trace, goal_begin, window_begin, window_end):
     commands = [s for s in trace if goal_begin <= s[0] <= window_end and s[2] == '/cmd_vel']
     if not commands:
         return False, None
-    # Collision Monitor may stop repeating an already published zero command.
-    # The latest command must be zero, and no terminal rotation is allowed.
+    # Collision Monitor 可能在发出零命令后静默，因此检查最后有效命令，而非伪造周期零帧。
+    # 最后命令须为零，观察段内的终点旋转另行作为不合格证据。
     zero = abs(commands[-1][3]) < 1e-6 and abs(commands[-1][4]) < 1e-6
     tail = [s for s in commands if s[0] >= window_end - .1]
     zero = zero and all(abs(s[3]) < 1e-6 and abs(s[4]) < 1e-6 for s in tail)
@@ -61,6 +77,8 @@ def command_evidence(trace, goal_begin, window_begin, window_end):
     return zero, peak
 
 
+# 按样本六元前缀（墙钟、x、y、实测 v、实测 w、TF 年龄）评估完整停后窗口。
+# 无穷／NaN、时段不足、采样缺口、定位误差或运动任一不满足都不能通过。
 def evaluate(samples, target, tangent, duration=1.0):
     """samples: wall time, x, y, measured v, measured w, TF age seconds."""
     if any(not all(math.isfinite(v) for v in s[:6]) for s in samples):
@@ -82,6 +100,8 @@ def evaluate(samples, target, tangent, duration=1.0):
             "lateral_error_m": -dx * tangent[1] + dy * tangent[0]}
 
 
+# 从首个进入速度门限的样本开始累积最早停后窗口。
+# 初段出现缺帧不会通过挑选后面更好的窗口来遮蔽；时钟冻结也不能凑够完整观察时间。
 def first_stopped_window(samples, duration=1.):
     window = []
     for s in samples:
@@ -100,11 +120,15 @@ def first_stopped_window(samples, duration=1.):
     return []
 
 
+# 检查截止 end 前所有已观察位置是否有限且在 10 mm 半径内。
+# 只约束可见样本，不证明未采样间隙内也准确。
 def observed_position_valid(samples, target, end):
     observed = [s for s in samples if s[0] <= end]
     return bool(observed) and all(all(math.isfinite(v) for v in s[1:3]) and math.dist(s[1:3], target) <= .010 for s in observed)
 
 
+# 统计达速持续时间、末端区进入时刻与低速蠕动积分。
+# 相邻采样 gap>0.1 s 不计作连续巡航，实际速度在请求 ±5% 内保持至少 0.5 s 才算达速。
 def motion_metrics(samples, begin, end, target, speed, creep):
     points = [s for s in samples if begin <= s[0] <= end]
     zone = max(.8, speed * speed / .5 + .1 * speed + .1)

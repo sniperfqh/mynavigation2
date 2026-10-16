@@ -1,4 +1,5 @@
-// 规控生命周期节点实现。初始化 ROS 接口、加载参数，并在生命周期转换时启停任务资源。
+// 生命周期配置与 ROS 实体装配。构造时声明参数，configure 创建客户端／订阅／定时器，activate 开放业务入口。
+// C++ 内置默认、项目 YAML 和 Launch 重写是不同配置层；不要只读声明值就判断后台生效值。
 
 #include "nav2_regulated_modules/regulated_navigator.hpp"
 
@@ -13,12 +14,14 @@ using namespace std::chrono_literals;
 namespace nav2_regulated_modules
 {
 
-// 声明规控运行参数；真正的 ROS 实体在生命周期配置阶段建立。
+// 仅声明运行参数；ROS 实体在 configure 建立，业务入口在 activate 后才允许接收。
+// 构造中的 false 等值是节点回退，不覆盖 Launch 从项目 YAML 注入的配置。
 RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : nav2_util::LifecycleNode("regulated_navigator", "", options)
 {
   declare_parameter("global_frame", "map");
   declare_parameter("robot_base_frame", "base_link");
   declare_parameter("operation_mode", "autonomous");
+  // 节点内置回退仍为 false；fixed_path 项目入口会按模式与启用开关统一注入 true／false。
   declare_parameter("collision_state_enabled", false);
   declare_parameter("collision_state_topic", "/collision_state");
   declare_parameter("collision_state_timeout", 0.5);
@@ -88,7 +91,8 @@ RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : na
   declare_parameter("chassis_angular_decel_jerk_max", 6.0);
 }
 
-// 读取并验证参数、创建 Action 客户端及 ROS 通信对象；失败则阻止节点激活。
+// 读取并校验配置，再创建客户端、Action 服务、订阅与定时器。
+// NavigationService 仅在 fixed_path 建立；标准自主入口虽已建立，接受回调仍检查运行模式。
 nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycle::State &)
 {
   global_frame_ = get_parameter("global_frame").as_string();
@@ -117,6 +121,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   fixed_path_boundaries_topic_ = get_parameter("fixed_path_boundaries_topic").as_string();
   fixed_path_controller_id_ = get_parameter("fixed_path_controller_id").as_string();
   fixed_path_goal_checker_id_ = get_parameter("fixed_path_goal_checker_id").as_string();
+  // 先按启动模式约束功能，即便参数设 true，非 fixed_path 也不会打开本导航器的状态门控。
   collision_state_enabled_ = operation_mode_ == NavigationMode::FIXED_PATH && get_parameter("collision_state_enabled").as_bool();
   const auto collision_topic = get_parameter("collision_state_topic").as_string();
   collision_state_.configure(get_parameter("collision_state_timeout").as_double());
@@ -259,6 +264,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
     smoothed_velocity_sub_ = create_subscription<geometry_msgs::msg::Twist>(smoothed_cmd_vel_topic_, velocity_qos, std::bind(&RegulatedNavigator::onSmoothedVelocity, this, std::placeholders::_1));
     velocity_odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(velocity_odom_topic_, velocity_qos, std::bind(&RegulatedNavigator::onVelocityOdometry, this, std::placeholders::_1));
   }
+  // 普通发布器用于绝对速度基准；它不是最终底盘速度出口。
   speed_limit_pub_ = this->create_publisher<nav2_msgs::msg::SpeedLimit>( speed_limit_topic_, rclcpp::QoS(10));
 
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
@@ -276,7 +282,8 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
-// 激活生命周期发布器及任务入口，允许外部请求进入。
+// 激活固定路径可视化与底盘支路，重置 collision 接收历史，再开放业务入口。
+// 这只表示生命周期就绪，不生成任务，也不证明定位／轮速已经新鲜。
 nav2_util::CallbackReturn RegulatedNavigator::on_activate(const rclcpp_lifecycle::State &)
 {
   collision_state_.reset();
@@ -299,7 +306,8 @@ nav2_util::CallbackReturn RegulatedNavigator::on_activate(const rclcpp_lifecycle
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
-// 停止接收新任务、取消在途目标并输出零速。
+// 先关闭业务许可，再停用底盘定时器并请求取消导航任务。
+// 固定路径可视化停用、bond 销毁与实际机械停稳是不同事件。
 nav2_util::CallbackReturn RegulatedNavigator::on_deactivate(const rclcpp_lifecycle::State &)
 {
   active_ = false;
@@ -323,7 +331,8 @@ nav2_util::CallbackReturn RegulatedNavigator::on_deactivate(const rclcpp_lifecyc
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
-// 销毁配置阶段创建的接口与资源，恢复未配置状态。
+// 释放配置阶段创建的 ROS 句柄、反馈缓存与 TF 对象。
+// cleanup 是资源清理，不是控制权移交或完整的下游停稳等待。
 nav2_util::CallbackReturn RegulatedNavigator::on_cleanup(const rclcpp_lifecycle::State &)
 {
   collision_state_sub_.reset();
@@ -368,7 +377,8 @@ nav2_util::CallbackReturn RegulatedNavigator::on_cleanup(const rclcpp_lifecycle:
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
-// 在 ROS 关闭前取消任务并执行安全停车。
+// 停用底盘支路并调用任务取消流程；是否发零速取决于当前任务状态。
+// 不能仅凭本回调返回 SUCCESS 推断 UART 和轮速已完成停车。
 nav2_util::CallbackReturn RegulatedNavigator::on_shutdown(const rclcpp_lifecycle::State &)
 {
   if (chassis_control_subscriber_)

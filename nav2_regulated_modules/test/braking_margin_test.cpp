@@ -1,8 +1,11 @@
+// 制动裕量纯函数回归：参数非法值、边界插值、正负速度对称和制动命令单调性。
+// 测试抛异常或返回非零表示失败，不建立 ROS 节点或物理停车证据。
 #include "nav2_regulated_modules/detail/braking_margin.hpp"
 #include <cmath>
 #include <limits>
 #include <stdexcept>
 
+// 测试辅助函数：将断言失败显式转成 false／异常，或构造最小采样结构；不依赖 ROS。
 void require(bool value)
 {
   if (!value)
@@ -11,6 +14,8 @@ void require(bool value)
   }
 }
 
+// 制动裕量纯函数回归：参数非法值、边界插值、正负速度对称和制动命令单调性。
+// 返回码由调用环境用于区分成功／失败，进程启动本身不能作为业务功能验收。
 int main()
 {
   using namespace nav2_regulated_modules::detail;

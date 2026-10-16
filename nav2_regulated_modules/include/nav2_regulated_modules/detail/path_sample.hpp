@@ -1,3 +1,5 @@
+// 路径采样拼接去重。要求 Pose 提供 pose.position.x/y，Sequence 支持 back、push_back 与赋值。
+// 重复位置用新样本替换旧末点，以保留精确业务终点；只处理邻接点，不承担路径可行性或碰撞检查。
 #ifndef NAV2_REGULATED_MODULES__DETAIL__PATH_SAMPLE_HPP_
 #define NAV2_REGULATED_MODULES__DETAIL__PATH_SAMPLE_HPP_
 
@@ -10,6 +12,8 @@ namespace detail
 {
 // 与切线判定采用相同容差；末点取新样本，保留精确业务终点。
 template<typename Sequence, typename Pose>
+// 相邻二维位置距离≤1e-9 m 时，用新 Pose 替换末点而非追加。
+// 新姿态／精确终点得以保留，避免重复点导致零长度切线；不删除非相邻重复点。
 void appendPathSample(Sequence & samples, Pose pose)
 {
   if (!samples.empty())

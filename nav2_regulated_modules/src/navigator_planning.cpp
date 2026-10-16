@@ -1,4 +1,5 @@
-// 导航规划回调。发送规划和平滑 Action，并以任务代次过滤过期异步结果。
+// 自主任务的规划、可选平滑与跟踪衔接，使用异步 Action 回调避免把旧结果写入新任务。
+// 周期重规划可暂时继续旧路径；失败计数与恢复上限是不同维度，平滑失败可回退原始规划路径。
 
 #include "nav2_regulated_modules/regulated_navigator.hpp"
 
@@ -11,14 +12,16 @@
 namespace nav2_regulated_modules
 {
 
-// 检查规划、平滑和跟踪 Action 服务是否已就绪。
+// 按 server_timeout 等待规划、可选平滑及 FollowPath 服务发现。
+// 服务可发现只证明通信入口存在，不证明地图、TF 或底盘反馈有效。
 bool RegulatedNavigator::dependenciesReady()
 {
   const auto timeout = std::chrono::duration<double>(server_timeout_);
   return compute_pose_client_->wait_for_action_server(timeout) && compute_poses_client_->wait_for_action_server(timeout) && (!planning_module_.useSmoother() || smooth_client_->wait_for_action_server(timeout)) && follow_client_->wait_for_action_server(timeout);
 }
 
-// 为当前任务发送新规划请求；重规划时保留任务代次用于回调过滤。
+// 仅在 autonomous、任务有效且没有在途规划时提交请求。
+// generation 标识任务，plan_sequence 标识该任务的规划轮次；两者均匹配才接受回调。
 void RegulatedNavigator::startPlanning(const bool replanning)
 {
   if (operation_mode_ != NavigationMode::AUTONOMOUS)
@@ -59,6 +62,7 @@ void RegulatedNavigator::startPlanning(const bool replanning)
     goal.planner_id = planning_module_.plannerId();
     goal.use_start = false;
     auto options = rclcpp_action::Client<ComputePathThroughPoses>::SendGoalOptions();
+    // 接受响应先验证任务及规划轮次；本轮被拒绝才计入失败，旧响应不能覆盖当前句柄。
     options.goal_response_callback = [this, generation, sequence](auto handle)
     {
       if (isCurrentPlan(generation, sequence))
@@ -71,6 +75,7 @@ void RegulatedNavigator::startPlanning(const bool replanning)
         }
       }
     };
+    // 规划结果先验证归属，再检查结果码、对象与非空 Path；通过后才进入可选平滑／跟踪。
     options.result_callback = [this, generation, sequence](const auto & result)
     {
       if (!isCurrentPlan(generation, sequence))
@@ -95,6 +100,7 @@ void RegulatedNavigator::startPlanning(const bool replanning)
     goal.planner_id = planning_module_.plannerId();
     goal.use_start = false;
     auto options = rclcpp_action::Client<ComputePathToPose>::SendGoalOptions();
+    // 接受响应先验证任务及规划轮次；本轮被拒绝才计入失败，旧响应不能覆盖当前句柄。
     options.goal_response_callback = [this, generation, sequence](auto handle)
     {
       if (isCurrentPlan(generation, sequence))
@@ -107,6 +113,7 @@ void RegulatedNavigator::startPlanning(const bool replanning)
         }
       }
     };
+    // 规划结果先验证归属，再检查结果码、对象与非空 Path；通过后才进入可选平滑／跟踪。
     options.result_callback = [this, generation, sequence](const auto & result)
     {
       if (!isCurrentPlan(generation, sequence))
@@ -126,13 +133,15 @@ void RegulatedNavigator::startPlanning(const bool replanning)
   }
 }
 
-// 比较任务代次和规划序号，丢弃旧规划异步回调。
+// 同时比较 generation 和规划 sequence，拒绝旧任务或旧规划轮次的异步结果。
+// 它不检查机器人位置或路径质量，只承担回调归属判断。
 bool RegulatedNavigator::isCurrentPlan(const uint64_t generation, const uint64_t sequence) const
 {
   return generation == task_.generation && sequence == plan_sequence_;
 }
 
-// 接收有效规划路径，按配置执行平滑或直接交给跟踪器。
+// 保存原始规划路径，按 use_smoother 决定是否发 SmoothPath。
+// 平滑拒绝、失败或返回空路径时回退原始 Path；不把回退当成平滑已成功。
 void RegulatedNavigator::onPathReady(const nav_msgs::msg::Path & path)
 {
   task_.consecutive_planning_failures = 0;
@@ -161,6 +170,7 @@ void RegulatedNavigator::onPathReady(const nav_msgs::msg::Path & path)
   goal.check_for_collisions = check_smoother_collisions_;
   LOG_DEBUG("发起路径平滑，generation={}，plan_sequence={}，smoother_id={}，原始路径点数={}", generation, sequence, planning_module_.smootherId(), path.poses.size());
   auto options = rclcpp_action::Client<SmoothPath>::SendGoalOptions();
+  // 平滑响应先验证任务及规划轮次，拒绝时回退保存的原始路径。
   options.goal_response_callback = [this, generation, sequence](auto handle)
   {
     if (isCurrentPlan(generation, sequence))
@@ -173,6 +183,7 @@ void RegulatedNavigator::onPathReady(const nav_msgs::msg::Path & path)
       }
     }
   };
+  // 平滑结果先验证归属；失败／空结果回退原始路径，成功则跟踪平滑路径。
   options.result_callback = [this, generation, sequence](const auto & result)
   {
     if (!isCurrentPlan(generation, sequence))
@@ -194,7 +205,8 @@ void RegulatedNavigator::onPathReady(const nav_msgs::msg::Path & path)
   smooth_client_->async_send_goal(goal, options);
 }
 
-// 记录规划失败并依据连续失败次数触发恢复或任务失败。
+// 累计连续规划失败；允许的周期重规划失败可继续旧 FollowPath。
+// 不满足继续条件时进入恢复，而不是在本函数直接改变规划算法。
 void RegulatedNavigator::handlePlanningFailure(const std::string & reason)
 {
   ++task_.consecutive_planning_failures;
