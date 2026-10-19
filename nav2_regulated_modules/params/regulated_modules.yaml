@@ -567,10 +567,10 @@ controller_server:
       goal_braking_reaction_time: 0.1
       # 终点制动安全裕量，单位米。
       goal_braking_distance_margin: 0.05
-      # 启用动态裕量：低速 0.015 m、高速 0.05 m；当前候选参数待实车验收。
+      # 启用动态裕量：低速 0.010 m、高速 0.05 m，速度达到 0.5 m/s 时采用高速裕量。
       dynamic_goal_braking_margin_enabled: true
-      goal_braking_min_distance_margin: 0.015
-      goal_braking_margin_transition_speed: 0.3
+      goal_braking_min_distance_margin: 0.01
+      goal_braking_margin_transition_speed: 0.5
       # 自适应到点制动默认关闭；仅在单独确认后显式启用。
       adaptive_goal_braking_enabled: false
       # 实车启用末端收敛：优先连续 1 秒精度复核，停稳满 2 秒可超限成功并记录日志。
