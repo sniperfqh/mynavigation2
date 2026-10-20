@@ -44,6 +44,7 @@
 #include "nav2_util/lifecycle_node.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "nav2_util/node_utils.hpp"
+#include "byd_custom_msgs/msg/motion_state.hpp"
 
 namespace nav_2d_utils
 {
@@ -70,17 +71,30 @@ public:
 
     std::string odom_topic;
     nh->get_parameter_or("odom_topic", odom_topic, default_topic);
-    odom_sub_ =
-      nh->create_subscription<nav_msgs::msg::Odometry>(
-      odom_topic,
-      rclcpp::SystemDefaultsQoS(),
-      std::bind(&OdomSubscriber::odomCallback, this, std::placeholders::_1));
+    const auto topic_basename = odom_topic.substr(odom_topic.find_last_of('/') + 1);
+    if (topic_basename == "motion_state") {
+      odom_sub_ = nh->create_subscription<byd_custom_msgs::msg::MotionState>(odom_topic, rclcpp::SystemDefaultsQoS(), [this](const byd_custom_msgs::msg::MotionState::SharedPtr msg) {odomCallback(msg);});
+    } else {
+      odom_sub_ = nh->create_subscription<nav_msgs::msg::Odometry>(odom_topic, rclcpp::SystemDefaultsQoS(), [this](const nav_msgs::msg::Odometry::SharedPtr msg) {odomCallback(msg);});
+    }
   }
 
-  inline nav_2d_msgs::msg::Twist2D getTwist() {return odom_vel_.velocity;}
-  inline nav_2d_msgs::msg::Twist2DStamped getTwistStamped() {return odom_vel_;}
+  inline nav_2d_msgs::msg::Twist2D getTwist() {std::lock_guard<std::mutex> lock(odom_mutex_); return odom_vel_.velocity;}
+  inline nav_2d_msgs::msg::Twist2DStamped getTwistStamped() {std::lock_guard<std::mutex> lock(odom_mutex_); return odom_vel_;}
 
 protected:
+  void odomCallback(const byd_custom_msgs::msg::MotionState::SharedPtr mtmsg) {
+    auto msg = std::make_shared<nav_msgs::msg::Odometry>();
+    msg->header = mtmsg->header;
+    msg->twist.twist.linear.x = mtmsg->v_car;
+    msg->twist.twist.linear.y = 0.0;
+    msg->twist.twist.linear.z = 0.0;
+    msg->twist.twist.angular.x = 0.0;
+    msg->twist.twist.angular.y = 0.0;
+    msg->twist.twist.angular.z = mtmsg->w_car;
+    odomCallback(msg);
+  }
+
   void odomCallback(const nav_msgs::msg::Odometry::SharedPtr msg)
   {
     // ROS_INFO_ONCE("odom received!");
@@ -91,7 +105,7 @@ protected:
     odom_vel_.velocity.theta = msg->twist.twist.angular.z;
   }
 
-  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+  rclcpp::SubscriptionBase::SharedPtr odom_sub_;
   nav_2d_msgs::msg::Twist2DStamped odom_vel_;
   std::mutex odom_mutex_;
 };
