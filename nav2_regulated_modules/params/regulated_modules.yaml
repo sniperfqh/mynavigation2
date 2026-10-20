@@ -327,7 +327,7 @@ controller_server:
     collision_state_topic: "/collision_state"
     collision_state_timeout: 0.5
     # 控制器读取里程计的话题。
-    odom_topic: "/odometry"
+    odom_topic: "/motion_state"
     # 小于此值的 x 向里程计速度视为零，单位米每秒。
     min_x_velocity_threshold: 0.001
     # 小于此值的 y 向里程计速度视为零，单位米每秒。
