@@ -4,12 +4,14 @@
 
 | 工具 | 环境与行为 | 说明 |
 |---|---|---|
-| [collision_action_test.py](collision_action_test.py) | 连接已有仿真，发送自身 Action 并发布状态 | periodic／cruise 均 50 Hz；前进／倒车、CSV、曲线和响应分类见 [COLLISION_TEST.md](COLLISION_TEST.md) |
+| [collision_action_test.py](collision_action_test.py) | 连接已有实车或仿真，发送自身 Action 并发布状态 | periodic／cruise 均 50 Hz；MotionState／Odometry 反馈、前进／倒车、CSV、曲线和响应分类见 [COLLISION_TEST.md](COLLISION_TEST.md) |
 | [action_only_speed_sweep.py](action_only_speed_sweep.py) | 连接已有环境执行速度矩阵 | 有预设参数和端点校验，不是任意场景通用客户端；见[分开验收](../doc/action_only_acceptance.md) |
 | [stationary_acceptance.py](stationary_acceptance.py) | 纯窗口评估辅助 | 分别计算速度停稳、定位覆盖和采样误差 |
 | [run_speed_case.py](run_speed_case.py) | 在隔离域启动／复位仿真实验、发送任务 | 会改变自己实验环境；使用前阅读下文实验几何与条件 |
 
-先在 nav2_ws 构建并加载环境。周期工具默认 schedule=cruise、return-direction=forward；要周期切换并倒车返回，须显式传 `--schedule periodic --return-direction backward`。周期状态为 4→3→2→1→0，默认保持 4／3／3／3／3 秒，不等待达速，不在换程重置。
+先在 nav2_ws 构建并加载环境。周期工具默认 `--runtime sim`，此时 schedule=cruise、return-direction=forward；要周期切换并倒车返回，显式传 `--schedule periodic --return-direction backward`。仿真周期状态为 4→3→2→1→0，默认保持 4／3／3／3／3 秒，不等待达速，不在换程重置。
+
+实车使用 `--runtime real`，必须显式设置现场 A／B 端点；默认读取 `/motion_state` 的 MotionState，periodic 调度、返程倒车、四程，状态保持 12／4／4／3／3 秒。可通过 `--feedback-topic` 覆盖反馈话题；完整参数、起步前提及使用例子见 [COLLISION_TEST.md](COLLISION_TEST.md)。Action 成功、各状态响应及同任务恢复分别记录；缺少覆盖项时不标完整通过。
 
 周期工具退出会发布停止并取消自身 UUID，不能用于证明独立发布进程消失后原任务的断流停车与恢复。首次尚未收到状态为 4；收到后断流 0.5 秒停车，配置语义见[规控说明](../README.md)。
 

@@ -5,6 +5,9 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+from types import SimpleNamespace
+from contextlib import redirect_stderr
+from io import StringIO
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location('collision_action_tool', ROOT / 'tools/collision_action_test.py')
@@ -14,6 +17,69 @@ spec.loader.exec_module(tool)
 
 # 组织本文件的回归场景；各 test_ 方法构造输入并断言预期，不把模拟样本当作现场证据。
 class EvidenceTest(unittest.TestCase):
+    def test_runtime_defaults_and_explicit_overrides(self):
+        sim = tool.parse_args(['--output-dir', '/tmp/not-created'])
+        self.assertEqual((sim.runtime, sim.feedback_topic, sim.schedule, sim.return_direction, sim.max_legs),
+                         ('sim', '/odometry', 'cruise', 'forward', 0))
+        self.assertEqual(sim.state_durations, [4, 3, 3, 3, 3])
+        real_args = ['--runtime', 'real', '--a', '0', '0', '--b', '30', '0',
+                     '--output-dir', '/tmp/not-created']
+        real = tool.parse_args(real_args)
+        self.assertEqual((real.feedback_topic, real.feedback_type, real.schedule, real.return_direction, real.max_legs),
+                         ('/motion_state', 'byd_custom_msgs/msg/MotionState', 'periodic', 'backward', 4))
+        self.assertEqual(real.state_durations, [12, 4, 4, 3, 3])
+        explicit = tool.parse_args(real_args + ['--feedback-topic', '/vehicle/motion_state',
+                                   '--max-legs', '0', '--schedule', 'cruise', '--return-direction', 'forward',
+                                   '--state-durations', '5', '4', '3', '2', '1'])
+        self.assertEqual((explicit.feedback_topic, explicit.max_legs, explicit.schedule, explicit.return_direction),
+                         ('/vehicle/motion_state', 0, 'cruise', 'forward'))
+        self.assertEqual(explicit.state_durations, [5, 4, 3, 2, 1])
+        self.assertEqual(tool.parse_args(['--output-dir', '/tmp/not-created', '--odom-topic', '/odom']).feedback_topic,
+                         '/odom')
+
+    def test_invalid_real_route_or_feedback_is_rejected_before_ros(self):
+        base = ['--runtime', 'real', '--output-dir', '/tmp/not-created']
+        for extra in [[], ['--a', '0', '0'], ['--a', 'nan', '0', '--b', '10', '0'],
+                      ['--a', '0', '0', '--b', '.5', '0'],
+                      ['--a', '0', '0', '--b', '10', '0', '--odom-topic', '/odometry'],
+                      ['--a', '0', '0', '--b', '10', '0', '--feedback-topic', ''],
+                      ['--a', '0', '0', '--b', '10', '0', '--max-legs', '-1'],
+                      ['--a', '0', '0', '--b', '10', '0', '--state-durations', '1', '1', '0', '1', '1']]:
+            with self.subTest(extra=extra), redirect_stderr(StringIO()), self.assertRaises(SystemExit) as error:
+                tool.parse_args(base + extra)
+            self.assertEqual(error.exception.code, 2)
+
+    def test_feedback_conversion_preserves_reverse_and_angular_speed(self):
+        self.assertEqual(tool.feedback_velocity(SimpleNamespace(v_car=-1.2, w_car=.04), 'real'), (-1.2, .04))
+        odom = SimpleNamespace(twist=SimpleNamespace(twist=SimpleNamespace(
+            linear=SimpleNamespace(x=-.9), angular=SimpleNamespace(z=-.03)) ))
+        self.assertEqual(tool.feedback_velocity(odom, 'sim'), (-.9, -.03))
+
+    def test_summary_requires_all_states_both_directions_and_recovery(self):
+        records = [dict(direction=d, state=s, status='PASS') for d in (1, -1) for s in range(5)]
+        records[0].update(recovery_required=True, recovery_status='PASS')
+        records[5].update(recovery_required=True, recovery_status='PASS')
+        summary, status = tool.response_summary(records, (1, -1))
+        self.assertEqual(status, 'PASS')
+        self.assertEqual(summary['state_2_direction_-1']['PASS'], 1)
+        self.assertEqual(tool.response_summary(records[:-1], (1, -1))[1], 'UNAVAILABLE')
+        self.assertEqual(tool.response_summary(records[:5], (1, -1))[1], 'UNAVAILABLE')
+        records.append(dict(direction=-1, state=2, status='FAIL'))
+        self.assertEqual(tool.response_summary(records, (1, -1))[1], 'FAIL')
+        self.assertEqual(tool.response_summary([], (1, -1))[1], 'UNAVAILABLE')
+
+    def test_recovery_window_is_distinct_from_full_speed_platform(self):
+        evidence = tool.IntervalEvidence((1, 0, 4, 1, 'own', 1, True), 0., 0., recovery_required=True)
+        for i in range(6):
+            evidence.sample(i*.1, (.3, 0.), .3, (.3, 0.), 10., True)
+        result = evidence.finish(.6, 'state')
+        self.assertEqual(result['status'], 'UNAVAILABLE')
+        self.assertEqual(result['recovery_status'], 'PASS')
+        evidence = tool.IntervalEvidence((1, 0, 4, 2, 'own', -1, True), 0., 0., recovery_required=True)
+        for i in range(31):
+            evidence.sample(i*.1, (0., 0.), -1.5, (0., 0.), 10., True)
+        self.assertEqual(evidence.finish(3.1, 'state')['recovery_status'], 'FAIL')
+
     # 证明 UART 静默例外只能用于自身任务终态，且必须有新鲜、有限的实测零轮速。
     def test_silent_terminal_requires_own_result_and_fresh_measured_zero(self):
         self.assertTrue(tool.stationary_after_terminal(10.,(1.,0.,0.),(10.,0.,0.),True))

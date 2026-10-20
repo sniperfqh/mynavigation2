@@ -15,6 +15,25 @@
 
 模式启动后不能热切换。导航模式要有新鲜的定位 TF 与速度反馈；启动进程、发现 Action 或加载配置均不等于车辆已具备运行条件。
 
+## 安装依赖
+
+以下命令适用于 Ubuntu 22.04／ROS 2 Humble，执行前需已安装 ROS 2 Humble 并配置 ROS 2 官方 apt 软件源。
+
+安装 Nav2 运行依赖：
+
+```bash
+sudo apt update
+sudo apt install ros-humble-navigation2 ros-humble-nav2-bringup
+```
+
+本仓库的 TEB Local Planner 还依赖 g2o；全量构建包含该包时先安装：
+
+```bash
+sudo apt install ros-humble-libg2o
+```
+
+源码其余依赖按下节的 `rosdep install` 命令安装，依赖声明见各包的 `package.xml`。仿真另需 Ignition Gazebo 与 ros_gz 组件，入口说明见 [myworld_bringup](myworld_bringup/README.md) 和 [TurtleBot3 仿真](navigation2_ignition_gazebo_turtlebot3/README.md)。完成源码构建后，按下节加载本工作空间的 `install/local_setup.bash`。
+
 ## 目录与构建
 
 源码含 55 个 ROS 包；54 个由当前 colcon 发现，nav2_system_tests 因 COLCON_IGNORE 默认跳过。嵌套 DWB 子包和 turtlebot3 按各自 package.xml 的名称构建，不能用仓库目录名代替包名。

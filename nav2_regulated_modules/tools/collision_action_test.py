@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-# 连接已有仿真的 collision 注入与 1.5 m/s Action 例子；不直接发布底盘速度或合成定位。
+# 连接已有实车／仿真的 collision 注入与 1.5 m/s Action 例子；不直接发布底盘速度或合成定位。
 # periodic 独立按 50 Hz 切换状态，cruise 等待速度条件；只有相同区间、相同任务内的合格样本才能组成证据。
 # 退出只取消自身 UUID 并观察停稳，工具 Ctrl+C 同时改变状态与任务，不能代替独立状态源断流验收。
-"""在现有仿真中周期注入 collision 状态；只取消本工具的 Action。"""
+"""在现有实车／仿真中注入 collision 状态；只取消本工具的 Action。"""
 import argparse
 import csv
 import json
@@ -10,6 +10,80 @@ import math
 from pathlib import Path
 import signal
 import time
+
+
+def parse_args(argv=None):
+    """先解析并验证场景参数；无效实车端点在创建 ROS 节点和结果目录前拒绝。"""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--runtime', choices=['real', 'sim'], default='sim')
+    parser.add_argument('--output-dir', type=Path, required=True)
+    parser.add_argument('--a', nargs=2, type=float)
+    parser.add_argument('--b', nargs=2, type=float)
+    parser.add_argument('--base-frame', default='base_link')
+    parser.add_argument('--feedback-topic', help='real: MotionState；sim: Odometry')
+    parser.add_argument('--odom-topic', help='仿真 Odometry 话题，兼容既有命令')
+    parser.add_argument('--max-legs', type=int, help='real 默认 4；sim 默认 0（持续）；0 始终表示持续')
+    parser.add_argument('--schedule', choices=['cruise', 'periodic'])
+    parser.add_argument('--return-direction', choices=['forward', 'backward'])
+    parser.add_argument('--state-durations', nargs=5, type=float,
+                        metavar=('S4', 'S3', 'S2', 'S1', 'S0'))
+    args = parser.parse_args(argv)
+    real = args.runtime == 'real'
+    if real and (args.a is None or args.b is None):
+        parser.error('实车必须显式指定 --a X Y 和 --b X Y 安全路线端点')
+    if real and args.odom_topic is not None:
+        parser.error('实车只接收 MotionState；请使用 --feedback-topic，不使用 --odom-topic')
+    if args.feedback_topic is not None and args.odom_topic is not None:
+        parser.error('--feedback-topic 与 --odom-topic 不可同时指定')
+    args.a = args.a if args.a is not None else [9.16, -4.37]
+    args.b = args.b if args.b is not None else [13.2, -.47]
+    args.feedback_topic = (args.feedback_topic if args.feedback_topic is not None else
+                           args.odom_topic if args.odom_topic is not None else
+                           '/motion_state' if real else '/odometry')
+    if not args.feedback_topic.strip():
+        parser.error('反馈话题不能为空')
+    args.feedback_type = 'byd_custom_msgs/msg/MotionState' if real else 'nav_msgs/msg/Odometry'
+    args.max_legs = args.max_legs if args.max_legs is not None else (4 if real else 0)
+    args.schedule = args.schedule or ('periodic' if real else 'cruise')
+    args.return_direction = args.return_direction or ('backward' if real else 'forward')
+    if args.state_durations is None:
+        args.state_durations = [12., 4., 4., 3., 3.] if real else [4., 3., 3., 3., 3.]
+    if not all(math.isfinite(v) for v in args.a + args.b) or math.dist(args.a, args.b) < 1 or args.max_legs < 0:
+        parser.error('端点须有限且距离至少 1 米；max-legs 不得为负')
+    try:
+        PeriodicSchedule(args.state_durations)
+    except ValueError as error:
+        parser.error(str(error))
+    return args
+
+
+def feedback_velocity(message, runtime):
+    """按明确场景取反馈速度；实车不把 Odometry 当成 MotionState。"""
+    if runtime == 'real':
+        return message.v_car, message.w_car
+    return message.twist.twist.linear.x, message.twist.twist.angular.z
+
+
+def response_summary(intervals, directions):
+    """列全预期方向／状态，缺项不可评价；失败优先，恢复只统计同任务停后恢复窗。"""
+    summary = {}
+    statuses = []
+    for direction in directions:
+        for state in PeriodicSchedule.states:
+            records = [r for r in intervals if r['direction'] == direction and r['state'] == state]
+            counts = {status: sum(r['status'] == status for r in records)
+                      for status in ('PASS', 'FAIL', 'UNAVAILABLE')}
+            status = 'FAIL' if counts['FAIL'] else 'PASS' if counts['PASS'] else 'UNAVAILABLE'
+            summary[f'state_{state}_direction_{direction}'] = dict(counts, status=status)
+            statuses.append(status)
+        recoveries = [r['recovery_status'] for r in intervals
+                      if r['direction'] == direction and r.get('recovery_required')]
+        status = 'FAIL' if 'FAIL' in recoveries else 'PASS' if 'PASS' in recoveries else 'UNAVAILABLE'
+        summary[f'recovery_direction_{direction}'] = {
+            'status': status, 'intervals': len(recoveries)}
+        statuses.append(status)
+    overall = 'FAIL' if 'FAIL' in statuses else 'PASS' if all(s == 'PASS' for s in statuses) else 'UNAVAILABLE'
+    return summary, overall
 
 
 # 保存要求的连续墙钟时长 seconds，初始无起点、无上次观察时刻。
@@ -104,14 +178,15 @@ class IntervalEvidence:
     """按状态区间与任务分段；观察结论绝不控制发布时序。"""
     # 以周期／状态／腿／UUID／方向／活动标志固定证据归属，并记录切入初速度。
     # 平台、停车和恢复分别维护连续窗口，不能合并不同状态区间的样本。
-    def __init__(self, key, now, initial_v, initial_w=0.):
+    def __init__(self, key, now, initial_v, initial_w=0., recovery_required=False):
         self.key = key
         cycle, index, state, leg, goal_uuid, direction, active = key
         self.record = dict(cycle=cycle, index=index, state=state, leg=leg, goal_uuid=goal_uuid,
                            direction=direction, active_goal=active, start=now,
                            status='UNAVAILABLE', command_status='UNAVAILABLE',
                            wheel_status='UNAVAILABLE', initial_v=initial_v, initial_w=initial_w,
-                           samples=0, eligible_samples=0, eligible_hold_s=0., recovered=False)
+                           samples=0, eligible_samples=0, eligible_hold_s=0., recovered=False,
+                           recovery_required=recovery_required, recovery_status='UNAVAILABLE')
         self.window = StageWindow(1 if state <= 1 else .3)
         self.wheels = StageWindow(1)
         self.demand = StageWindow(1)
@@ -150,7 +225,9 @@ class IntervalEvidence:
             r['wheel_status'] = 'PASS'
         elif state <= 1:
             r['wheel_status'] = 'UNAVAILABLE'
-        if self.recovery.update(stamp, eligible and direction * uart[0] > .1 and direction * raw > .1):
+        recovery_good = (valid and finite and r['active_goal'] and remaining >= .5 and straight
+                         and direction * uart[0] > .1 and direction * raw > .1)
+        if self.recovery.update(stamp, recovery_good):
             r['recovered'] = True
 
     # 按窗口证据给出 PASS／FAIL／UNAVAILABLE，分别标记区间内制动与进入区间前已静止。
@@ -158,6 +235,8 @@ class IntervalEvidence:
     def finish(self, now, reason):
         r = dict(self.record, end=now, split_reason=reason)
         enough = now - r['start'] >= 2 and r['eligible_hold_s'] >= 1
+        if r['recovery_required']:
+            r['recovery_status'] = 'PASS' if r['recovered'] else 'FAIL' if enough else 'UNAVAILABLE'
         if r['command_status'] == 'PASS':
             r['status'] = 'PASS'
         elif enough and r['state'] != 4:
@@ -229,26 +308,11 @@ def write_plot(directory):
     (directory / 'velocity.html').write_text('<!doctype html><meta charset="utf-8"><title>collision 速度曲线</title>' + svg)
 
 
-# 连接已有仿真的 collision 注入与 1.5 m/s Action 例子；不直接发布底盘速度或合成定位。
+# 连接已有实车／仿真的 collision 注入与 1.5 m/s Action 例子；不直接发布底盘速度或合成定位。
 # 先解析参数与检查运行前提，再按本文件流程采集／处理并写结果；异常和 finally 收口分支不应被注释描述为正常通过。
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--output-dir', type=Path, required=True)
-    parser.add_argument('--a', nargs=2, type=float, default=[9.16, -4.37])
-    parser.add_argument('--b', nargs=2, type=float, default=[13.2, -.47])
-    parser.add_argument('--base-frame', default='base_link')
-    parser.add_argument('--odom-topic', default='/odometry')
-    parser.add_argument('--max-legs', type=int, default=0, help='0 表示持续运行；4 可用于一轮回归')
-    parser.add_argument('--schedule', choices=['cruise', 'periodic'], default='cruise')
-    parser.add_argument('--return-direction', choices=['forward', 'backward'], default='forward')
-    parser.add_argument('--state-durations', nargs=5, type=float, default=[4., 3., 3., 3., 3.], metavar=('S4','S3','S2','S1','S0'))
-    args = parser.parse_args(argv)
-    if not all(math.isfinite(v) for v in args.a + args.b) or math.dist(args.a, args.b) < 1 or args.max_legs < 0:
-        parser.error('端点须有限且距离至少 1 米；max-legs 不得为负')
-    try:
-        schedule = PeriodicSchedule(args.state_durations)
-    except ValueError as error:
-        parser.error(str(error))
+    args = parse_args(argv)
+    schedule = PeriodicSchedule(args.state_durations)
 
     import rclpy
     import uuid
@@ -269,14 +333,16 @@ def main(argv=None):
     from lifecycle_msgs.srv import GetState
     from tf2_ros import Buffer, TransformListener
     from byd_custom_msgs.action import NavigationService
-    from byd_custom_msgs.msg import NaviSegment, ControlRes
+    from byd_custom_msgs.msg import NaviSegment, ControlRes, MotionState
 
     args.output_dir.mkdir(parents=True, exist_ok=False)
     trace = (args.output_dir / 'trace.jsonl').open('w')
     csvfile = (args.output_dir / 'velocity.csv').open('w', newline='')
     writer = csv.writer(csvfile)
     writer.writerow(['elapsed', 'topic', 'v', 'w', 'state', 'leg', 'direction', 'cycle', 'goal_uuid', 'active_goal'])
-    report = {'status': 'PREFLIGHT', 'physical_robot': False, 'speed': 1.5, 'a': args.a, 'b': args.b,
+    report = {'status': 'PREFLIGHT', 'physical_robot': args.runtime == 'real', 'runtime': args.runtime,
+              'feedback_topic': args.feedback_topic, 'feedback_type': args.feedback_type,
+              'speed': 1.5, 'a': args.a, 'b': args.b,
               'schedule': args.schedule, 'return_direction': args.return_direction,
               'state_durations_s': args.state_durations, 'legs': [], 'intervals': []}
     rclpy.init(signal_handler_options=SignalHandlerOptions.NO)
@@ -341,7 +407,10 @@ def main(argv=None):
     for topic in ['/cmd_vel_nav', '/cmd_vel']:
         subscriptions.append(node.create_subscription(Twist, topic, lambda m,t=topic: receive(t,m.linear.x,m.angular.z), qos_profile_sensor_data))
     subscriptions.append(node.create_subscription(ControlRes, '/control_to_uart', lambda m: receive('/control_to_uart',m.v,m.w), qos_profile_sensor_data))
-    subscriptions.append(node.create_subscription(Odometry, args.odom_topic, lambda m: receive(args.odom_topic,m.twist.twist.linear.x,m.twist.twist.angular.z), qos_profile_sensor_data))
+    feedback_class = MotionState if args.runtime == 'real' else Odometry
+    subscriptions.append(node.create_subscription(
+        feedback_class, args.feedback_topic,
+        lambda m: receive(args.feedback_topic, *feedback_velocity(m, args.runtime)), qos_profile_sensor_data))
     qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL)
     for topic in ['/navigation_service', '/follow_path']:
         subscriptions.append(node.create_subscription(GoalStatusArray, topic+'/_action/status', lambda m,t=topic: statuses.__setitem__(t,m.status_list), qos))
@@ -400,11 +469,11 @@ def main(argv=None):
     # 要求新鲜 UART 和轮速同时满足线速度≤0.01 m/s、角速度≤0.05 rad/s。
     # 它仅评价本次采样，连续保持由外部 StageWindow 累积。
     def stopped():
-        return all(fresh(t) and abs(latest[t][1]) <= .01 and abs(latest[t][2]) <= .05 for t in ['/control_to_uart', args.odom_topic])
+        return all(fresh(t) and abs(latest[t][1]) <= .01 and abs(latest[t][2]) <= .05 for t in ['/control_to_uart', args.feedback_topic])
     # 将已确认自身 Action 终态的标志交给退出停稳判据，不为仍活动的任务放宽 UART 新鲜度。
     def terminal_stopped():
         return stationary_after_terminal(time.monotonic(),latest.get('/control_to_uart'),
-                                         latest.get(args.odom_topic),confirmed_terminal)
+                                         latest.get(args.feedback_topic),confirmed_terminal)
     # 只更新下一次发布所用状态并记事件，不在此函数额外发送一帧。
     def set_state(value):
         nonlocal state
@@ -429,7 +498,11 @@ def main(argv=None):
         if evidence is None or evidence.key!=key:
             finish_evidence('state_or_task_boundary')
             initial=latest.get('/control_to_uart',(0,0.,0.))
-            evidence=IntervalEvidence(key,now,initial[1],initial[2])
+            previous = report['intervals'][-1] if report['intervals'] else {}
+            recovery_required = (state == 4 and active_goal and previous.get('state') in (0, 1)
+                                 and previous.get('goal_uuid') == key[4]
+                                 and previous.get('leg') == leg and previous.get('active_goal', False))
+            evidence=IntervalEvidence(key,now,initial[1],initial[2],recovery_required)
         if not fresh('/control_to_uart'):
             return
         try:
@@ -439,19 +512,22 @@ def main(argv=None):
             remaining=float('nan')
         uart=latest['/control_to_uart']
         raw=latest.get('/cmd_vel_nav',(0,float('nan'),0.))
-        wheel=latest.get(args.odom_topic,(0,float('nan'),float('nan')))
+        wheel=latest.get(args.feedback_topic,(0,float('nan'),float('nan')))
         evidence.sample(uart[0]-started,uart[1:],raw[1],wheel[1:],remaining,
-                        fresh('/cmd_vel_nav') and fresh(args.odom_topic) and schedule_running)
+                        fresh('/cmd_vel_nav') and fresh(args.feedback_topic) and schedule_running)
     # 保存腿、状态区间与发布时序摘要，刷新 CSV 并生成预览。
     # 分方向聚合必须保留 UNAVAILABLE，不能只凭 Action 成功给整项通过。
     def save():
         report['publish_timing']=publish_stats.result()
-        summary={}
-        for interval in report['intervals']:
-            key=f"state_{interval['state']}_direction_{interval['direction']}"
-            group=summary.setdefault(key,{'PASS':0,'FAIL':0,'UNAVAILABLE':0})
-            group[interval['status']]+=1
-        report['response_summary']=summary
+        if args.schedule == 'periodic':
+            directions = (1, -1) if args.return_direction == 'backward' else (1,)
+            report['response_summary'], report['collision_status'] = response_summary(report['intervals'], directions)
+        else:
+            # cruise 的逐腿恢复判据保持；缺少四种注入状态不能给完整通过。
+            legs = report['legs']
+            report['collision_status'] = ('FAIL' if any(r['status'] == 'FAIL' for r in legs) else
+                                          'PASS' if {r['state'] for r in legs if r['status'] == 'PASS'} == {0,1,2,3}
+                                          and all(r.get('recovered') for r in legs) else 'UNAVAILABLE')
         (args.output_dir/'results.json').write_text(json.dumps(report, ensure_ascii=False, indent=2))
     exit_code = 1
     try:
@@ -472,6 +548,8 @@ def main(argv=None):
             common.append((values[2].double_value,values[3].bool_value))
         if len(set(common)) != 1 or common[0][0] < .2:
             raise RuntimeError('门控超时或时钟配置不一致／超时过短')
+        if args.runtime == 'real' and common[0][1]:
+            raise RuntimeError('实车节点 use_sim_time=true，拒绝发送任务')
         node.set_parameters([Parameter('use_sim_time',value=common[0][1])])
         for name in ['controller_server','velocity_smoother']:
             if call('/'+name+'/get_state', GetState, GetState.Request()).current_state.id != 3:
@@ -482,12 +560,12 @@ def main(argv=None):
             cap = v.double_array_value[0] if v.double_array_value else v.double_value
             if cap < 1.5-1e-6:
                 raise RuntimeError(f'{name}.{param}={cap}，低于 1.5')
-        wait(lambda: fresh(args.odom_topic), 5)
+        wait(lambda: fresh(args.feedback_topic), 5)
         wait(lambda: buffer.can_transform('map', args.base_frame, Time()), 5)
         if math.dist(pose(),args.a) > .2:
             raise RuntimeError('机器人不在 A 点附近 0.2 米内；请手动就位')
         # The controlpub publisher is lazy: initial missing UART is allowed only before motion.
-        if any(abs(v) > limit for v,limit in zip(latest[args.odom_topic][1:], [.01,.05])):
+        if any(abs(v) > limit for v,limit in zip(latest[args.feedback_topic][1:], [.01,.05])):
             raise RuntimeError('起始轮速非零')
         # Advertised publishers may remain silent at rest; require measured rest,
         # and reject any received nonzero command without manufacturing a zero.
@@ -499,9 +577,9 @@ def main(argv=None):
                 if topic in latest and (not all(math.isfinite(v) for v in latest[topic][1:]) or
                                         abs(latest[topic][1])>.01 or abs(latest[topic][2])>.05):
                     raise RuntimeError('起始底盘指令非零或无效')
-            return initial_rest.update(time.monotonic(),fresh(args.odom_topic) and
-                                      abs(latest[args.odom_topic][1])<=.01 and
-                                      abs(latest[args.odom_topic][2])<=.05)
+            return initial_rest.update(time.monotonic(),fresh(args.feedback_topic) and
+                                      abs(latest[args.feedback_topic][1])<=.01 and
+                                      abs(latest[args.feedback_topic][2])<=.05)
         wait(ready_at_rest,5)
         emitting = True
         report['status'] = 'RUNNING'
@@ -551,7 +629,7 @@ def main(argv=None):
                 try:
                     xy=pose()
                     event('pose',x=xy[0],y=xy[1],leg=leg)
-                    if not fresh(args.odom_topic): raise RuntimeError('轮速数据过期')
+                    if not fresh(args.feedback_topic): raise RuntimeError('轮速数据过期')
                     bad_since=None
                 except Exception:
                     bad_since=bad_since or now

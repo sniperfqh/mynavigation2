@@ -25,7 +25,7 @@ from nav_msgs.msg import Odometry
 from std_msgs.msg import UInt8
 from tf2_ros import TransformBroadcaster
 from byd_custom_msgs.action import NavigationService
-from byd_custom_msgs.msg import ControlRes
+from byd_custom_msgs.msg import ControlRes, MotionState
 
 
 # 提供隔离 Action／参数／生命周期替身及合成遥测，驱动真实客户端的协议回归。
@@ -43,6 +43,10 @@ class Mock(Node):
         self.raw=self.create_publisher(Twist,'/cmd_vel_nav',10)
         self.cmd=self.create_publisher(Twist,'/cmd_vel',10)
         self.odom=self.create_publisher(Odometry,'/odometry',10)
+        self.motion=self.create_publisher(MotionState,'/motion_state',10)
+        self.custom_motion=self.create_publisher(MotionState,'/vehicle/motion_state',10)
+        self.extra_collision=None
+        self.speeds=[]
         self.create_subscription(UInt8,'/collision_state',self.collision,1)
         self.parameter_services=[]
         for name in ['controller_server','velocity_smoother','regulated_navigator']:
@@ -63,7 +67,8 @@ class Mock(Node):
         for key in req.names:
             p=ParameterValue()
             if key in ('collision_state_enabled','use_sim_time'):
-                p.type=ParameterType.PARAMETER_BOOL;p.bool_value=key=='collision_state_enabled'
+                p.type=ParameterType.PARAMETER_BOOL
+                p.bool_value=key=='collision_state_enabled' or (key=='use_sim_time' and self.case=='real_sim_time')
             elif key=='collision_state_topic':
                 p.type=ParameterType.PARAMETER_STRING;p.string_value='/collision_state'
             elif key=='max_velocity':
@@ -90,6 +95,7 @@ class Mock(Node):
         segment=goal.request.navi_segment[0]
         self.direction=1 if segment.motion_direction==1 else -1
         self.directions.append(segment.motion_direction)
+        self.speeds.append(segment.max_speed)
         self.target=[segment.node2.x,segment.node2.y]
         while rclpy.ok() and self.target is not None:
             if goal.is_cancel_requested:
@@ -123,6 +129,11 @@ class Mock(Node):
         self.raw.publish(self.twist(self.direction*(1. if self.case=='periodic' else 1.5) if self.active else 0.))
         odom=Odometry();odom.header.stamp=self.get_clock().now().to_msg()
         odom.twist.twist.linear.x=v;self.odom.publish(odom)
+        if not (self.case=='real_feedback_gap' and self.active is not None and
+                time.monotonic()-self.goal_started>.5):
+            motion=MotionState();motion.header.stamp=odom.header.stamp
+            motion.v_car=v;motion.w_car=0.
+            self.motion.publish(motion);self.custom_motion.publish(motion)
         tf=TransformStamped();tf.header.stamp=odom.header.stamp
         tf.header.frame_id='map';tf.child_frame_id='base_link'
         tf.transform.translation.x,tf.transform.translation.y=self.xy
@@ -148,22 +159,31 @@ def main():
     tool=Path(__file__).resolve().parents[1]/'tools/collision_action_test.py'
     reports={};process=None
     try:
-        for case in ['four_legs','rejected','interrupt','early_finish','telemetry_gap','silent_initial','periodic','quiet_terminal','periodic_interrupt']:
+        for case in ['four_legs','rejected','interrupt','early_finish','telemetry_gap','silent_initial',
+                     'periodic','quiet_terminal','periodic_interrupt','real_periodic','real_feedback_gap',
+                     'real_duplicate','real_rejected','real_interrupt','real_sim_time']:
             mock.case=case;mock.goal_started=0.
-            mock.directions=[]
-            mock.xy=[9.16,-4.37];mock.state=0;mock.reject=case=='rejected'
+            mock.directions=[];mock.speeds=[]
+            mock.xy=[9.16,-4.37];mock.state=0;mock.reject=case in ('rejected','real_rejected')
+            if mock.extra_collision is not None:
+                mock.destroy_publisher(mock.extra_collision);mock.extra_collision=None
+            if case=='real_duplicate':
+                mock.extra_collision=mock.create_publisher(UInt8,'/collision_state',1)
             out=args.output_dir/case
             command=['python3',str(tool),'--output-dir',str(out)]
+            if case.startswith('real_'):
+                command+=['--runtime','real','--a','9.16','-4.37','--b','13.2','-.47']
             if case=='four_legs':command+=['--max-legs','4']
             if case=='silent_initial':command+=['--max-legs','1']
             if case=='quiet_terminal':command+=['--max-legs','1']
-            if case=='periodic':
-                command+=['--schedule','periodic','--return-direction','backward',
-                          '--state-durations','2','1','1','1.5','1.5','--max-legs','2']
+            if case in ('periodic','real_periodic'):
+                command+=['--state-durations','2','1','1','1.5','1.5','--max-legs','2']
+                if case=='periodic':command+=['--schedule','periodic','--return-direction','backward']
+                else:command+=['--feedback-topic','/vehicle/motion_state']
             if case=='periodic_interrupt':command+=['--schedule','periodic','--return-direction','backward']
             with (args.output_dir/(case+'.log')).open('w') as log:
                 process=subprocess.Popen(command,stdout=log,stderr=log)
-                if case in ('interrupt','periodic_interrupt'):
+                if case in ('interrupt','periodic_interrupt','real_interrupt'):
                     deadline=time.monotonic()+15
                     while mock.active is None and process.poll() is None and time.monotonic()<deadline:time.sleep(.05)
                     assert mock.active is not None,'No accepted goal to interrupt'
@@ -179,9 +199,19 @@ def main():
                 assert [r['state'] for r in report['legs']]==([3,2,1,0] if case=='four_legs' else [3]),report
                 assert all(r['status']=='PASS' for r in report['legs']),report
                 assert report['shutdown_stopped'],report
-            elif case=='rejected':
+            elif case in ('rejected','real_rejected'):
                 assert process.returncode!=0 and '拒绝' in report['error'],report
-            elif case in ('interrupt','periodic_interrupt'):
+            elif case=='real_duplicate':
+                assert process.returncode!=0 and '其他 collision 发布者' in report['error'],report
+                assert mock.directions==[],mock.directions
+            elif case=='real_sim_time':
+                assert process.returncode!=0 and 'use_sim_time=true' in report['error'],report
+                assert mock.directions==[],mock.directions
+            elif case=='real_feedback_gap':
+                assert process.returncode!=0 and '定位／轮速连续失效' in report['error'],report
+                assert report['shutdown_stopped'],report
+                assert report['collision_status']!='PASS',report
+            elif case in ('interrupt','periodic_interrupt','real_interrupt'):
                 assert process.returncode==0 and report['status']=='INTERRUPTED',report
                 assert report['shutdown_stopped'] and expected in mock.cancelled,report
                 if case=='periodic_interrupt':
@@ -211,9 +241,19 @@ def main():
                 negative=[r for r in __import__('csv').DictReader((out/'velocity.csv').open())
                           if r['topic']=='/control_to_uart' and float(r['v'])<-.05]
                 assert negative,'No reverse velocity recorded'
+                assert all(abs(v-1.5)<1e-6 for v in mock.speeds),mock.speeds
+                assert len(report['response_summary'])==12,report
+                if case=='real_periodic':
+                    assert report['runtime']=='real' and report['physical_robot'],report
+                    assert report['feedback_topic']=='/vehicle/motion_state',report
+                    assert report['feedback_type']=='byd_custom_msgs/msg/MotionState',report
+                    assert any(r['topic']=='/vehicle/motion_state' for r in
+                               __import__('csv').DictReader((out/'velocity.csv').open())),report
+                    assert any(r.get('recovery_required') and r['recovery_status']=='PASS'
+                               for r in report['intervals']),report
             process=None
         (args.output_dir/'protocol_results.json').write_text(json.dumps(reports,ensure_ascii=False,indent=2))
-        print('PASS: legacy scenarios and 50 Hz independent periodic forward/reverse below cruise speed; mock protocol only')
+        print('PASS: 15 simulation / MotionState protocol scenarios; synthetic feedback, no vehicle proof')
     finally:
         if process is not None and process.poll() is None:
             process.terminate()
