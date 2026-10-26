@@ -20,6 +20,25 @@ from launch_ros.parameter_descriptions import ParameterValue
 from nav2_common.launch import RewrittenYaml
 
 
+# 仿真入口的显式覆盖由现有 RewrittenYaml 统一处理，不再生成额外参数文件。
+FIXED_PATH_OVERRIDES = {
+    'desired_linear_vel': ('fixed_path_max_linear_velocity', 1.5),
+    'approach_velocity_scaling_dist': ('fixed_path_approach_velocity_scaling_dist', 0.8),
+    'goal_linear_deceleration': ('fixed_path_goal_linear_deceleration', 0.25),
+    'goal_final_approach_velocity': ('fixed_path_goal_final_approach_velocity', 0.01),
+    'goal_braking_reaction_time': ('fixed_path_goal_braking_reaction_time', 0.1),
+    'goal_terminal_lookahead_dist': ('fixed_path_goal_terminal_lookahead_dist', 0.2),
+    'goal_terminal_lookahead_reference_speed': ('fixed_path_goal_terminal_lookahead_reference_speed', 0.75),
+    'goal_terminal_lookahead_speed_gain': ('fixed_path_goal_terminal_lookahead_speed_gain', 0.1),
+    'goal_terminal_lookahead_min_dist': ('fixed_path_goal_terminal_lookahead_min_dist', 0.15),
+    'goal_terminal_lookahead_max_dist': ('fixed_path_goal_terminal_lookahead_max_dist', 0.25),
+    'rotate_to_heading_angular_vel': ('fixed_path_rotate_to_heading_angular_vel', 0.4),
+    'max_angular_accel': ('fixed_path_max_angular_accel', 0.8),
+    'rotate_to_heading_kp': ('fixed_path_rotate_to_heading_kp', 1.5),
+    'goal_error_log_frequency': ('fixed_path_goal_error_log_frequency', 1.0),
+}
+
+
 # 读取 YAML 和显式 Launch 覆盖，保留布尔／浮点类型并验证裕量关系。
 # 空覆盖沿用参数文件；此处的解析结果用于后续重写，不会热改已经运行的节点。
 def resolve_braking_margin_arguments(context):
@@ -43,6 +62,24 @@ def resolve_braking_margin_arguments(context):
         else:
             value = str(float(value))
         actions.append(SetLaunchConfiguration('resolved_fixed_path_' + key, value))
+    for key, (argument, default) in FIXED_PATH_OVERRIDES.items():
+        explicit = LaunchConfiguration(argument, default='').perform(context).strip()
+        value = float(explicit if explicit else values.get(key, default))
+        actions.append(SetLaunchConfiguration('resolved_fixed_path_' + key, str(value)))
+    controller = config.get('controller_server', {}).get('ros__parameters', {})
+    navigator = config.get('regulated_navigator', {}).get('ros__parameters', {})
+    mode = LaunchConfiguration('operation_mode', default='autonomous').perform(context)
+    tolerance = LaunchConfiguration('fixed_path_xy_goal_tolerance', default='').perform(context).strip()
+    for checker in ['fixed_path_goal_checker', 'stopped_goal_checker']:
+        value = controller.get(checker, {}).get('xy_goal_tolerance', 0.01)
+        if tolerance and (checker == 'fixed_path_goal_checker' or mode == 'fixed_path'):
+            value = float(tolerance)
+        actions.append(SetLaunchConfiguration('resolved_' + checker + '_xy_goal_tolerance', str(value)))
+    use_smoother = LaunchConfiguration('use_path_smoother', default='').perform(context).strip().lower()
+    if use_smoother and use_smoother not in ('true', 'false'):
+        raise ValueError('Invalid boolean use_path_smoother')
+    actions.append(SetLaunchConfiguration('resolved_use_path_smoother',
+                   use_smoother or str(navigator.get('use_smoother', True)).lower()))
     return actions
 
 
@@ -172,6 +209,12 @@ def generate_launch_description():
            LaunchConfiguration('resolved_fixed_path_' + key) for key in
            ['goal_braking_distance_margin', 'dynamic_goal_braking_margin_enabled',
             'goal_braking_min_distance_margin', 'goal_braking_margin_transition_speed']},
+        **{'controller_server.ros__parameters.FixedPathController.' + key:
+           LaunchConfiguration('resolved_fixed_path_' + key) for key in FIXED_PATH_OVERRIDES},
+        **{'controller_server.ros__parameters.' + checker + '.xy_goal_tolerance':
+           LaunchConfiguration('resolved_' + checker + '_xy_goal_tolerance')
+           for checker in ['fixed_path_goal_checker', 'stopped_goal_checker']},
+        'regulated_navigator.ros__parameters.use_smoother': LaunchConfiguration('resolved_use_path_smoother'),
     }
 
     # 用启动实参重写 YAML 中的时钟、自动激活和地图路径，并保留 ROS 参数类型。
@@ -633,7 +676,13 @@ def generate_launch_description():
                 'goal_braking_min_distance_margin', 'goal_braking_margin_transition_speed']:
         ld.add_action(DeclareLaunchArgument('fixed_path_' + key, default_value='',
                                            description='Explicit FixedPathController override; empty uses parameter YAML'))
-    ld.add_action(OpaqueFunction(function=resolve_braking_margin_arguments))
+    for argument, _ in FIXED_PATH_OVERRIDES.values():
+        ld.add_action(DeclareLaunchArgument(argument, default_value='',
+                                           description='Explicit FixedPathController override; empty uses parameter YAML'))
+    ld.add_action(DeclareLaunchArgument('fixed_path_xy_goal_tolerance', default_value='',
+                                       description='Position tolerance override; empty uses parameter YAML'))
+    ld.add_action(DeclareLaunchArgument('use_path_smoother', default_value='',
+                                       description='Override navigator path smoothing; empty uses parameter YAML'))
     ld.add_action(declare_rviz_config_file_cmd)
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_collision_monitor_cmd)
@@ -644,6 +693,7 @@ def generate_launch_description():
     ld.add_action(declare_use_respawn_cmd)
     ld.add_action(declare_log_level_cmd)
     ld.add_action(declare_operation_mode_cmd)
+    ld.add_action(OpaqueFunction(function=resolve_braking_margin_arguments))
     ld.add_action(declare_adaptive_goal_braking_cmd)
     ld.add_action(declare_enable_localization_jump_detection_cmd)
     ld.add_action(declare_fixed_path_progress_timeout_cmd)

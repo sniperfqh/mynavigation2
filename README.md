@@ -32,6 +32,8 @@ sudo apt install ros-humble-navigation2 ros-humble-nav2-bringup
 sudo apt install ros-humble-libg2o
 ```
 
+碰撞监视器的激光／点云半径离群点过滤还使用 PCL 的 `common`、`filters` 模块，依赖已在 [nav2_collision_monitor/package.xml](nav2_collision_monitor/package.xml) 和 [CMakeLists.txt](nav2_collision_monitor/CMakeLists.txt) 声明；按下节通过 rosdep 安装对应依赖。
+
 源码其余依赖按下节的 `rosdep install` 命令安装，依赖声明见各包的 `package.xml`。仿真另需 Ignition Gazebo 与 ros_gz 组件，入口说明见 [myworld_bringup](myworld_bringup/README.md) 和 [TurtleBot3 仿真](navigation2_ignition_gazebo_turtlebot3/README.md)。完成源码构建后，按下节加载本工作空间的 `install/local_setup.bash`。
 
 ## 目录与构建
@@ -70,7 +72,45 @@ ros2 launch nav2_regulated_modules regulated_modules.launch.py \
   operation_mode:=autonomous
 ```
 
-改为 `operation_mode:=fixed_path` 接收分段固定路径，改为 `remote` 进入键盘底盘直控。默认地图 `/userdata/map/pbstream/out.yaml` 必须存在，或传 `map:=实际地图绝对路径`。
+改为 `operation_mode:=fixed_path` 接收分段固定路径，改为 `remote` 进入键盘底盘直控。直接规控入口的导航模式默认使用 `/userdata/map/pbstream/out.yaml`，该文件必须存在，或传 `map:=实际地图绝对路径`；remote 模式不执行地图规划。
+
+直接规控入口默认读取 [regulated_modules.yaml](nav2_regulated_modules/params/regulated_modules.yaml) ：自主导航选择 `GridBasedAstar`（NavFn A*）＋`RPP`，固定路径选择 `FixedPathController`＋`fixed_path_goal_checker`。当前控制器和平滑器配置频率均为 100 Hz；配置值与节点实际运行频率需分别核验。仓库虽有 TEB 源码，但这份规控 YAML 的控制器列表未注册 TEB。
+
+当前 `myworld_bringup entry.launch.py` 默认 `use_rviz:=true`、`use_sim_time:=false`，由外部定位提供 TF。自主／固定路径共用 `/userdata/map/pbstream/out.yaml` 地图、map／base_link 坐标系、反馈话题、RViz 配置和规控启动装配，导航栈默认均延迟 3 秒，RViz 延迟 5 秒。各模式均默认 `use_gazebo:=true`、`headless:=true`，启动后台 Gazebo 服务端、传感器桥接和速度反馈转换，不打开 Gazebo 窗口；自主模式的碰撞监控与区域可视化仍默认关闭。fixed_path 默认启用碰撞状态门控和区域可视化，Collision Monitor 仍默认关闭；remote 的默认地图为包内 `myworld2.yaml`，各模式均可通过 `map` 显式覆盖。显式 `use_gazebo:=false` 可改为接入外部 ROS 数据。入口直接传递 `params_file`，不再读写或生成 `noamcl_*.yaml`；坐标系与反馈话题直接配置在 `myworld2.yaml`，AMCL 保持禁用。
+
+默认自主模式直接使用 [myworld2.yaml](myworld_bringup/params/myworld2.yaml) 中的 MPPI：控制频率 100 Hz、模型步长 0.01 s、150 步预测 1.5 s，前进速度上限 1.5 m/s。fixed_path 仍选择 FixedPathController，remote 不启动导航链；显式传入完整 `params_file` 时直接使用该文件，不再自动修改其坐标系或反馈话题。直接规控入口的实车参数文件仍默认使用 RPP。此处为启动配置，实际运行效果另行验收。
+
+### 当前场景的自主与固定路径仿真
+
+在 `nav2_ws` 加载 `/opt/ros/humble/setup.bash` 和 `install/local_setup.bash` 后，按任务选择以下一个入口。两种模式不能同时启动或热切换；切换前先退出旧导航／仿真入口。本地 Cartographer 在独立终端按原方式启动，提供新鲜 `map→base_link`，其定位地图须与 `/userdata/map/pbstream/out.yaml` 一致。
+
+自主模式，使用 RViz 导航目标或标准导航 Action：
+
+```bash
+ros2 launch myworld_bringup entry.launch.py operation_mode:=autonomous
+```
+
+固定路径模式，使用业务分段路径 Action：
+
+```bash
+ros2 launch myworld_bringup entry.launch.py \
+  operation_mode:=fixed_path headless:=true use_rviz:=true \
+  enable_collision_state:=true use_collision_monitor:=false
+```
+
+| 项目 | 场景自主模式 | 场景固定路径模式 |
+|---|---|---|
+| 任务接口 | `/navigate_to_pose`、`/navigate_through_poses` 或 `/goal_pose` | `/navigation_service` |
+| 路径与跟踪 | `GridBasedAstar` → 路径平滑 → MPPI | `NaviSegment[]` → 业务 Path → FixedPathController |
+| 默认目标检查器 | `stopped_goal_checker`，位置容差 0.03 m | `fixed_path_goal_checker`，位置容差 0.01 m |
+| 后台 Gazebo、桥接、速度转换 | 默认启动，不打开 Gazebo 窗口 | 相同 |
+| RViz2／地图／时钟 | RViz2 开启；地图 `/userdata/map/pbstream/out.yaml`；系统时间 | 相同 |
+| 外部碰撞状态／区域可视化 | 关闭 | 默认开启 |
+| Collision Monitor | 默认关闭 | 默认关闭 |
+
+仿真提供 `/scan`（LaserScan）、`/odometry`（Odometry），转换节点提供 `/motion_state`（MotionState）；Cartographer 提供定位 TF。Map Server 发布 `/map` 不会生成定位 TF。雷达点缺失时先查 `/scan` 发布者与桥接，Nav2 等待 `map` TF 时再查 Cartographer 的数据输入、TF 连通性与时间基准。显式 `use_gazebo:=false` 会同时关闭仿真、桥接和速度转换，使用者须另行提供对应 ROS 数据。
+
+自主任务类型为 `nav2_msgs/action/NavigateToPose` 或 `NavigateThroughPoses`；固定路径为 `byd_custom_msgs/action/NavigationService`，两者的 Goal 字段不同。启动、任务接口、历史路径示例及只读排查命令见 [myworld_bringup/README.md](myworld_bringup/README.md)。本节描述场景配置，直接 `nav2_regulated_modules` 入口的参数文件和默认 RPP 控制器见上文。
 
 ```text
 autonomous: 导航目标 → regulated_navigator → Planner → 可选 Smoother → FollowPath
@@ -87,16 +127,32 @@ FollowPath → Controller Server → /cmd_vel_nav → Velocity Smoother
 | `/navigate_to_pose`、`/navigate_through_poses` | 标准 Nav2 导航 Action；由所选入口提供 |
 | `/follow_path` | `nav2_msgs/action/FollowPath`；Controller Server |
 | `/cmd_vel_nav`、`/cmd_vel` | Twist；控制输出与平滑／过滤后速度 |
-| `/odometry` | Odometry；当前规控与 myworld 控制／导航反馈 |
-| `/motion_state` | MotionState；平滑器和底盘闭环反馈 |
+| `/odometry` | `nav_msgs/msg/Odometry`；当前 myworld entry 为控制器提供的仿真反馈；直接规控导航器旧速度日志的默认反馈话题 |
+| `/motion_state` | `byd_custom_msgs/msg/MotionState`；直接规控默认的控制器、平滑器与底盘闭环反馈；myworld entry 将仿真里程计转换后供平滑器与底盘闭环使用 |
 | `/downstream/chassis_control` | ChassisControl；底盘指令支路，具体消费者随模式变化 |
 | `/control_to_uart` | ControlRes；ROS 底盘输出，不代表本仓库实现 UART 驱动 |
 
 以上为无命名空间入口约定，参数和 remapping 可改变实际名称。定位需提供 map→base_link 或完整等效 TF 链；合成 laserpub／map2base_tf 只用于隔离测试，当前生产入口不自动启动。
 
+反馈类型要与消费者匹配：控制器的 `OdomSubscriber`、平滑器的 `OdomSmoother` 和统一诊断按话题末级名称是否为 `motion_state` 选择 MotionState／Odometry；MotionState 速度取 `v_car/w_car`。导航器的 `velocity_odom_topic` 则仍是固定 Odometry 类型，只在启用旧速度日志时订阅，不能把它直接改成 MotionState 话题。实际控制反馈以 `controller_server.odom_topic` 为准，平滑反馈以 `velocity_smoother.odom_topic` 为准。
+
 ## 固定路径、collision 与测试
 
 NavigationService 支持直线／三次贝塞尔；各段同向，方向 1 前进、2 倒车，max_speed 始终为正。任务限速取各段最小值，再受 fixed_path_max_speed=1.5 限制。起步航向和速度保护可能先转向或低速跟踪；Action 成功与独立速度／定位验收分别记录。
+
+固定路径直接使用业务分段生成的 Path，不调用全局规划或路径平滑 Action，也不自动搜索绕障路线。`motion_direction=2` 时按路径切线反向编码车头姿态，并以负线速度执行；`max_load_speed`、`dwell_time` 当前未在这条固定路径执行链中实现对应的限速／停留调度，不能仅凭消息字段存在就认为已生效。
+
+当前直接规控参数的起步上限为 `start_offset_speed_limit=0.30 m/s`，仍受更低任务限速约束。保护距离按沿路径投影进度计算：至少从首次有效投影位置再前进 `start_speed_limit_distance=0.50 m`，并且横向／运动方向航向误差连续 10 个周期达标后才解除；这不是车辆到起点的直线距离。起步保护在同一路径解除后不重复开启。
+
+终点参数与成功条件按当前源码分开理解：
+
+- 直接规控默认 `goal_stop_entry_tolerance=0.008 m`；进入停车入口或满足末段越过终点平面条件后，控制器锁存零速并停止继续转向。位置精度仍按 `xy_goal_tolerance=0.01 m` 检查，实际轮速由下游执行链决定。
+- `terminal_convergence_enabled=true` 时，优先要求当前位置精度、定位／速度反馈时效及停稳条件连续通过 1 秒复核；已锁停且新鲜反馈持续停稳 2 秒、定位仍新鲜时，也可经兜底返回成功并记录 WARN。因此必须同时检查误差、超限标志和复核日志。
+- 直接规控默认终点减速度 `0.20 m/s²`、末段接近速度 `0.015 m/s`，动态制动裕量为低速 `0.010 m`／高速 `0.050 m`，过渡速度 `0.50 m/s`。仿真包装有独立参数与覆盖逻辑，不能把两套配置的调参结果直接混用。
+- 终点基础前视为 `goal_terminal_lookahead_dist=0.20 m`，参考速度 `0.75 m/s`，速度增益 `0.10 s`，距离限制为 `0.15～0.25 m`；末端收敛开启时使用实测速度幅值计算。正常前视到末段前视的混合区间为距终点 `0.50～0.10 m`。
+- 当前 `selectCarrot()` 仍从最近离散路径点累计长度选点，路径不足前视距离时沿终点切线外推虚拟跟踪点。外推距离为“前视距离减去最近路径点到终点的剩余弧长，再取非负值”；它随位置与参数变化，不是固定延长 15 厘米，也不改变业务终点。连续投影／段内插值的优化方案尚未实现。
+
+实现入口见 [固定路径控制器](nav2_regulated_modules/src/fixed_path_controller.cpp) 、[末端前视混合](nav2_regulated_modules/include/nav2_regulated_modules/detail/terminal_lookahead.hpp) 和 [Controller Server 到点复核](nav2_controller/src/controller_server.cpp) 。
 
 外部 collision 门控在 fixed_path 默认启用，自主／遥控不启用。状态 4／3／2 分别为任务速度上限的 100%／65%／35%，1／0 停止；首次从未收到消息按 4，收到后非法值或断流达到 0.5 秒停车。恢复 4 只解除限制，不创建任务或恢复已取消任务。
 
@@ -108,17 +164,25 @@ Collision Monitor 与上述门控独立，直接规控和当前 myworld 入口 `
 - [分开验收](nav2_regulated_modules/doc/action_only_acceptance.md)：速度停稳、定位覆盖与精度独立评价。
 - [固定路径架构](nav2_regulated_modules/doc/fixed_path_architecture.md)：既有模块职责与流程；其中旧的 Collision Monitor 默认开启描述以本文当前配置为准。
 
+`collision_action_test.py` 已区分实车与仿真：默认 `--runtime sim` 使用 `/odometry`／Odometry，默认巡航触发、两程前进并持续运行；`--runtime real` 使用 `/motion_state`／MotionState，默认周期调度、去程前进返程倒车、四程。实车必须显式提供 `--a X Y --b X Y`，工具不替现场选择路线。`--feedback-topic` 可覆盖话题，反馈类型由 runtime 决定；`--odom-topic` 只供仿真兼容使用。
+
+`--schedule periodic` 选择独立周期调度，发布调用目标频率为 50 Hz；五态保持时间默认仿真为 4／3／3／3／3 秒，实车为 12／4／4／3／3 秒，可用 `--state-durations` 覆盖。实际时序、各方向／状态响应和同一 Action 停后恢复分别记录，未覆盖的观察项标为 UNAVAILABLE。
+
 截至本次文档核对，隔离真实节点配合合成反馈的测试、当前地图仿真测试、实车验证是不同证据层级。周期仿真仅取得部分减速／停止有效证据；独立状态源启停验收因 5 秒起步窗内一直转向而 UNAVAILABLE，断流停车和同任务恢复的完整两程验收仍未完成。历史原始报告由外层项目维护，本文不替代报告。
 
 ## 日志与排查
 
 统一诊断默认文件快照 100 Hz、终端摘要 1 Hz，默认 `/tmp/nav2_logs`；可用 `log_dir` 指向数据盘。ROS Launch 日志由 ROS_LOG_DIR 管理。`enable_velocity_diagnostics` 默认 true，`enable_legacy_velocity_logs` 默认 false。详情见[速度日志](nav2_regulated_modules/doc/velocity_logging.md)。
 
+`velocity … schema=2` 是各话题最新值的周期快照，同一话题／类型的多个角色会合并显示。`count` 重复表示没有新消息，`age` 是单调时钟计算的接收年龄；`status=valid` 只说明已收到、速度数值有限且未过期，不验证速度是否物理合理，也不证明停稳。各话题回调不是严格同步采样，不能把单行内的指令／反馈差值直接当作同一时刻的控制误差；`wz` 对应车体角速度，`w_shelf` 是另一物理量。
+
 ```bash
 ros2 lifecycle get /controller_server
 ros2 lifecycle get /velocity_smoother
 ros2 lifecycle get /regulated_navigator
 ros2 param get /regulated_navigator operation_mode
+ros2 param get /controller_server odom_topic
+ros2 param get /velocity_smoother odom_topic
 ros2 param get /velocity_smoother collision_state_enabled
 ros2 topic info /collision_state --verbose
 ```
