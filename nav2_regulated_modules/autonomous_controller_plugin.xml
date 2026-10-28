@@ -1,0 +1,10 @@
+<class_libraries>
+  <library path="nav2_regulated_modules_autonomous_controller">
+    <class type="nav2_regulated_modules::AutonomousMPPIController" base_class_type="nav2_core::Controller">
+      <description>Autonomous-only MPPI with rotation alignment, constrained approach and terminal heading control.</description>
+    </class>
+    <class type="nav2_regulated_modules::AutonomousStoppedGoalChecker" base_class_type="nav2_core::GoalChecker">
+      <description>Autonomous-only position, heading and stopped-velocity verification over a continuous settle window.</description>
+    </class>
+  </library>
+</class_libraries>

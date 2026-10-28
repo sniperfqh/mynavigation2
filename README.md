@@ -74,11 +74,11 @@ ros2 launch nav2_regulated_modules regulated_modules.launch.py \
 
 改为 `operation_mode:=fixed_path` 接收分段固定路径，改为 `remote` 进入键盘底盘直控。直接规控入口的导航模式默认使用 `/userdata/map/pbstream/out.yaml`，该文件必须存在，或传 `map:=实际地图绝对路径`；remote 模式不执行地图规划。
 
-直接规控入口默认读取 [regulated_modules.yaml](nav2_regulated_modules/params/regulated_modules.yaml) ：自主导航选择 `GridBasedAstar`（NavFn A*）＋`RPP`，固定路径选择 `FixedPathController`＋`fixed_path_goal_checker`。当前控制器和平滑器配置频率均为 100 Hz；配置值与节点实际运行频率需分别核验。仓库虽有 TEB 源码，但这份规控 YAML 的控制器列表未注册 TEB。
+直接规控入口默认读取 [regulated_modules.yaml](nav2_regulated_modules/params/regulated_modules.yaml) ：自主导航选择 `GridBasedAstar`（NavFn A*）＋`RPP`，固定路径选择 `FixedPathController`＋`fixed_path_goal_checker`。自主模式将控制器和速度平滑器频率重写为 50 Hz，默认诊断快照同为 50 Hz；固定路径保持原有 100 Hz；配置值与节点实际运行频率需分别核验。仓库虽有 TEB 源码，但这份规控 YAML 的控制器列表未注册 TEB。
 
 当前 `myworld_bringup entry.launch.py` 默认 `use_rviz:=true`、`use_sim_time:=false`，由外部定位提供 TF。自主／固定路径共用 `/userdata/map/pbstream/out.yaml` 地图、map／base_link 坐标系、反馈话题、RViz 配置和规控启动装配，导航栈默认均延迟 3 秒，RViz 延迟 5 秒。各模式均默认 `use_gazebo:=true`、`headless:=true`，启动后台 Gazebo 服务端、传感器桥接和速度反馈转换，不打开 Gazebo 窗口；自主模式的碰撞监控与区域可视化仍默认关闭。fixed_path 默认启用碰撞状态门控和区域可视化，Collision Monitor 仍默认关闭；remote 的默认地图为包内 `myworld2.yaml`，各模式均可通过 `map` 显式覆盖。显式 `use_gazebo:=false` 可改为接入外部 ROS 数据。入口直接传递 `params_file`，不再读写或生成 `noamcl_*.yaml`；坐标系与反馈话题直接配置在 `myworld2.yaml`，AMCL 保持禁用。
 
-默认自主模式直接使用 [myworld2.yaml](myworld_bringup/params/myworld2.yaml) 中的 MPPI：控制频率 100 Hz、模型步长 0.01 s、150 步预测 1.5 s，前进速度上限 1.5 m/s。fixed_path 仍选择 FixedPathController，remote 不启动导航链；显式传入完整 `params_file` 时直接使用该文件，不再自动修改其坐标系或反馈话题。直接规控入口的实车参数文件仍默认使用 RPP。此处为启动配置，实际运行效果另行验收。
+默认场景自主模式在 [myworld2.yaml](myworld_bringup/params/myworld2.yaml) 基础上应用专用 MPPI 配置：控制频率 50 Hz、模型步长 0.02 s、75 步预测 1.5 s、300 条候选，前进速度上限 0.5 m/s。该上限通过自主模式重写 `MPPI.vx_max=0.5` 生效，共享 YAML 不修改。`MPPI` ID 选择独立自主包装，内部仍为 MPPI，增加起步转向、末端位置收敛、制动后航向对齐和连续 0.5 s 停稳检查；位置／航向容差保持。自主模式另修复 TF 时效、旋转进度与恢复计时；fixed_path 的参数与控制器实现保持，remote 不启动导航链。显式参数文件不再自动改写坐标系或反馈话题；`autonomous_mppi_profile:=false` 可关闭 MPPI 包装配置，但保留自主模式的 50 Hz／MPPI 时间网格；直接规控入口默认不启用该包装、实车参数仍选择 RPP。此处为实现与配置说明，实际运行效果另行验收。
 
 ### 当前场景的自主与固定路径仿真
 
@@ -101,8 +101,8 @@ ros2 launch myworld_bringup entry.launch.py \
 | 项目 | 场景自主模式 | 场景固定路径模式 |
 |---|---|---|
 | 任务接口 | `/navigate_to_pose`、`/navigate_through_poses` 或 `/goal_pose` | `/navigation_service` |
-| 路径与跟踪 | `GridBasedAstar` → 路径平滑 → MPPI | `NaviSegment[]` → 业务 Path → FixedPathController |
-| 默认目标检查器 | `stopped_goal_checker`，位置容差 0.03 m | `fixed_path_goal_checker`，位置容差 0.01 m |
+| 路径与跟踪 | `SmacHybrid` → 路径平滑 → 自主转向／接近包装＋MPPI | `NaviSegment[]` → 业务 Path → FixedPathController |
+| 默认目标检查器 | `stopped_goal_checker`，位置容差 0.03 m、连续停稳 0.5 s | `fixed_path_goal_checker`，位置容差 0.01 m |
 | 后台 Gazebo、桥接、速度转换 | 默认启动，不打开 Gazebo 窗口 | 相同 |
 | RViz2／地图／时钟 | RViz2 开启；地图 `/userdata/map/pbstream/out.yaml`；系统时间 | 相同 |
 | 外部碰撞状态／区域可视化 | 关闭 | 默认开启 |
@@ -135,6 +135,69 @@ FollowPath → Controller Server → /cmd_vel_nav → Velocity Smoother
 以上为无命名空间入口约定，参数和 remapping 可改变实际名称。定位需提供 map→base_link 或完整等效 TF 链；合成 laserpub／map2base_tf 只用于隔离测试，当前生产入口不自动启动。
 
 反馈类型要与消费者匹配：控制器的 `OdomSubscriber`、平滑器的 `OdomSmoother` 和统一诊断按话题末级名称是否为 `motion_state` 选择 MotionState／Odometry；MotionState 速度取 `v_car/w_car`。导航器的 `velocity_odom_topic` 则仍是固定 Odometry 类型，只在启用旧速度日志时订阅，不能把它直接改成 MotionState 话题。实际控制反馈以 `controller_server.odom_topic` 为准，平滑反馈以 `velocity_smoother.odom_topic` 为准。
+
+## 自主路径 Action 命令行测试
+
+后台已启动 Cartographer 定位和自主 Nav2 时，在新终端加载同一工作空间即可，不要重复启动导航栈。以下命令对应无命名空间的 `myworld_bringup entry.launch.py operation_mode:=autonomous`；若启用了命名空间，给 Action、节点和服务名加上对应前缀。
+
+```bash
+source /opt/ros/humble/setup.bash
+cd /mnt/nvme/codex/nav2_demo/nav2_ws
+source install/local_setup.bash
+
+ros2 param get /regulated_navigator operation_mode
+ros2 lifecycle get /regulated_navigator
+ros2 lifecycle get /controller_server
+ros2 action list -t
+```
+
+应看到 `operation_mode=autonomous`、两个节点均为 `active`，以及 `/navigate_to_pose [nav2_msgs/action/NavigateToPose]`、`/navigate_through_poses [nav2_msgs/action/NavigateThroughPoses]`。发送前确认 `map→base_link` 定位 TF 可用、目标在当前地图可通行区域且没有其他任务执行；新目标会抢占当前任务。下面坐标仅演示消息格式，请先在 RViz 核对并替换，单点与多点示例分别执行，等待前一个任务结束后再发送下一个。
+
+### 单点到达并停车
+
+下面向 `map` 坐标系的 `(11.0, -4.0)` 发送目标，终点航向为 0°（车头沿地图 +X 方向）。`--feedback` 持续打印反馈；自主 Action 不包含固定路径的 `navi_segment`、`motion_direction` 或 `max_speed` 字段，速度由控制器及平滑器配置决定。自研协调器不接受行为树 XML，`behavior_tree` 必须留空。
+
+```bash
+ros2 action send_goal --feedback /navigate_to_pose \
+  nav2_msgs/action/NavigateToPose \
+  "{pose: {header: {frame_id: map}, pose: {position: {x: 11.0, y: -4.0, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}, behavior_tree: ''}"
+```
+
+修改终点位置时改 `position.x/y`；平面航向通过四元数 `orientation.z/w` 指定，`x/y` 保持 0。例如 90° 使用 `z: 0.7071067811865476, w: 0.7071067811865476`，180° 使用 `z: 1.0, w: 0.0`；不要把角度直接填入 `orientation.z`。
+
+### 按顺序经过多个目标
+
+`poses` 是有序的目标数组，每个元素都需要坐标系、位置和有效四元数。示例先经过 `(11.0, -4.0)`，再到 `(12.0, -3.0)`，最终航向为 90°；这不是要求每个中间点都停车等待的站点任务。
+
+```bash
+ros2 action send_goal --feedback /navigate_through_poses \
+  nav2_msgs/action/NavigateThroughPoses \
+  "{poses: [{header: {frame_id: map}, pose: {position: {x: 11.0, y: -4.0, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}, {header: {frame_id: map}, pose: {position: {x: 12.0, y: -3.0, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.7071067811865476, w: 0.7071067811865476}}}], behavior_tree: ''}"
+```
+
+消息字段见 [NavigateToPose.action](nav2_msgs/action/NavigateToPose.action) 和 [NavigateThroughPoses.action](nav2_msgs/action/NavigateThroughPoses.action)。
+
+### 结果判断与取消任务
+
+- `Goal accepted with ID: ...` 仅表示目标被接收，保存该 UUID 以便精确取消。`Goal finished with status: SUCCEEDED` 才表示任务成功；`ABORTED` 表示失败，`CANCELED` 表示取消。
+- 反馈包括 `current_pose`、`distance_remaining`、`navigation_time` 和 `number_of_recoveries`；多点任务另有 `number_of_poses_remaining`。自主剩余距离取下游路径估计与当前请求目标直线距离的较大值，避免最近路径点已到末点时提前归零；这仍不是独立物理真值。规划或换路径后首次控制反馈尚未到达时，使用目标直线距离作为下界。
+- `estimated_time_remaining` 包含平移、终点转向及默认 0.5 秒停稳的估计，原地转向或低速时不直接置零；估计值不参与成功判定。Duration 要同时看 `sec` 和 `nanosec`，`nanosec: 0` 也可以表示合法的整秒。
+- 自主 `number_of_recoveries` 为控制恢复与定位丢失后恢复执行次数之和，受字段范围限制时饱和显示；控制恢复的次数上限仍单独生效。
+- 默认场景的最终位置／航向／速度需满足配置阈值并连续稳定 0.5 秒；Action 成功与独立实车精度验收分开评价。失败原因可查看 `/tmp/nav2_logs/nav2_regulated_modules/regulated_navigator.log`，若设置了 `log_dir` 则使用对应目录。
+- 位置正好重合时 `distance_remaining` 可以为 0，而航向／轮速仍未达标。此时查看 `controller_server.log` 中的 `Autonomous arrival waiting=...`：`POSITION` 为位置未达标，`HEADING` 为航向未达标，`VELOCITY` 为轮速未达标，`SETTLING` 为等待连续稳定窗口；日志同时给出误差、阈值和稳定时长。成功仍由下游 FollowPath 的成功结果触发，不由距离字段单独触发。
+- 本机已核对的 Humble `ros2 action send_goal` 在目标被接收后支持原终端 `Ctrl+C` 请求取消该目标。等待取消结果，并确认 `/motion_state` 的 `v_car/w_car` 停稳；关闭终端或客户端断开不能作为停车确认。
+
+也可在另一终端按 UUID 取消单点任务。将 `GOAL_UUID` 替换成发送命令打印的 32 位目标 ID；转换成功后才发送取消请求，时间戳保持零，仅匹配该 UUID。
+
+```bash
+GOAL_UUID='替换为本轮目标的32位UUID'
+GOAL_UUID_BYTES=$(python3 -c 'import sys, uuid; u = uuid.UUID(sys.argv[1]); assert u.int != 0, "目标 UUID 不能全为零"; print(list(u.bytes))' "$GOAL_UUID") && \
+ros2 service call /navigate_to_pose/_action/cancel_goal \
+  action_msgs/srv/CancelGoal \
+  "{goal_info: {goal_id: {uuid: $GOAL_UUID_BYTES}, stamp: {sec: 0, nanosec: 0}}}"
+```
+
+取消多点任务时，把上述服务名替换为 `/navigate_through_poses/_action/cancel_goal`，UUID 使用该多点任务自己的 ID。`return_code=0` 且 `goals_canceling` 包含目标 UUID 表示取消请求已接受，仍需等待任务结束和轮速停稳。
 
 ## 固定路径、collision 与测试
 
@@ -172,7 +235,7 @@ Collision Monitor 与上述门控独立，直接规控和当前 myworld 入口 `
 
 ## 日志与排查
 
-统一诊断默认文件快照 100 Hz、终端摘要 1 Hz，默认 `/tmp/nav2_logs`；可用 `log_dir` 指向数据盘。ROS Launch 日志由 ROS_LOG_DIR 管理。`enable_velocity_diagnostics` 默认 true，`enable_legacy_velocity_logs` 默认 false。详情见[速度日志](nav2_regulated_modules/doc/velocity_logging.md)。
+统一诊断默认文件快照自主模式 50 Hz、固定路径／remote 100 Hz，终端摘要 1 Hz，默认 `/tmp/nav2_logs`；可用 `log_dir` 指向数据盘。ROS Launch 日志由 ROS_LOG_DIR 管理。`enable_velocity_diagnostics` 默认 true，`enable_legacy_velocity_logs` 默认 false。详情见[速度日志](nav2_regulated_modules/doc/velocity_logging.md)。
 
 `velocity … schema=2` 是各话题最新值的周期快照，同一话题／类型的多个角色会合并显示。`count` 重复表示没有新消息，`age` 是单调时钟计算的接收年龄；`status=valid` 只说明已收到、速度数值有限且未过期，不验证速度是否物理合理，也不证明停稳。各话题回调不是严格同步采样，不能把单行内的指令／反馈差值直接当作同一时刻的控制误差；`wz` 对应车体角速度，`w_shelf` 是另一物理量。
 

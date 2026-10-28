@@ -18,11 +18,37 @@ void RegulatedNavigator::sendFollowPath(const nav_msgs::msg::Path & path)
     handlePlanningFailure("控制路径为空");
     return;
   }
+  if (operation_mode_ == NavigationMode::AUTONOMOUS)
+  {
+    geometry_msgs::msg::PoseStamped current_pose;
+    if (!lookupCurrentPose(current_pose))
+    {
+      cancelSubGoals(true);
+      stopRobot();
+      task_.state = NavigationState::LOCALIZATION_LOST;
+      localization_lost_time_ = now();
+      localization_stable_since_ = rclcpp::Time(0, 0, get_clock()->get_clock_type());
+      LOG_WARN("自主路径执行前定位未就绪，保持停车并等待新鲜 TF");
+      return;
+    }
+  }
   task_.active_path = path;
+  if (operation_mode_ == NavigationMode::AUTONOMOUS)
+  {
+    task_.distance_remaining = 0.0;
+    current_speed_ = 0.0;
+  }
   task_.state = NavigationState::CONTROLLING;
   const auto generation = task_.generation;
   const auto sequence = ++follow_sequence_;
   const bool replacing_path = active_follow_goal_ != nullptr;
+  if (operation_mode_ == NavigationMode::AUTONOMOUS && !replacing_path)
+  {
+    // 新任务或真正恢复后的首次执行重建基准；周期换路径继续累计卡死时间。
+    task_.last_progress_pose = geometry_msgs::msg::PoseStamped();
+    task_.last_progress_time = now();
+    autonomous_progress_heading_error_.reset();
+  }
   const std::string & controller_id = task_.type == TaskType::NAVIGATION_SERVICE ? fixed_path_controller_id_ : control_module_.controllerId();
   const std::string & goal_checker_id = task_.type == TaskType::NAVIGATION_SERVICE ? fixed_path_goal_checker_id_ : control_module_.goalCheckerId();
   FollowPath::Goal goal;

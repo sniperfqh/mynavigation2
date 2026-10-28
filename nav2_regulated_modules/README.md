@@ -10,6 +10,7 @@
 | [params/regulated_modules.yaml](params/regulated_modules.yaml) | 节点参数、规划／控制插件和反馈话题 |
 | [src/](src/)／[include/](include/) | 协调器、规划与控制模块、固定路径跟踪与停止逻辑 |
 | [fixed_path_controller_plugin.xml](fixed_path_controller_plugin.xml) | `nav2_regulated_modules::FixedPathController` 与 `FixedPathGoalChecker` |
+| [autonomous_controller_plugin.xml](autonomous_controller_plugin.xml) | 仅自主配置选择的 MPPI 转向／接近包装和连续停稳 GoalChecker |
 | [tools/README.md](tools/README.md)／[test/](test/) | 现有环境观察、隔离实验及开发验证 |
 | [doc/](doc/) | 架构、日志与分开验收方法 |
 
@@ -39,7 +40,13 @@ ros2 launch nav2_regulated_modules regulated_modules.launch.py \
 
 直接入口不启动 Gazebo、AMCL、合成 TF 或合成雷达。默认地图为 `/userdata/map/pbstream/out.yaml`；用 `map:=...` 覆盖。可用 `ros2 launch nav2_regulated_modules regulated_modules.launch.py --show-args` 查看安装版本支持的参数，实际值受 YAML、Launch 重写及显式实参共同影响。
 
+自主模式专用修复包括 TF 源时间戳校验、有效旋转／末端误差进度、真正恢复后重建计时基准；fixed_path／remote 不进入这些新分支。Controller 的 PoseProgressChecker 和较小位移阈值也只在 autonomous 的参数重写中启用。场景入口额外传 `autonomous_mppi_profile=true`，在 `MPPI` ID 下选择 `AutonomousMPPIController`（内部为 MPPI），并选择 `AutonomousStoppedGoalChecker`；直接入口默认该开关 false，保留原 RPP 选择。共享 YAML、FixedPathController 和固定路径 GoalChecker 未改。
+
+自主 MPPI 包装负责起步对齐、末端专用位置收敛、制动停稳和终点朝向对齐；目标检查器保留位置／航向／速度阈值并要求连续达标 0.5 s。自主模式的控制频率为 50 Hz，MPPI 模型步长 0.02 s、75 步预测 1.5 s，场景自主包装的候选数为 300，MPPI 前进速度上限为 0.5 m/s；关闭包装仍保留自主模式的 50 Hz／MPPI 时间网格。自主速度平滑器及默认诊断快照同为 50 Hz，固定路径模式保持原有 100 Hz。不据此声称实际达到 50 Hz 或已通过导航任务验收。实现见 [autonomous_mppi_controller.cpp](src/autonomous_mppi_controller.cpp) 。
+
 ## 数据流与反馈
+
+自主包装的起步对齐按 Controller Server 提供的同一帧机器人位姿计算路径朝向；不再调用原 RotationShim 为路径采样点写 `now()` 的变换链。同坐标系不查询 TF，跨坐标系按该位姿时间戳零等待查询，缺失时报告失败并停车；保留起步旋转足迹检查和原定位时效门限。此改动只作用于自主插件，固定路径、共享 `nav2_util` 和 RotationShim 实现保持。未来外推导致的默认 100 ms 等待被去除，实际控制周期仍需运行测量。
 
 ```text
 autonomous: 导航目标 → regulated_navigator → Planner → 可选 Smoother → FollowPath
@@ -52,6 +59,8 @@ FollowPath → Controller Server → /cmd_vel_nav
 控制器、导航器默认读取 `/odometry` 的 Odometry；平滑器及底盘闭环使用 `/motion_state` 的 MotionState。`v_car/w_car` 映射到线／角速度；反馈过期、定位缺失、取消和正常到点分别处理。TF 须提供新鲜 `map→base_link`，或由明确的 TF 链组合得到；不把原始里程计位置当作地图定位。
 
 `regulated_navigator` 另监听 `/downstream/chassis_control`，收到该支路有效命令才处理底盘请求。部署时须核对最终控制源，避免键盘直控与导航转发同时竞争 `/control_to_uart`。
+
+自主反馈以请求目标的直线距离作为 `distance_remaining` 下界，并估计平移、终点航向及停稳时间；ETA 不直接当作成功计时。定位恢复与控制恢复分别计数，标准反馈报告两者总数，原控制恢复次数上限不变。自主 GoalChecker 每秒提供终点等待原因与误差／阈值／稳定时长，成功仍只由 FollowPath 的成功结果向上传递。标准 Nav2 Action 消息定义和固定路径反馈均保持。
 
 ## 固定路径与终点行为
 
@@ -104,7 +113,7 @@ ros2 run nav2_regulated_modules collision_action_test.py \
 
 ## 日志、工具与证据
 
-统一速度诊断默认开启：文件快照 100 Hz、终端摘要 1 Hz；默认日志目录 `/tmp/nav2_logs`，可通过 `log_dir` 改到数据盘。`ROS_LOG_DIR` 管理 ROS Launch 日志，两者独立。`enable_legacy_velocity_logs=false` 默认抑制重复摘要，关闭统一诊断后回退旧记录。
+统一速度诊断默认开启：自主模式文件快照 50 Hz、固定路径／remote 100 Hz，终端摘要 1 Hz；默认日志目录 `/tmp/nav2_logs`，可通过 `log_dir` 改到数据盘。`ROS_LOG_DIR` 管理 ROS Launch 日志，两者独立。`enable_legacy_velocity_logs=false` 默认抑制重复摘要，关闭统一诊断后回退旧记录。
 
 - [速度日志](doc/velocity_logging.md)：字段、异步滚动、S 曲线及缺失／过期状态。
 - [固定路径架构](doc/fixed_path_architecture.md)：既有模块与控制流程分析，其中旧的 Collision Monitor 默认开启描述以本 README 的当前默认表为准。

@@ -73,7 +73,10 @@ def generate_launch_description():
         "' if '", operation_mode, "' in ('fixed_path', 'autonomous') else '",
         os.path.join(myworld_dir, 'myworld2.yaml'), "'"])
     map_file = LaunchConfiguration('map', default=default_map)
-    rviz_config_file = os.path.join(bringup_dir, 'rviz', 'nav2_default_view.rviz')
+    rviz_config_file = PythonExpression([
+        "'", os.path.join(bringup_dir, 'rviz', 'nav2_autonomous_view.rviz'),
+        "' if '", operation_mode, "' == 'autonomous' else '",
+        os.path.join(bringup_dir, 'rviz', 'nav2_default_view.rviz'), "'"])
     robot_description_file = os.path.join(bringup_dir, 'urdf', 'diffbot.urdf')
     with open(robot_description_file, 'r', encoding='utf-8') as urdf_file:
         robot = ET.fromstring(urdf_file.read())
@@ -85,6 +88,7 @@ def generate_launch_description():
         raise ValueError('External localization expects the existing zero-offset base_joint')
     base_joint.find('parent').set('link', 'base_link')
     base_joint.find('child').set('link', 'base_footprint')
+    # Fixed sensor joints publish on /tf_static; wheel joints follow /joint_states on /tf.
     robot_description = ET.tostring(robot, encoding='unicode')
 
     resource_path = [os.path.join('/opt/ros/humble', 'share'), ':' + os.path.join(bringup_dir, 'models'), ':' + myworld_dir, ':' + os.path.join(myworld_dir, 'models')]
@@ -116,6 +120,8 @@ def generate_launch_description():
         'use_respawn': 'False',
         'log_level': 'info',
         'operation_mode': operation_mode,
+        'autonomous_planner_id': 'SmacHybrid',
+        'autonomous_mppi_profile': LaunchConfiguration('autonomous_mppi_profile'),
         'use_path_smoother': PythonExpression(["'", operation_mode, "' != 'fixed_path'"]),
         'enable_localization_jump_detection': enable_localization_jump_detection,
         'enable_collision_state': LaunchConfiguration('enable_collision_state'),
@@ -154,7 +160,7 @@ def generate_launch_description():
         DeclareLaunchArgument('enable_velocity_diagnostics', default_value='true'),
         DeclareLaunchArgument('enable_legacy_velocity_logs', default_value='false'),
         DeclareLaunchArgument('log_dir', default_value=os.environ.get('SPDLOG_WRAPPER_LOG_DIR', '/tmp/nav2_logs')),
-        DeclareLaunchArgument('velocity_file_log_frequency', default_value='100.0'),
+        DeclareLaunchArgument('velocity_file_log_frequency', default_value=PythonExpression(["'50.0' if '", operation_mode, "' == 'autonomous' else '100.0'"])),
         DeclareLaunchArgument('velocity_console_log_frequency', default_value='1.0'),ign_resource_path,
         ign_partition,
         ignition_sim,
@@ -179,6 +185,7 @@ def generate_launch_description():
         DeclareLaunchArgument('use_collision_visualization', default_value=default_collision_visualization, description='Enable collision boundary visualization; defaults true for fixed_path, false for other modes'),
         DeclareLaunchArgument('headless', default_value='true', description='Run only the Ignition Gazebo server by default; false enables Gazebo GUI'),
         DeclareLaunchArgument('operation_mode', default_value='autonomous', choices=['remote', 'autonomous', 'fixed_path'], description='Select the robot operation mode'),
+        DeclareLaunchArgument('autonomous_mppi_profile', default_value='true', description='Apply rotation alignment, terminal approach and reduced MPPI sampling only in autonomous mode'),
         DeclareLaunchArgument('enable_localization_jump_detection', default_value='false', description='Whether localization pose jumps cancel control and stop the simulated robot'),
         DeclareLaunchArgument('fixed_path_progress_timeout', default_value='120.0', description='Maximum stationary time in fixed-path mode'),
         DeclareLaunchArgument('fixed_path_max_linear_velocity', default_value='1.5', description='Fixed-path controller maximum linear velocity (m/s)'),

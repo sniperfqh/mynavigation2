@@ -67,6 +67,7 @@ struct NavigationTask
   geometry_msgs::msg::PoseStamped last_progress_pose;
   // 恢复次数与连续规划失败次数分别受各自上限约束。
   int recovery_count { 0 };
+  int localization_recovery_count = 0;
   int consecutive_planning_failures { 0 };
   double distance_remaining { 0.0 };
   std::string task_id;

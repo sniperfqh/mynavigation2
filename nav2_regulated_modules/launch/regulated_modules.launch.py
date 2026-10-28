@@ -10,14 +10,82 @@ import math
 from ament_index_python.packages import get_package_share_directory
 
 from launch import LaunchDescription
-from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription, OpaqueFunction, SetEnvironmentVariable, SetLaunchConfiguration
+from launch.actions import DeclareLaunchArgument, GroupAction, IncludeLaunchDescription, LogInfo, OpaqueFunction, SetEnvironmentVariable, SetLaunchConfiguration
 from launch.conditions import IfCondition, UnlessCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import EnvironmentVariable, LaunchConfiguration, PythonExpression
+from launch.utilities import normalize_to_list_of_substitutions, perform_substitutions
 from launch_ros.actions import LoadComposableNodes, Node
 from launch_ros.descriptions import ComposableNode, ParameterFile
 from launch_ros.parameter_descriptions import ParameterValue
 from nav2_common.launch import RewrittenYaml
+
+
+class NavigationRewrittenYaml(RewrittenYaml):
+    """Keep fixed_path/remote rewrites unchanged; select autonomous settings lazily."""
+
+    def __init__(self, **kwargs):
+        self.navigation_kwargs = kwargs
+        super().__init__(**kwargs)
+
+    def perform(self, context):
+        if LaunchConfiguration('operation_mode').perform(context) != 'autonomous':
+            return super().perform(context)
+        rewrites = dict(self.navigation_kwargs['param_rewrites'])
+        rewrites.update({
+            'controller_server.ros__parameters.controller_frequency': '50.0',
+            'controller_server.ros__parameters.MPPI.model_dt': '0.02',
+            'controller_server.ros__parameters.MPPI.time_steps': '75',
+            'controller_server.ros__parameters.MPPI.vx_max': '0.5',
+            'controller_server.ros__parameters.MPPI.visualize': 'true',
+            'controller_server.ros__parameters.MPPI.TrajectoryVisualizer.trajectory_step': '15',
+            'controller_server.ros__parameters.MPPI.TrajectoryVisualizer.time_step': '5',
+            'velocity_smoother.ros__parameters.smoothing_frequency': '50.0',
+            'controller_server.ros__parameters.progress_checker.plugin': 'nav2_controller::PoseProgressChecker',
+            'controller_server.ros__parameters.progress_checker.required_movement_radius': '0.05',
+            'controller_server.ros__parameters.progress_checker.required_movement_angle': '0.2',
+            'regulated_navigator.ros__parameters.progress_min_translation': '0.05',
+        })
+        autonomous_planner_id = LaunchConfiguration('autonomous_planner_id', default='').perform(context).strip()
+        if autonomous_planner_id:
+            rewrites['regulated_navigator.ros__parameters.planner_id'] = autonomous_planner_id
+        if LaunchConfiguration('autonomous_mppi_profile', default='false').perform(context).lower() == 'true':
+            source = perform_substitutions(context, normalize_to_list_of_substitutions(self.navigation_kwargs['source_file']))
+            with open(source, encoding='utf-8') as stream:
+                config = yaml.safe_load(stream) or {}
+            namespace = perform_substitutions(context, normalize_to_list_of_substitutions(self.navigation_kwargs.get('root_key') or ''))
+            config = config.get(namespace, config) if namespace else config
+            xy_tolerance = float(config['controller_server']['ros__parameters']['stopped_goal_checker']['xy_goal_tolerance'])
+            profile = {
+                'plugin': 'nav2_regulated_modules::AutonomousMPPIController',
+                'primary_controller': 'nav2_mppi_controller::MPPIController',
+                'batch_size': '300',
+                'angular_dist_threshold': '0.7853981633974483',
+                'angular_disengage_threshold': '0.17453292519943295',
+                'forward_sampling_distance': '0.5',
+                'rotate_to_heading_angular_vel': '0.5',
+                'max_angular_accel': '0.8',
+                'simulate_ahead_time': '0.5',
+                'rotate_to_goal_heading': 'true',
+                'closed_loop': 'true',
+                'autonomous_approach_distance': '1.0',
+                'autonomous_terminal_distance': '0.15',
+                'autonomous_terminal_max_linear_velocity': '0.05',
+                'autonomous_terminal_max_angular_velocity': '0.1',
+                'GoalAngleCritic.enabled': 'false',
+            }
+            for key in ['autonomous_terminal_distance', 'autonomous_terminal_max_linear_velocity', 'autonomous_terminal_max_angular_velocity']:
+                profile[key] = str(config['controller_server']['ros__parameters'].get('MPPI', {}).get(key, profile[key]))
+            rewrites.update({'controller_server.ros__parameters.MPPI.' + key: value for key, value in profile.items()})
+            rewrites.update({
+                'controller_server.ros__parameters.stopped_goal_checker.plugin': 'nav2_regulated_modules::AutonomousStoppedGoalChecker',
+                'controller_server.ros__parameters.stopped_goal_checker.stateful': 'false',
+                'controller_server.ros__parameters.stopped_goal_checker.settle_duration': '0.5',
+                'regulated_navigator.ros__parameters.autonomous_terminal_progress_enabled': 'true',
+                'regulated_navigator.ros__parameters.autonomous_terminal_xy_tolerance': str(xy_tolerance),
+                'regulated_navigator.ros__parameters.autonomous_terminal_distance': profile['autonomous_terminal_distance'],
+            })
+        return RewrittenYaml(**{**self.navigation_kwargs, 'param_rewrites': rewrites}).perform(context)
 
 
 # 仿真入口的显式覆盖由现有 RewrittenYaml 统一处理，不再生成额外参数文件。
@@ -219,7 +287,7 @@ def generate_launch_description():
 
     # 用启动实参重写 YAML 中的时钟、自动激活和地图路径，并保留 ROS 参数类型。
     configured_params = ParameterFile(
-        RewrittenYaml(
+        NavigationRewrittenYaml(
             source_file=params_file,
             root_key=namespace,
             param_rewrites=param_substitutions,
@@ -655,9 +723,13 @@ def generate_launch_description():
     ld = LaunchDescription()
 
     ld.add_action(DeclareLaunchArgument('enable_velocity_diagnostics', default_value='true'))
+    ld.add_action(DeclareLaunchArgument('autonomous_planner_id', default_value='',
+                                       description='Optional planner ID override in autonomous mode'))
+    ld.add_action(DeclareLaunchArgument('autonomous_mppi_profile', default_value='false',
+                                       description='Use the simulation autonomous MPPI wrapper; ignored outside autonomous mode'))
     ld.add_action(DeclareLaunchArgument('enable_legacy_velocity_logs', default_value='false'))
     ld.add_action(DeclareLaunchArgument('log_dir', default_value=EnvironmentVariable('SPDLOG_WRAPPER_LOG_DIR', default_value='/tmp/nav2_logs')))
-    ld.add_action(DeclareLaunchArgument('velocity_file_log_frequency', default_value='100.0'))
+    ld.add_action(DeclareLaunchArgument('velocity_file_log_frequency', default_value=PythonExpression(["'50.0' if '", LaunchConfiguration('operation_mode', default='autonomous'), "' == 'autonomous' else '100.0'"])))
     ld.add_action(DeclareLaunchArgument('velocity_console_log_frequency', default_value='1.0'))
     ld.add_action(stdout_linebuf_envvar)
     ld.add_action(spdlog_log_dir_envvar)
@@ -702,4 +774,5 @@ def generate_launch_description():
     ld.add_action(remote_control_cmd)
     ld.add_action(navigation_group)
 
+    ld.add_action(LogInfo(condition=IfCondition(PythonExpression(["'", operation_mode, "' == 'autonomous'"])), msg=['Autonomous rates: controller=50Hz, smoother=50Hz, diagnostic=', LaunchConfiguration('velocity_file_log_frequency'), 'Hz, console=', LaunchConfiguration('velocity_console_log_frequency'), 'Hz; MPPI model_dt=0.02s/time_steps=75']))
     return ld
