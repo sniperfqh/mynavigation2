@@ -2,6 +2,7 @@
 // 本文件重置句柄或报告上层终态，不等于等待下游取消完成；停车请求和实际停稳需由独立证据区分。
 
 #include "nav2_regulated_modules/regulated_navigator.hpp"
+#include "nav2_regulated_modules/detail/autonomous_navigation.hpp"
 
 #include <memory>
 #include <string>
@@ -174,7 +175,14 @@ void RegulatedNavigator::succeedTask()
     active_navigation_service_goal_->succeed(navigation_service_result);
     active_navigation_service_goal_.reset();
   }
-  LOG_INFO("导航任务执行成功，generation={}，耗时={:.3f}s，恢复次数={}", generation, elapsed, task_.recovery_count);
+  if (operation_mode_ == NavigationMode::AUTONOMOUS)
+  {
+    LOG_INFO("导航任务执行成功，generation={}，耗时={:.3f}s，恢复次数={}，控制恢复={}，定位恢复={}", generation, elapsed, detail::autonomousFeedbackRecoveries(task_.recovery_count, task_.localization_recovery_count), task_.recovery_count, task_.localization_recovery_count);
+  }
+  else
+  {
+    LOG_INFO("导航任务执行成功，generation={}，耗时={:.3f}s，恢复次数={}", generation, elapsed, task_.recovery_count);
+  }
   resetTask();
 }
 

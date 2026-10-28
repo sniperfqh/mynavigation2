@@ -189,8 +189,8 @@ private:
   // 依次处理取消、清图等待、TF 丢失／恢复、可选跳变、进度及自主重规划。
   // collision 仅暂停固定路径无进展计时，不跳过前面的取消与定位处理。
   void monitorTask();
-  // 尝试获取最近 map→base_link 变换，成功后更新 last_valid_tf_time。
-  // 当前实现没有额外按消息时间戳计算 TF 年龄；查询成功不能当作独立定位新鲜度／精度验收。
+  // 自主模式同时检查 TF 源时间戳；固定路径保留最近变换查询与本机成功计时。
+  // 新鲜定位仍不等于独立物理精度验收。
   bool lookupCurrentPose(geometry_msgs::msg::PoseStamped & pose);
   // 多点任务中按 passed_goal_radius（m）移除已接近的前置目标，至少保留末点。
   // 这是目标队列维护，不是 FollowPath 成功判定。
@@ -261,6 +261,15 @@ private:
   double max_translation_jump_ { 0.3 };
   double max_rotation_jump_ { 0.35 };
   double progress_min_translation_ { 0.1 };
+  double autonomous_progress_min_rotation_ = 0.2;
+  double autonomous_goal_progress_distance_ = 0.01;
+  std::optional<double> autonomous_progress_heading_error_;
+  double autonomous_progress_goal_distance_ = 0.0;
+  bool autonomous_progress_terminal_ = false;
+  double autonomous_progress_reference_heading_ = 0.0;
+  bool autonomous_terminal_progress_enabled_ = false;
+  double autonomous_terminal_xy_tolerance_ = 0.03;
+  double autonomous_terminal_distance_ = 0.15;
   double localization_recovery_timeout_ { 10.0 };
   double localization_stable_duration_ { 0.5 };
   int max_recovery_rounds_ { 2 };

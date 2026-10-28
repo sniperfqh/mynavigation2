@@ -4,9 +4,12 @@
 #include "nav2_regulated_modules/regulated_navigator.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <memory>
 
 #include "nav2_regulated_modules/navigation_utils.hpp"
+#include "nav2_regulated_modules/detail/autonomous_navigation.hpp"
+#include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 
 namespace nav2_regulated_modules
 {
@@ -146,7 +149,35 @@ void RegulatedNavigator::publishFeedback()
     return;
   }
   const double navigation_time = (now() - task_.start_time).seconds();
-  const double eta = current_speed_ > 0.03 ? task_.distance_remaining / current_speed_ : 0.0;
+  double remaining = task_.distance_remaining;
+  double eta = current_speed_ > 0.03 ? task_.distance_remaining / current_speed_ : 0.0;
+  int16_t recoveries = static_cast<int16_t>(task_.recovery_count);
+  if (operation_mode_ == NavigationMode::AUTONOMOUS)
+  {
+    auto goal = task_.goal;
+    goal.header.stamp = current_pose.header.stamp;
+    if (goal.header.frame_id != current_pose.header.frame_id)
+    {
+      try
+      {
+        goal = tf_buffer_->transform(goal, current_pose.header.frame_id, tf2::durationFromSec(0.0));
+      }
+      catch (const tf2::TransformException & error)
+      {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000, "Autonomous feedback unavailable: %s", error.what());
+        return;
+      }
+    }
+    const double goal_distance = navigation_utils::poseDistance(current_pose, goal);
+    const double yaw_error = navigation_utils::normalizeAngle(navigation_utils::yawFromPose(goal) - navigation_utils::yawFromPose(current_pose));
+    if (!std::isfinite(goal_distance) || !std::isfinite(yaw_error))
+    {
+      return;
+    }
+    remaining = detail::autonomousFeedbackDistance(task_.distance_remaining, goal_distance);
+    eta = detail::autonomousFeedbackEta(remaining, yaw_error, current_speed_);
+    recoveries = detail::autonomousFeedbackRecoveries(task_.recovery_count, task_.localization_recovery_count);
+  }
 
   if (active_pose_goal_)
   {
@@ -154,8 +185,8 @@ void RegulatedNavigator::publishFeedback()
     feedback->current_pose = current_pose;
     feedback->navigation_time = navigation_utils::durationFromSeconds(navigation_time);
     feedback->estimated_time_remaining = navigation_utils::durationFromSeconds(eta);
-    feedback->number_of_recoveries = static_cast<int16_t>(task_.recovery_count);
-    feedback->distance_remaining = task_.distance_remaining;
+    feedback->number_of_recoveries = recoveries;
+    feedback->distance_remaining = remaining;
     active_pose_goal_->publish_feedback(feedback);
   }
   if (active_poses_goal_)
@@ -164,8 +195,8 @@ void RegulatedNavigator::publishFeedback()
     feedback->current_pose = current_pose;
     feedback->navigation_time = navigation_utils::durationFromSeconds(navigation_time);
     feedback->estimated_time_remaining = navigation_utils::durationFromSeconds(eta);
-    feedback->number_of_recoveries = static_cast<int16_t>(task_.recovery_count);
-    feedback->distance_remaining = task_.distance_remaining;
+    feedback->number_of_recoveries = recoveries;
+    feedback->distance_remaining = remaining;
     feedback->number_of_poses_remaining = static_cast<int16_t>(task_.goals.size());
     active_poses_goal_->publish_feedback(feedback);
   }

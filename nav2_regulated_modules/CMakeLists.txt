@@ -26,6 +26,8 @@ find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(spdlog_wrapper REQUIRED)
 find_package(visualization_msgs REQUIRED)
+find_package(nav2_rotation_shim_controller REQUIRED)
+find_package(nav2_controller REQUIRED)
 
 # 协调器进程将按职责拆分的 navigator_* 文件链接在一起，共享同一 RegulatedNavigator 实例状态。
 add_executable(regulated_navigator_node
@@ -71,6 +73,11 @@ target_include_directories(nav2_regulated_modules_fixed_path_controller PUBLIC $
 target_compile_features(nav2_regulated_modules_fixed_path_controller PUBLIC cxx_std_17)
 ament_target_dependencies(nav2_regulated_modules_fixed_path_controller rclcpp rclcpp_lifecycle geometry_msgs nav2_core nav2_costmap_2d nav2_util nav_msgs pluginlib tf2 tf2_ros tf2_geometry_msgs spdlog_wrapper)
 
+add_library(nav2_regulated_modules_autonomous_controller SHARED src/autonomous_mppi_controller.cpp)
+target_include_directories(nav2_regulated_modules_autonomous_controller PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>)
+target_compile_features(nav2_regulated_modules_autonomous_controller PUBLIC cxx_std_17)
+ament_target_dependencies(nav2_regulated_modules_autonomous_controller nav2_rotation_shim_controller nav2_controller nav2_core nav2_costmap_2d nav2_util geometry_msgs nav_msgs rclcpp rclcpp_lifecycle pluginlib tf2 tf2_ros)
+
 # 诊断进程独立于控制周期；边界可视化也只发布显示消息，不进入速度计算。
 add_executable(velocity_diagnostics_node src/velocity_diagnostics.cpp)
 target_compile_features(velocity_diagnostics_node PUBLIC cxx_std_17)
@@ -80,7 +87,7 @@ add_executable(collision_boundary_visualizer_node src/collision_boundary_visuali
 target_compile_features(collision_boundary_visualizer_node PUBLIC c_std_99 cxx_std_17)
 ament_target_dependencies(collision_boundary_visualizer_node rclcpp geometry_msgs visualization_msgs)
 
-install(TARGETS nav2_regulated_modules_fixed_path_controller
+install(TARGETS nav2_regulated_modules_fixed_path_controller nav2_regulated_modules_autonomous_controller
   ARCHIVE DESTINATION lib
   LIBRARY DESTINATION lib
   RUNTIME DESTINATION bin
@@ -88,6 +95,10 @@ install(TARGETS nav2_regulated_modules_fixed_path_controller
 
 install(TARGETS regulated_navigator_node collision_boundary_visualizer_node velocity_diagnostics_node
   DESTINATION lib/${PROJECT_NAME})
+
+# 新增自主头文件使用已导出的 include 根目录；旧固定路径安装布局保持。
+install(FILES include/nav2_regulated_modules/autonomous_mppi_controller.hpp DESTINATION include/nav2_regulated_modules)
+install(FILES include/nav2_regulated_modules/detail/autonomous_navigation.hpp DESTINATION include/nav2_regulated_modules/detail)
 
 # 安装公开头文件及运行资源；symlink-install 下部分安装路径依赖 build 或源目录，不可直接整目录清理。
 install(DIRECTORY
@@ -107,7 +118,7 @@ install(DIRECTORY
 pluginlib_export_plugin_description_file(nav2_core fixed_path_controller_plugin.xml)
 ament_export_include_directories(include)
 ament_export_libraries(nav2_regulated_modules_fixed_path_controller)
-ament_export_dependencies(nav2_core nav2_costmap_2d pluginlib)
+ament_export_dependencies(nav2_core nav2_costmap_2d pluginlib nav2_controller nav2_rotation_shim_controller)
 
 include(CTest)
 # 将 collision 测试客户端安装为 ros2 run 可执行脚本；安装不代表它会随 Launch 自动运行。
@@ -119,6 +130,22 @@ if(BUILD_TESTING)
   add_test(NAME logging_routing_test COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/test_logging_routing.py)
   add_test(NAME velocity_logging_launch_test COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/velocity_logging_launch_test.py)
   add_test(NAME collision_launch_test COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/test_collision_launch.py)
+  add_test(NAME autonomous_launch_test COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/test_autonomous_launch.py)
+  add_executable(autonomous_navigation_test test/autonomous_navigation_test.cpp)
+  target_include_directories(autonomous_navigation_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_compile_features(autonomous_navigation_test PRIVATE cxx_std_17)
+  add_test(NAME autonomous_navigation_test COMMAND autonomous_navigation_test)
+  add_executable(autonomous_terminal_collision_test test/autonomous_terminal_collision_test.cpp)
+  target_include_directories(autonomous_terminal_collision_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_compile_features(autonomous_terminal_collision_test PRIVATE cxx_std_17)
+  ament_target_dependencies(autonomous_terminal_collision_test nav2_costmap_2d)
+  add_test(NAME autonomous_terminal_collision_test COMMAND autonomous_terminal_collision_test)
+  add_executable(autonomous_tf_timing_test test/autonomous_tf_timing_test.cpp)
+  target_include_directories(autonomous_tf_timing_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_compile_features(autonomous_tf_timing_test PRIVATE cxx_std_17)
+  ament_target_dependencies(autonomous_tf_timing_test nav2_controller nav2_rotation_shim_controller nav2_core rclcpp rclcpp_lifecycle tf2 tf2_ros nav_msgs geometry_msgs)
+  target_link_libraries(autonomous_tf_timing_test nav2_regulated_modules_autonomous_controller)
+  add_test(NAME autonomous_tf_timing_test COMMAND autonomous_tf_timing_test)
   add_executable(terminal_convergence_test test/terminal_convergence_test.cpp)
   target_include_directories(terminal_convergence_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   ament_target_dependencies(terminal_convergence_test nav2_core)
@@ -140,5 +167,7 @@ if(BUILD_TESTING)
   target_compile_features(fixed_path_start_speed_guard_test PRIVATE cxx_std_17)
   add_test(NAME fixed_path_start_speed_guard_test COMMAND fixed_path_start_speed_guard_test)
 endif()
+
+pluginlib_export_plugin_description_file(nav2_core autonomous_controller_plugin.xml)
 
 ament_package()

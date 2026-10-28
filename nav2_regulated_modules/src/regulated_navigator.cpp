@@ -59,6 +59,14 @@ RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : na
   declare_parameter("max_localization_rotation_jump", 0.35);
   declare_parameter("progress_timeout", 10.0);
   declare_parameter("progress_min_translation", 0.1);
+  if (get_parameter("operation_mode").as_string() == "autonomous")
+  {
+    declare_parameter("autonomous_progress_min_rotation", 0.2);
+    declare_parameter("autonomous_goal_progress_distance", 0.01);
+    declare_parameter("autonomous_terminal_progress_enabled", false);
+    declare_parameter("autonomous_terminal_xy_tolerance", 0.03);
+    declare_parameter("autonomous_terminal_distance", 0.15);
+  }
   declare_parameter("localization_recovery_timeout", 10.0);
   declare_parameter("localization_stable_duration", 0.5);
   declare_parameter("fixed_path_step", 0.1);
@@ -164,6 +172,24 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   max_translation_jump_ = get_parameter("max_localization_translation_jump").as_double();
   max_rotation_jump_ = get_parameter("max_localization_rotation_jump").as_double();
   progress_min_translation_ = get_parameter("progress_min_translation").as_double();
+  if (operation_mode_ == NavigationMode::AUTONOMOUS)
+  {
+    autonomous_progress_min_rotation_ = get_parameter("autonomous_progress_min_rotation").as_double();
+    autonomous_goal_progress_distance_ = get_parameter("autonomous_goal_progress_distance").as_double();
+    autonomous_terminal_progress_enabled_ = get_parameter("autonomous_terminal_progress_enabled").as_bool();
+    autonomous_terminal_xy_tolerance_ = get_parameter("autonomous_terminal_xy_tolerance").as_double();
+    autonomous_terminal_distance_ = get_parameter("autonomous_terminal_distance").as_double();
+    if (!std::isfinite(autonomous_progress_min_rotation_) || autonomous_progress_min_rotation_ <= 0.0 || !std::isfinite(autonomous_goal_progress_distance_) || autonomous_goal_progress_distance_ <= 0.0)
+    {
+      LOG_ERROR("自主模式的旋转和末端进度阈值必须为有限正数");
+      return nav2_util::CallbackReturn::FAILURE;
+    }
+    if (!std::isfinite(autonomous_terminal_xy_tolerance_) || autonomous_terminal_xy_tolerance_ <= 0.0 || !std::isfinite(autonomous_terminal_distance_) || autonomous_terminal_distance_ <= autonomous_terminal_xy_tolerance_)
+    {
+      LOG_ERROR("自主末端进度的容差与进入距离配置无效");
+      return nav2_util::CallbackReturn::FAILURE;
+    }
+  }
   localization_recovery_timeout_ = get_parameter("localization_recovery_timeout").as_double();
   localization_stable_duration_ = get_parameter("localization_stable_duration").as_double();
   fixed_path_step_ = get_parameter("fixed_path_step").as_double();

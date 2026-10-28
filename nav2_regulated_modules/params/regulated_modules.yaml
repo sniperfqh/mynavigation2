@@ -9,7 +9,7 @@ planner_server:
     # 是否使用仿真时钟；启动入口可覆盖此值。
     use_sim_time: false
     # 规控节点调用的规划器标识。
-    selected_planner: "GridBasedAstar"
+    selected_planner: "SmacHybrid"
     # 注册到规划服务器的规划器标识列表。
     planner_plugins: ["GridBased", "GridBasedAstar", "Smac2D", "SmacHybrid", "SmacLattice", "ThetaStar"]
 

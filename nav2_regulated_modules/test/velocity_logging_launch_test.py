@@ -24,7 +24,8 @@ for mode in ('fixed_path', 'autonomous', 'remote'):
         values = evaluate_parameters(context, actions[0]._Node__parameters)[0]
         assert values['operation_mode'] == mode
         assert values['smoother_feedback_topic'] == '/motion_state'
-        assert values['controller_feedback_topic'] == '/odometry'
+        # 此测试使用实车 regulated_modules.yaml；仿真场景另用 /odometry。
+        assert values['controller_feedback_topic'] == '/motion_state'
         assert values['smoother_output_topic'] == ('cmd_vel_collision_in' if collision == 'true' else 'cmd_vel')
         assert values['velocity_file_log_frequency'] == 100.0
         assert values['velocity_console_log_frequency'] == 1.0
