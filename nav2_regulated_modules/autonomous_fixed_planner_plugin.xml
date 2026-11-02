@@ -1,0 +1,7 @@
+<library path="nav2_regulated_modules_autonomous_fixed_planner">
+  <class name="nav2_regulated_modules::AutonomousFixedHybridPlanner"
+         type="nav2_regulated_modules::AutonomousFixedHybridPlanner"
+         base_class_type="nav2_core::GlobalPlanner">
+    <description>One Hybrid A* search with collision-checked grid-center correction before freezing.</description>
+  </class>
+</library>

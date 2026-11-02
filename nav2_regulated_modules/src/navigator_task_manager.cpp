@@ -190,6 +190,10 @@ void RegulatedNavigator::succeedTask()
 // 此函数自身没有调用 stopRobot；停车效果不能从函数名或本地状态归零推断。
 void RegulatedNavigator::failTask(const std::string & reason)
 {
+  if (operation_mode_ == NavigationMode::AUTONOMOUS_FIXED)
+  {
+    stopRobot();
+  }
   const auto generation = task_.generation;
   task_.state = NavigationState::FAILED;
   cancelSubGoals(true);
@@ -218,6 +222,20 @@ void RegulatedNavigator::failTask(const std::string & reason)
 // 0 在插件接口中的语义与 collision_task_speed 清理需区分，不代表独立停车命令。
 void RegulatedNavigator::resetTask()
 {
+  frozen_path_ = nav_msgs::msg::Path();
+  frozen_segments_.clear();
+  frozen_plan_requested_ = false;
+  frozen_follow_inflight_ = false;
+  frozen_localization_wait_ = false;
+  if (operation_mode_ == NavigationMode::AUTONOMOUS_FIXED)
+  {
+    frozen_soft_pause_since_.reset();
+    frozen_localization_reason_.clear();
+  }
+  frozen_stable_since_.reset();
+  frozen_obstacle_since_ = -1.0;
+  frozen_inhibited_since_.reset();
+  frozen_phase_.clear();
   collision_progress_paused_ = false;
   // 固定路径结束清除该任务的限速基准；这条消息不代替 stopRobot 的 Twist 零命令。
   if (task_.type == TaskType::NAVIGATION_SERVICE && speed_limit_pub_)

@@ -29,6 +29,8 @@ class NavigationRewrittenYaml(RewrittenYaml):
         super().__init__(**kwargs)
 
     def perform(self, context):
+        if LaunchConfiguration('operation_mode').perform(context) == 'autonomous_fixed':
+            return self.fixed_parameters(context)
         if LaunchConfiguration('operation_mode').perform(context) != 'autonomous':
             return super().perform(context)
         rewrites = dict(self.navigation_kwargs['param_rewrites'])
@@ -46,9 +48,11 @@ class NavigationRewrittenYaml(RewrittenYaml):
             'controller_server.ros__parameters.progress_checker.required_movement_angle': '0.2',
             'regulated_navigator.ros__parameters.progress_min_translation': '0.05',
         })
-        autonomous_planner_id = LaunchConfiguration('autonomous_planner_id', default='').perform(context).strip()
+        autonomous_planner_id = LaunchConfiguration('autonomous_planner_id', default='SmacHybrid').perform(context).strip()
         if autonomous_planner_id:
             rewrites['regulated_navigator.ros__parameters.planner_id'] = autonomous_planner_id
+            # PlannerServer prioritizes selected_planner over the Action request.
+            rewrites['planner_server.ros__parameters.selected_planner'] = autonomous_planner_id
         if LaunchConfiguration('autonomous_mppi_profile', default='false').perform(context).lower() == 'true':
             source = perform_substitutions(context, normalize_to_list_of_substitutions(self.navigation_kwargs['source_file']))
             with open(source, encoding='utf-8') as stream:
@@ -86,6 +90,91 @@ class NavigationRewrittenYaml(RewrittenYaml):
                 'regulated_navigator.ros__parameters.autonomous_terminal_distance': profile['autonomous_terminal_distance'],
             })
         return RewrittenYaml(**{**self.navigation_kwargs, 'param_rewrites': rewrites}).perform(context)
+
+    def fixed_parameters(self, context):
+        """Fourth-mode profile; never rewrite the three existing mode profiles."""
+        import tempfile
+        baseline = super().perform(context)
+        with open(baseline, encoding='utf-8') as stream:
+            document = yaml.safe_load(stream)
+        namespace = perform_substitutions(context, normalize_to_list_of_substitutions(self.navigation_kwargs.get('root_key') or ''))
+        config = document[namespace] if namespace else document
+        # Only this mode uses the requested 0.8 x 0.6 m envelope and wider obstacle cost field.
+        footprint = '[[0.4, 0.3], [0.4, -0.3], [-0.4, -0.3], [-0.4, 0.3]]'
+        for name in ['global_costmap', 'local_costmap']:
+            costmap = config[name][name]['ros__parameters']
+            costmap.update(footprint=footprint, footprint_padding=0.0)
+            costmap.pop('robot_radius', None)
+            costmap['inflation_layer'].update(inflation_radius=0.90, cost_scaling_factor=2.5)
+        navigator = config['regulated_navigator']['ros__parameters']
+        # Budget the error against the original action goal, including planner quantization.
+        final_xy = float(navigator.get('autonomous_fixed_xy_tolerance', 0.01))
+        if not 0.0 < final_xy < float('inf'):
+            raise ValueError('autonomous_fixed_xy_tolerance must be finite and positive')
+        final_xy = min(final_xy, 0.01)
+        endpoint_budget = min(0.003, final_xy * 0.3)
+        speed = float(navigator.get('autonomous_fixed_max_speed', 0.5))
+        short_pause_timeout = float(navigator.get('autonomous_fixed_short_pause_timeout', 0.5))
+        resume_stable_duration = float(navigator.get('autonomous_fixed_resume_stable_duration', 0.15))
+        navigator.update(operation_mode='autonomous_fixed', planner_id='SmacHybrid',
+                         controller_id='AutonomousFixedPathController',
+                         goal_checker_id='autonomous_fixed_goal_checker', use_smoother=False,
+                         progress_timeout=10.0, replan_frequency=1.0,
+                         autonomous_fixed_xy_tolerance=final_xy,
+                         autonomous_fixed_short_pause_timeout=short_pause_timeout,
+                         autonomous_fixed_resume_stable_duration=resume_stable_duration)
+        planner = config['planner_server']['ros__parameters']
+        planner['planner_plugins'] = ['SmacHybrid']
+        planner['selected_planner'] = 'SmacHybrid'
+        planner['SmacHybrid'].update(plugin='nav2_regulated_modules::AutonomousFixedHybridPlanner',
+                                    motion_model_for_search='REEDS_SHEPP', tolerance=endpoint_budget,
+                                    minimum_turning_radius=0.40, max_planning_time=3.5, smooth_path=True,
+                                    lookup_table_size=10.0)
+        controller = config['controller_server']['ros__parameters']
+        controller.update(controller_frequency=100.0,
+                          controller_plugins=['AutonomousFixedPathController'],
+                          goal_checker_plugins=['autonomous_fixed_goal_checker', 'autonomous_fixed_cusp_checker'])
+        tracker = dict(controller['FixedPathController'])
+        tracker.pop('plugin', None)
+        tracker.update(desired_linear_vel=speed, rotate_to_heading_angular_vel=0.4,
+                       max_angular_accel=0.8, terminal_convergence_enabled=True,
+                       goal_final_approach_velocity=0.01,
+                       goal_stop_entry_tolerance=final_xy * 0.5,
+                       goal_terminal_lookahead_dist=0.08,
+                       goal_terminal_lookahead_min_dist=0.05,
+                       goal_terminal_lookahead_max_dist=0.12,
+                       goal_terminal_lookahead_reference_speed=0.1,
+                       goal_terminal_lookahead_speed_gain=0.2)
+        controller['AutonomousFixedPathController'] = {
+            'plugin': 'nav2_regulated_modules::AutonomousFixedPathController',
+            'tracker': tracker, 'settle_duration': 0.5,
+            'brake_stable_duration': 0.2, 'terminal_review_timeout': 2.0,
+            'terminal_capture_margin': 0.02,
+            'terminal_trim_max_speed': 0.02, 'terminal_trim_max_step': 0.02,
+            'terminal_trim_max_distance': 0.03, 'terminal_trim_timeout': 5.0,
+            'terminal_trim_max_attempts': 2, 'terminal_trim_confirm_duration': 0.2,
+            'max_angular_velocity': 0.4, 'max_angular_acceleration': 0.8,
+            'localization_timeout': float(navigator.get('localization_timeout', 0.3)),
+            'short_pause_timeout': short_pause_timeout,
+            'resume_stable_duration': resume_stable_duration,
+            'resume_distance': float(navigator.get('autonomous_fixed_resume_distance', 0.2)),
+            'resume_linear_acceleration': 0.5,
+            'obstacle_timeout': float(navigator.get('autonomous_fixed_obstacle_timeout', 60.0)),
+        }
+        for name, xy, yaw in [('autonomous_fixed_goal_checker', final_xy - endpoint_budget, float(navigator.get('autonomous_fixed_yaw_tolerance', 0.15726646259971647)) * 0.5),
+                              ('autonomous_fixed_cusp_checker', 0.01, 0.08726646259971647)]:
+            controller[name] = {'plugin': 'nav2_controller::StoppedGoalChecker', 'stateful': False,
+                                'xy_goal_tolerance': xy, 'yaw_goal_tolerance': yaw,
+                                'trans_stopped_velocity': 0.01, 'rot_stopped_velocity': 0.05}
+        controller['progress_checker'].update(plugin='nav2_controller::PoseProgressChecker',
+                                               required_movement_radius=0.01,
+                                               required_movement_angle=0.05,
+                                               movement_time_allowance=120.0)
+        config['velocity_smoother']['ros__parameters'].update(
+            smoothing_frequency=100.0, max_velocity=[speed, 0.0, 0.4], min_velocity=[-speed, 0.0, -0.4])
+        with tempfile.NamedTemporaryFile(mode='w', prefix='autonomous-fixed-', delete=False, encoding='utf-8') as stream:
+            yaml.safe_dump(document, stream)
+            return stream.name
 
 
 # 仿真入口的显式覆盖由现有 RewrittenYaml 统一处理，不再生成额外参数文件。
@@ -236,7 +325,7 @@ def generate_launch_description():
     smoothed_cmd_vel_topic = PythonExpression(["'cmd_vel_collision_in' if '", use_collision_monitor,"'.lower() == 'true' else 'cmd_vel'"])
     # 固定路径采用独立进度超时，其余模式保持普通导航超时。
     effective_progress_timeout = ParameterValue(
-        PythonExpression([fixed_path_progress_timeout, " if '", operation_mode,"' == 'fixed_path' else 10.0"]),value_type=float)
+        PythonExpression([fixed_path_progress_timeout, " if '", operation_mode,"' == 'fixed_path' else (120.0 if '", operation_mode, "' == 'autonomous_fixed' else 10.0)"]),value_type=float)
     adaptive_fixed_path = PythonExpression(["'", operation_mode, "' == 'fixed_path' and '", adaptive_goal_braking_enabled, "'.lower() == 'true'"])
     # 仅在显式启用自适应固定路径时约束正常减速；默认保持原速度平滑器参数。
     fixed_path_smoother_deceleration = ParameterValue([PythonExpression(["-1.0 if (", adaptive_fixed_path, ") else -2.0"]),0.0, -3.2], value_type=list[float])
@@ -264,7 +353,7 @@ def generate_launch_description():
            for node in ['controller_server', 'velocity_smoother', 'regulated_navigator']
            for key, value in {
                'collision_state_enabled': PythonExpression([
-                   "'", operation_mode, "' == 'fixed_path' and '",
+                   "'", operation_mode, "' in ('fixed_path', 'autonomous_fixed') and '",
                    LaunchConfiguration('enable_collision_state'), "'.lower() == 'true'"]),
                'collision_state_topic': LaunchConfiguration('resolved_collision_state_topic'),
                'collision_state_timeout': LaunchConfiguration('resolved_collision_state_timeout'),
@@ -341,7 +430,7 @@ def generate_launch_description():
     # 决定是否让速度经过 Collision Monitor；同时影响速度话题路由。
     declare_use_collision_monitor_cmd = DeclareLaunchArgument(
         'use_collision_monitor',
-        default_value='false',# 当前直接入口默认不插入 Collision Monitor。
+        default_value='false',
         description='Whether to start Collision Monitor and insert it into the velocity chain')
 
     # 默认启动碰撞区域 Marker 可视化，仍可通过启动参数关闭。
@@ -384,7 +473,7 @@ def generate_launch_description():
     declare_operation_mode_cmd = DeclareLaunchArgument(
         'operation_mode',
         default_value='autonomous',
-        choices=['remote', 'autonomous', 'fixed_path'],
+        choices=['remote', 'autonomous', 'fixed_path', 'autonomous_fixed'],
         description='Robot operation mode')
 
     declare_adaptive_goal_braking_cmd = DeclareLaunchArgument(
@@ -723,8 +812,8 @@ def generate_launch_description():
     ld = LaunchDescription()
 
     ld.add_action(DeclareLaunchArgument('enable_velocity_diagnostics', default_value='true'))
-    ld.add_action(DeclareLaunchArgument('autonomous_planner_id', default_value='',
-                                       description='Optional planner ID override in autonomous mode'))
+    ld.add_action(DeclareLaunchArgument('autonomous_planner_id', default_value='SmacHybrid',
+                                       description='Autonomous planner ID; empty follows YAML, ignored outside autonomous mode'))
     ld.add_action(DeclareLaunchArgument('autonomous_mppi_profile', default_value='false',
                                        description='Use the simulation autonomous MPPI wrapper; ignored outside autonomous mode'))
     ld.add_action(DeclareLaunchArgument('enable_legacy_velocity_logs', default_value='false'))

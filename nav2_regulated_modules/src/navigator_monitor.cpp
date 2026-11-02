@@ -21,6 +21,11 @@ namespace nav2_regulated_modules
 // 清图请求异步发送；等待时间到后再尝试恢复，不在此确认清图或实际停车完成。
 void RegulatedNavigator::startRecovery(const std::string & reason)
 {
+  if (operation_mode_ == NavigationMode::AUTONOMOUS_FIXED)
+  {
+    failTask(reason + "，一次规划模式不执行清图或重规划");
+    return;
+  }
   if (task_.type == TaskType::NONE)
   {
     return;
@@ -61,6 +66,11 @@ void RegulatedNavigator::monitorTask()
     cancelTask("收到外层导航取消请求");
     return;
   }
+  if (operation_mode_ == NavigationMode::AUTONOMOUS_FIXED)
+  {
+    monitorFixedAutonomy();
+    return;
+  }
   if (task_.state == NavigationState::CLEARING_COSTMAP)
   {
     if (now() >= recovery_ready_time_)
@@ -74,7 +84,7 @@ void RegulatedNavigator::monitorTask()
   // 自主模式还校验 TF 源时间戳；固定路径保留原先的查询成功计时语义。
   if (!lookupCurrentPose(current_pose))
   {
-    if (operation_mode_ == NavigationMode::AUTONOMOUS)
+    if (operation_mode_ == NavigationMode::AUTONOMOUS || operation_mode_ == NavigationMode::AUTONOMOUS_FIXED)
     {
       localization_stable_since_ = rclcpp::Time(0, 0, get_clock()->get_clock_type());
     }
@@ -228,7 +238,7 @@ bool RegulatedNavigator::lookupCurrentPose(geometry_msgs::msg::PoseStamped & pos
   try
   {
     const auto transform = tf_buffer_->lookupTransform(global_frame_, robot_base_frame_, tf2::TimePointZero, 50ms);
-    if (operation_mode_ == NavigationMode::AUTONOMOUS)
+    if (operation_mode_ == NavigationMode::AUTONOMOUS || operation_mode_ == NavigationMode::AUTONOMOUS_FIXED)
     {
       const auto transform_time = rclcpp::Time(transform.header.stamp, get_clock()->get_clock_type());
       if (transform_time.nanoseconds() <= 0 || !detail::freshAutonomousTransform((now() - transform_time).seconds(), localization_timeout_))
@@ -242,7 +252,7 @@ bool RegulatedNavigator::lookupCurrentPose(geometry_msgs::msg::PoseStamped & pos
     pose.pose.position.y = transform.transform.translation.y;
     pose.pose.position.z = transform.transform.translation.z;
     pose.pose.orientation = transform.transform.rotation;
-    if (operation_mode_ != NavigationMode::AUTONOMOUS)
+    if (operation_mode_ != NavigationMode::AUTONOMOUS && operation_mode_ != NavigationMode::AUTONOMOUS_FIXED)
     {
       last_valid_tf_time_ = now();
     }

@@ -7,8 +7,8 @@
 | 参数 | 内置默认值 |
 |---|---|
 | `parent_frame`／`child_frame` | `map`／`base_link` |
-| `x`／`y`／`z` | 9.3／−12.0／0.0 m |
-| `yaw` | 3.094010164837 rad |
+| `x`／`y`／`z` | 0.0／0.0／0.0 m |
+| `yaw` | 0.0 rad |
 | `publish_rate` | 30 Hz |
 | `tf_time_offset` | 0.0 s；正值将发送时间戳向过去偏移 |
 

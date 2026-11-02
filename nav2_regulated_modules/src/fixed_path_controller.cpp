@@ -707,9 +707,18 @@ std::size_t FixedPathController::findNearestIndex(const geometry_msgs::msg::Pose
 {
   std::size_t best_index = nearest_index_;
   double best_distance = std::numeric_limits<double>::max();
+  double searched_arc = 0.0;
   // 仅向前搜索，防止定位抖动让最近点索引回退并重复跟踪已通过路径。
   for (std::size_t index = nearest_index_; index < global_plan_.poses.size(); ++index)
   {
+    if (index > nearest_index_ && nearest_search_window_ > 0.0)
+    {
+      searched_arc += poseDistance(global_plan_.poses[index - 1], global_plan_.poses[index]);
+      if (searched_arc > nearest_search_window_)
+      {
+        break;
+      }
+    }
     const double distance = poseDistance(robot_pose, global_plan_.poses[index]);
     // 发现更近的候选点才更新索引；相等时保留先遇到的路径点。
     if (distance < best_distance)

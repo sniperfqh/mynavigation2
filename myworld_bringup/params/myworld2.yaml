@@ -138,7 +138,7 @@ regulated_navigator:
     compute_path_through_poses_action: "compute_path_through_poses"
     smooth_path_action: "smooth_path"
     follow_path_action: "follow_path"
-    planner_id: "GridBasedAstar"
+    planner_id: "SmacHybrid"
     controller_id: "MPPI"
     fixed_path_controller_id: "FixedPathController"
     fixed_path_goal_checker_id: "fixed_path_goal_checker"
@@ -707,7 +707,7 @@ planner_server:
     use_sim_time: True
     # Change only selected_planner to switch the planner used by BT/action requests.
     # Available values: GridBased, GridBasedAstar, Smac2D, SmacHybrid, SmacLattice, ThetaStar.
-    selected_planner: "GridBasedAstar"
+    selected_planner: "SmacHybrid"
     planner_plugins: ["GridBased", "GridBasedAstar", "Smac2D", "SmacHybrid", "SmacLattice", "ThetaStar"]
 
     GridBased:
@@ -750,7 +750,7 @@ planner_server:
       max_iterations: 1000000
       max_on_approach_iterations: 1000
       max_planning_time: 3.5
-      motion_model_for_search: "DUBIN"
+      motion_model_for_search: "REEDS_SHEPP"
       angle_quantization_bins: 72
       analytic_expansion_ratio: 3.5
       analytic_expansion_max_length: 3.0

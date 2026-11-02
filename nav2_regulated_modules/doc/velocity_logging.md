@@ -29,6 +29,8 @@ ros2 launch nav2_regulated_modules regulated_modules.launch.py operation_mode:=f
 
 ## 边界
 
+速度快照（文件 DEBUG 与终端 INFO）仅在首次实际收到 `byd_custom_msgs::msg::ChassisControl` 后开始输出，默认触发话题为 `/downstream/chassis_control`，可通过现有 `chassis_input_topic` 参数或 ROS 重映射调整。仅有发布者或收到其他反馈不会触发；零速度消息也会触发。启动信息和参数错误保持输出。触发后继续按原频率记录，消息中断时保留 `stale` 诊断，重新启动诊断节点后恢复等待状态。所有运行模式均适用；remote 模式仅用该订阅触发快照，不增加原速度输出字段。
+
 100 Hz 是最新值的周期快照，不是每条消息的逐帧归档；重复 count 表示未收到新数据。各阶段来自独立订阅，不能当作同一控制周期的严格同步输入输出。话题观测不是平滑器内部校正参考值。
 
 日志使用独立进程、单线程 ROS 执行器和异步滚动文件写入；8192 项队列拥塞时覆盖最旧记录，不能保证绝对无丢失。文件不可写时明确报错并仅保留终端摘要，不影响原控制链。

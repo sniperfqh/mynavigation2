@@ -30,6 +30,11 @@ class FixedPathController : public nav2_core::Controller, public nav2_core::Term
 // 构造控制器；插件资源与路径状态在 configure 和 setPlan 阶段建立。
   // 默认构造仅使用成员初值；实际依赖和参数在 configure 建立，不能把构造成功视为插件已配置。
   FixedPathController() = default;
+  // 仅新自主包装显式启用；0 保持原固定路径全段搜索行为。
+  void limitNearestSearch(const double distance)
+  {
+    nearest_search_window_ = distance;
+  }
   // 说明 ~FixedPathController 对应的接口行为；调用方需遵守该类的任务状态约束。
   // 默认析构由成员管理资源；生命周期 cleanup／deactivate 的业务职责仍需宿主按约定调用。
   ~FixedPathController() override = default;
@@ -102,6 +107,7 @@ private:
   static double poseDistance(const geometry_msgs::msg::PoseStamped & first, const geometry_msgs::msg::PoseStamped & second);
 
   rclcpp_lifecycle::LifecycleNode::WeakPtr node_;
+  double nearest_search_window_ = 0.0;
   std::shared_ptr<tf2_ros::Buffer> tf_;
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
   rclcpp::Logger logger_ { rclcpp::get_logger("FixedPathController") };

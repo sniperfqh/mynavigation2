@@ -40,6 +40,8 @@ ros2 launch nav2_regulated_modules regulated_modules.launch.py \
 
 直接入口不启动 Gazebo、AMCL、合成 TF 或合成雷达。默认地图为 `/userdata/map/pbstream/out.yaml`；用 `map:=...` 覆盖。可用 `ros2 launch nav2_regulated_modules regulated_modules.launch.py --show-args` 查看安装版本支持的参数，实际值受 YAML、Launch 重写及显式实参共同影响。
 
+场景入口的 `myworld_bringup/params/myworld2.yaml` 将导航器 `planner_id`、规划服务器 `selected_planner` 配置为 `SmacHybrid`，并设置 `SmacHybrid.motion_model_for_search=REEDS_SHEPP`（RS，允许前进／倒车搜索）。场景 Launch 显式传入空的 `autonomous_planner_id`，让这三个值以参数文件为准。直接启动本规控 Launch 时，`autonomous_planner_id` 默认 `SmacHybrid`，仅自主模式同步覆盖导航器 `planner_id` 和服务器 `selected_planner`；显式传空可沿用 YAML，fixed_path／remote 忽略该实参。运动模型始终读取指定 YAML。已运行的导航栈需重新启动才加载文件改动。
+
 自主模式专用修复包括 TF 源时间戳校验、有效旋转／末端误差进度、真正恢复后重建计时基准；fixed_path／remote 不进入这些新分支。Controller 的 PoseProgressChecker 和较小位移阈值也只在 autonomous 的参数重写中启用。场景入口额外传 `autonomous_mppi_profile=true`，在 `MPPI` ID 下选择 `AutonomousMPPIController`（内部为 MPPI），并选择 `AutonomousStoppedGoalChecker`；直接入口默认该开关 false，保留原 RPP 选择。共享 YAML、FixedPathController 和固定路径 GoalChecker 未改。
 
 自主 MPPI 包装负责起步对齐、末端专用位置收敛、制动停稳和终点朝向对齐；目标检查器保留位置／航向／速度阈值并要求连续达标 0.5 s。自主模式的控制频率为 50 Hz，MPPI 模型步长 0.02 s、75 步预测 1.5 s，场景自主包装的候选数为 300，MPPI 前进速度上限为 0.5 m/s；关闭包装仍保留自主模式的 50 Hz／MPPI 时间网格。自主速度平滑器及默认诊断快照同为 50 Hz，固定路径模式保持原有 100 Hz。不据此声称实际达到 50 Hz 或已通过导航任务验收。实现见 [autonomous_mppi_controller.cpp](src/autonomous_mppi_controller.cpp) 。
@@ -121,3 +123,13 @@ ros2 run nav2_regulated_modules collision_action_test.py \
 - [测试工具](tools/README.md)：工具运行前提及会修改环境的实验边界。
 
 本文为当前源码静态说明。本轮文档更新不执行构建或运动。已有隔离真实节点＋合成反馈回归不等同于实车验收；现有短路线周期测试只取得部分减速／停止证据，独立状态源启停验收因起步转向占满 5 秒基准窗而 UNAVAILABLE，不能声称两程全部通过。动态验证记录由外层项目 ROADMAP 与报告维护。
+
+## autonomous_fixed：第四种运行模式
+
+新增 Hybrid A*／REEDS_SHEPP 一次规划、路径冻结和固定路径分段跟踪。先启动指定 Cartographer 定位，再启动 `operation_mode:=autonomous_fixed`。支持单点目标、倒车和停稳换向，暂停后沿原路径恢复；不执行重规划。接口、参数及验证边界见 [自主固定路径架构](doc/autonomous_fixed_architecture.md) 。
+
+第四模式保留 0.5 s 短时定位暂停窗口，满足不同源时间戳及连续有效 0.15 s 等条件后沿同一个 FollowPath 恢复；持续失效仍取消并完整恢复。位置验收相对原始请求目标收紧到 10 mm，内部控制容差 7 mm、停车进入半径 5 mm，末端接近速度 0.01 m/s；停稳要求保持，碰撞监控默认关闭。仅代码与编译交付，未运行测试或后台验证，实际精度未验证。
+
+仅第四模式的 `SmacHybrid` ID 装载 `AutonomousFixedHybridPlanner`：复用一次 Hybrid A*，在冻结前将整条路径做有界等量平移以消除终点格心偏差，保持曲率、方向和换向点关系，并重新检查全路径矩形足迹及扫掠采样。超出 3 cm 偏移上限、碰撞、超时或同栅格单点无法表示平移时直接失败，不追加路径或重规划。其它模式仍使用原规划器。
+
+仅第四模式的全局／局部 Costmap 使用长 0.8 m、宽 0.6 m 的矩形足迹（无额外 padding），膨胀半径 0.45→0.90 m、代价衰减系数 5.0→2.5。配置目标是增加路径与障碍间距；实际轨迹间距是否达到两倍需后续测量。共享 YAML 与其余模式保持原配置，本轮不运行测试。

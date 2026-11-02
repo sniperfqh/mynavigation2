@@ -49,6 +49,16 @@ RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : na
   declare_parameter("max_smoothing_duration", 2.0);
   declare_parameter("feedback_frequency", 5.0);
   declare_parameter("replan_frequency", 1.0);
+  declare_parameter("autonomous_fixed_max_speed", 0.5);
+  declare_parameter("autonomous_fixed_xy_tolerance", get_parameter("operation_mode").as_string() == "autonomous_fixed" ? 0.01 : 0.03);
+  declare_parameter("autonomous_fixed_yaw_tolerance", 0.15726646259971647);
+  declare_parameter("autonomous_fixed_obstacle_timeout", 60.0);
+  declare_parameter("autonomous_fixed_resume_distance", 0.20);
+  if (get_parameter("operation_mode").as_string() == "autonomous_fixed")
+  {
+    declare_parameter("autonomous_fixed_short_pause_timeout", 0.5);
+    declare_parameter("autonomous_fixed_resume_stable_duration", 0.15);
+  }
   declare_parameter("max_consecutive_planning_failures", 3);
   declare_parameter("max_recovery_rounds", 2);
   declare_parameter("costmap_update_wait_duration", 0.8);
@@ -118,6 +128,10 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   {
     operation_mode_ = NavigationMode::FIXED_PATH;
   }
+  else if (operation_mode == "autonomous_fixed")
+  {
+    operation_mode_ = NavigationMode::AUTONOMOUS_FIXED;
+  }
   else
   {
     LOG_ERROR("不支持的 operation_mode：{}", operation_mode);
@@ -130,7 +144,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   fixed_path_controller_id_ = get_parameter("fixed_path_controller_id").as_string();
   fixed_path_goal_checker_id_ = get_parameter("fixed_path_goal_checker_id").as_string();
   // 先按启动模式约束功能，即便参数设 true，非 fixed_path 也不会打开本导航器的状态门控。
-  collision_state_enabled_ = operation_mode_ == NavigationMode::FIXED_PATH && get_parameter("collision_state_enabled").as_bool();
+  collision_state_enabled_ = (operation_mode_ == NavigationMode::FIXED_PATH || operation_mode_ == NavigationMode::AUTONOMOUS_FIXED) && get_parameter("collision_state_enabled").as_bool();
   const auto collision_topic = get_parameter("collision_state_topic").as_string();
   collision_state_.configure(get_parameter("collision_state_timeout").as_double());
   if (collision_state_enabled_ && collision_topic.empty())
@@ -283,8 +297,34 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
     fixed_path_boundaries_pub_ = create_publisher<visualization_msgs::msg::MarkerArray>(fixed_path_boundaries_topic_, rclcpp::QoS(rclcpp::KeepLast(1)).reliable().transient_local());
   }
   stop_cmd_pub_ = create_publisher<geometry_msgs::msg::Twist>(get_parameter("stop_cmd_vel_topic").as_string(), rclcpp::SystemDefaultsQoS());
+  if (operation_mode_ == NavigationMode::AUTONOMOUS_FIXED)
+  {
+    const std::vector<std::string> fixed_parameters =
+    {
+      "autonomous_fixed_max_speed", "autonomous_fixed_xy_tolerance", "autonomous_fixed_yaw_tolerance", "autonomous_fixed_obstacle_timeout", "autonomous_fixed_resume_distance", "autonomous_fixed_short_pause_timeout", "autonomous_fixed_resume_stable_duration"
+    };
+    for (const auto & parameter : fixed_parameters)
+    {
+      const double value = get_parameter(parameter).as_double();
+      if (!std::isfinite(value) || value <= 0.0)
+      {
+        throw std::invalid_argument(std::string(parameter) + " must be finite and positive");
+      }
+    }
+    if (get_parameter("autonomous_fixed_xy_tolerance").as_double() > 0.01)
+    {
+      throw std::invalid_argument("autonomous_fixed_xy_tolerance must not exceed 0.01 m");
+    }
+    if (get_parameter("autonomous_fixed_resume_stable_duration").as_double() >= get_parameter("autonomous_fixed_short_pause_timeout").as_double())
+    {
+      throw std::invalid_argument("Autonomous fixed resume stability must fit inside the short pause window");
+    }
+    frozen_localization_gate_pub_ = create_publisher<std_msgs::msg::String>("autonomous_fixed/localization_gate", rclcpp::QoS(10));
+    frozen_status_sub_ = create_subscription<std_msgs::msg::String>("autonomous_fixed/execution_status", rclcpp::QoS(10), std::bind(&RegulatedNavigator::onFixedExecutionStatus, this, std::placeholders::_1));
+    frozen_path_pub_ = create_publisher<nav_msgs::msg::Path>("autonomous_fixed/plan", rclcpp::QoS(1).reliable().transient_local());
+  }
   const auto velocity_qos = rclcpp::QoS(rclcpp::KeepLast(10)).best_effort();
-  if (get_parameter("legacy_velocity_logging").as_bool())
+  if (get_parameter("legacy_velocity_logging").as_bool() || operation_mode_ == NavigationMode::AUTONOMOUS_FIXED)
   {
     controller_velocity_sub_ = create_subscription<geometry_msgs::msg::Twist>(controller_cmd_vel_topic_, velocity_qos, std::bind(&RegulatedNavigator::onControllerVelocity, this, std::placeholders::_1));
     smoothed_velocity_sub_ = create_subscription<geometry_msgs::msg::Twist>(smoothed_cmd_vel_topic_, velocity_qos, std::bind(&RegulatedNavigator::onSmoothedVelocity, this, std::placeholders::_1));
@@ -312,6 +352,14 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
 // 这只表示生命周期就绪，不生成任务，也不证明定位／轮速已经新鲜。
 nav2_util::CallbackReturn RegulatedNavigator::on_activate(const rclcpp_lifecycle::State &)
 {
+  if (frozen_path_pub_)
+  {
+    frozen_path_pub_->on_activate();
+  }
+  if (frozen_localization_gate_pub_)
+  {
+    frozen_localization_gate_pub_->on_activate();
+  }
   collision_state_.reset();
   collision_progress_paused_ = false;
   if (fixed_path_pub_)
@@ -336,6 +384,14 @@ nav2_util::CallbackReturn RegulatedNavigator::on_activate(const rclcpp_lifecycle
 // 固定路径可视化停用、bond 销毁与实际机械停稳是不同事件。
 nav2_util::CallbackReturn RegulatedNavigator::on_deactivate(const rclcpp_lifecycle::State &)
 {
+  if (frozen_path_pub_)
+  {
+    frozen_path_pub_->on_deactivate();
+  }
+  if (frozen_localization_gate_pub_)
+  {
+    frozen_localization_gate_pub_->on_deactivate();
+  }
   active_ = false;
   if (chassis_control_subscriber_)
   {
@@ -361,6 +417,9 @@ nav2_util::CallbackReturn RegulatedNavigator::on_deactivate(const rclcpp_lifecyc
 // cleanup 是资源清理，不是控制权移交或完整的下游停稳等待。
 nav2_util::CallbackReturn RegulatedNavigator::on_cleanup(const rclcpp_lifecycle::State &)
 {
+  frozen_status_sub_.reset();
+  frozen_localization_gate_pub_.reset();
+  frozen_path_pub_.reset();
   collision_state_sub_.reset();
   collision_params_handler_.reset();
   collision_state_.reset();

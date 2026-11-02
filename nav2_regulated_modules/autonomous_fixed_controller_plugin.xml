@@ -1,0 +1,5 @@
+<library path="nav2_regulated_modules_autonomous_fixed_controller">
+  <class name="nav2_regulated_modules::AutonomousFixedPathController" type="nav2_regulated_modules::AutonomousFixedPathController" base_class_type="nav2_core::Controller">
+    <description>Single-direction frozen path tracking with strict pose and stopped-velocity acceptance.</description>
+  </class>
+</library>

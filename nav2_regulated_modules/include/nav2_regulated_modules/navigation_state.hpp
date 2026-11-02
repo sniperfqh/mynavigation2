@@ -20,6 +20,7 @@ enum class NavigationMode
 {
   REMOTE,
   AUTONOMOUS,
+  AUTONOMOUS_FIXED,
   FIXED_PATH
 };
 

@@ -1,5 +1,6 @@
 """Check autonomous-only parameter changes without starting ROS nodes."""
 import importlib.util
+import ast
 from pathlib import Path
 import tempfile
 import unittest
@@ -36,20 +37,31 @@ class AutonomousLaunchTest(unittest.TestCase):
 
     def test_simulation_planner_override_is_autonomous_only(self):
         for mode in ['autonomous', 'fixed_path', 'remote']:
-            resolved, baseline = self.resolve(mode, True, planner_id='SmacHybrid')
-            planner = resolved['regulated_navigator']['ros__parameters']['planner_id']
-            if mode == 'autonomous':
-                self.assertEqual(planner, 'SmacHybrid')
-                self.assertEqual(resolved['planner_server']['ros__parameters']['SmacHybrid']['plugin'],
-                                 'nav2_smac_planner/SmacPlannerHybrid')
-            else:
-                self.assertEqual(resolved, baseline)
+            for profile in [False, True]:
+                for namespace in ['', 'robot']:
+                    with self.subTest(mode=mode, profile=profile, namespace=namespace):
+                        resolved, baseline = self.resolve(mode, profile, namespace, planner_id='SmacHybrid')
+                        if namespace:
+                            resolved, baseline = resolved[namespace], baseline[namespace]
+                        if mode == 'autonomous':
+                            planner = resolved['regulated_navigator']['ros__parameters']['planner_id']
+                            server = resolved['planner_server']['ros__parameters']
+                            self.assertEqual(planner, 'SmacHybrid')
+                            self.assertEqual(server['selected_planner'], planner)
+                            self.assertEqual(server[server['selected_planner']]['plugin'],
+                                             'nav2_smac_planner/SmacPlannerHybrid')
+                            self.assertEqual(server[server['selected_planner']]['motion_model_for_search'],
+                                             'REEDS_SHEPP')
+                        else:
+                            self.assertEqual(resolved, baseline)
 
     def test_autonomous_mppi_wrapper_and_settle(self):
         for namespace in ['', 'robot']:
             resolved, baseline = self.resolve('autonomous', True, namespace)
             if namespace:
                 resolved, baseline = resolved[namespace], baseline[namespace]
+            self.assertEqual(resolved['planner_server']['ros__parameters']['SmacHybrid']['motion_model_for_search'],
+                             'REEDS_SHEPP')
             controller = resolved['controller_server']['ros__parameters']
             self.assertEqual(controller['controller_frequency'], 50.0)
             self.assertEqual(controller['MPPI']['plugin'], 'nav2_regulated_modules::AutonomousMPPIController')
@@ -77,6 +89,47 @@ class AutonomousLaunchTest(unittest.TestCase):
             self.assertEqual(controller['stopped_goal_checker']['xy_goal_tolerance'], 0.03)
             self.assertFalse(controller['stopped_goal_checker']['stateful'])
             self.assertEqual(controller['FixedPathController'], baseline['controller_server']['ros__parameters']['FixedPathController'])
+
+    def test_scene_planner_selection_and_motion_model_follow_yaml(self):
+        config = yaml.safe_load((ROOT.parent / 'myworld_bringup/params/myworld2.yaml').read_text())
+        self.assertEqual(config['regulated_navigator']['ros__parameters']['planner_id'], 'SmacHybrid')
+        self.assertEqual(config['planner_server']['ros__parameters']['selected_planner'], 'SmacHybrid')
+        self.assertEqual(config['planner_server']['ros__parameters']['SmacHybrid']['motion_model_for_search'], 'REEDS_SHEPP')
+        # A later YAML edit must not be silently overridden by the autonomous profile.
+        config['regulated_navigator']['ros__parameters']['planner_id'] = 'GridBasedAstar'
+        config['planner_server']['ros__parameters']['selected_planner'] = 'GridBasedAstar'
+        config['planner_server']['ros__parameters']['SmacHybrid']['motion_model_for_search'] = 'DUBIN'
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / 'params.yaml'
+            source.write_text(yaml.safe_dump(config))
+            for profile in [False, True]:
+                context = LaunchContext()
+                context.launch_configurations.update(operation_mode='autonomous', autonomous_mppi_profile=str(profile).lower(), autonomous_planner_id='')
+                output = module.NavigationRewrittenYaml(source_file=str(source), param_rewrites={}, convert_types=True).perform(context)
+                resolved = yaml.safe_load(Path(output).read_text())
+                self.assertEqual(resolved['regulated_navigator']['ros__parameters']['planner_id'], 'GridBasedAstar')
+                self.assertEqual(resolved['planner_server'], config['planner_server'])
+
+        entry = ast.parse((ROOT.parent / 'myworld_bringup/launch/entry.launch.py').read_text())
+        planner_arguments = [value.value for item in ast.walk(entry) if isinstance(item, ast.Dict)
+                             for key, value in zip(item.keys, item.values)
+                             if isinstance(key, ast.Constant) and key.value == 'autonomous_planner_id'
+                             and isinstance(value, ast.Constant)]
+        self.assertEqual(planner_arguments, [''])
+
+    def test_direct_launch_defaults_to_hybrid(self):
+        description = module.generate_launch_description()
+        argument = next(action for action in description.entities
+                        if isinstance(action, DeclareLaunchArgument) and action.name == 'autonomous_planner_id')
+        context = LaunchContext()
+        context.launch_configurations['operation_mode'] = 'autonomous'
+        argument.execute(context)
+        self.assertEqual(context.launch_configurations['autonomous_planner_id'], 'SmacHybrid')
+        source = ROOT.parent / 'myworld_bringup/params/myworld2.yaml'
+        output = module.NavigationRewrittenYaml(source_file=str(source), param_rewrites={}, convert_types=True).perform(context)
+        resolved = yaml.safe_load(Path(output).read_text())
+        self.assertEqual(resolved['regulated_navigator']['ros__parameters']['planner_id'], 'SmacHybrid')
+        self.assertEqual(resolved['planner_server']['ros__parameters']['selected_planner'], 'SmacHybrid')
 
     def test_direct_autonomous_does_not_replace_selected_controller(self):
         resolved, baseline = self.resolve('autonomous', False)

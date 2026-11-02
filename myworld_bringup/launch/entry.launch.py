@@ -30,7 +30,8 @@ def generate_launch_description():
     default_use_gazebo = 'true'
     default_collision_visualization = PythonExpression(["'true' if '", operation_mode, "' == 'fixed_path' else 'false'"])
     use_gazebo = LaunchConfiguration('use_gazebo', default=default_use_gazebo)
-    use_collision_monitor = LaunchConfiguration('use_collision_monitor', default='false')
+    default_collision_monitor = 'false'
+    use_collision_monitor = LaunchConfiguration('use_collision_monitor', default=default_collision_monitor)
     use_collision_visualization = LaunchConfiguration('use_collision_visualization', default=default_collision_visualization)
     headless = LaunchConfiguration('headless', default='true')
     enable_localization_jump_detection = LaunchConfiguration('enable_localization_jump_detection', default='false')
@@ -61,8 +62,8 @@ def generate_launch_description():
 
     is_navigation = PythonExpression(["'", operation_mode, "' != 'remote'"])
     gazebo_enabled = ["'", use_gazebo, "'.lower() == 'true' and "]
-    is_autonomous_gui = PythonExpression(gazebo_enabled + ["'", operation_mode, "' == 'autonomous' and '", headless, "' == 'false'"])
-    is_autonomous_headless = PythonExpression(gazebo_enabled + ["'", operation_mode, "' == 'autonomous' and '", headless, "' == 'true'"])
+    is_autonomous_gui = PythonExpression(gazebo_enabled + ["'", operation_mode, "' in ('autonomous', 'autonomous_fixed') and '", headless, "' == 'false'"])
+    is_autonomous_headless = PythonExpression(gazebo_enabled + ["'", operation_mode, "' in ('autonomous', 'autonomous_fixed') and '", headless, "' == 'true'"])
     is_fixed_path_gui = PythonExpression(gazebo_enabled + ["'", operation_mode, "' == 'fixed_path' and '", headless, "' == 'false'"])
     is_remote_gui = PythonExpression(gazebo_enabled + ["'", operation_mode, "' == 'remote' and '", headless, "' == 'false'"])
 
@@ -70,10 +71,12 @@ def generate_launch_description():
     myworld_dir = os.path.join(bringup_dir, 'models', 'myworld2')
     default_map = PythonExpression([
         "'", os.path.join('/userdata/map/pbstream', 'out.yaml'),
-        "' if '", operation_mode, "' in ('fixed_path', 'autonomous') else '",
+        "' if '", operation_mode, "' in ('fixed_path', 'autonomous', 'autonomous_fixed') else '",
         os.path.join(myworld_dir, 'myworld2.yaml'), "'"])
     map_file = LaunchConfiguration('map', default=default_map)
     rviz_config_file = PythonExpression([
+        "'", os.path.join(bringup_dir, 'rviz', 'nav2_autonomous_fixed_view.rviz'),
+        "' if '", operation_mode, "' == 'autonomous_fixed' else ",
         "'", os.path.join(bringup_dir, 'rviz', 'nav2_autonomous_view.rviz'),
         "' if '", operation_mode, "' == 'autonomous' else '",
         os.path.join(bringup_dir, 'rviz', 'nav2_default_view.rviz'), "'"])
@@ -120,9 +123,10 @@ def generate_launch_description():
         'use_respawn': 'False',
         'log_level': 'info',
         'operation_mode': operation_mode,
-        'autonomous_planner_id': 'SmacHybrid',
+        # Scene planner selection stays in params_file, rather than the child Launch default.
+        'autonomous_planner_id': '',
         'autonomous_mppi_profile': LaunchConfiguration('autonomous_mppi_profile'),
-        'use_path_smoother': PythonExpression(["'", operation_mode, "' != 'fixed_path'"]),
+        'use_path_smoother': PythonExpression(["'", operation_mode, "' not in ('fixed_path', 'autonomous_fixed')"]),
         'enable_localization_jump_detection': enable_localization_jump_detection,
         'enable_collision_state': LaunchConfiguration('enable_collision_state'),
         'fixed_path_progress_timeout': fixed_path_progress_timeout,
@@ -181,10 +185,10 @@ def generate_launch_description():
         DeclareLaunchArgument('use_rviz', default_value='true', description='Whether to start RViz'),
         DeclareLaunchArgument('use_gazebo', default_value=default_use_gazebo, description='Start Gazebo, sensor bridges and simulated velocity feedback; defaults true in all modes, with the GUI disabled by headless=true'),
         DeclareLaunchArgument('enable_collision_state', default_value='true', description='Enable fixed-path external collision-state gating'),
-        DeclareLaunchArgument('use_collision_monitor', default_value='false', description='Enable Collision Monitor in autonomous and fixed-path simulation'),
+        DeclareLaunchArgument('use_collision_monitor', default_value=default_collision_monitor, description='Enable Collision Monitor; defaults false in all modes'),
         DeclareLaunchArgument('use_collision_visualization', default_value=default_collision_visualization, description='Enable collision boundary visualization; defaults true for fixed_path, false for other modes'),
         DeclareLaunchArgument('headless', default_value='true', description='Run only the Ignition Gazebo server by default; false enables Gazebo GUI'),
-        DeclareLaunchArgument('operation_mode', default_value='autonomous', choices=['remote', 'autonomous', 'fixed_path'], description='Select the robot operation mode'),
+        DeclareLaunchArgument('operation_mode', default_value='autonomous', choices=['remote', 'autonomous', 'fixed_path', 'autonomous_fixed'], description='Select the robot operation mode'),
         DeclareLaunchArgument('autonomous_mppi_profile', default_value='true', description='Apply rotation alignment, terminal approach and reduced MPPI sampling only in autonomous mode'),
         DeclareLaunchArgument('enable_localization_jump_detection', default_value='false', description='Whether localization pose jumps cancel control and stop the simulated robot'),
         DeclareLaunchArgument('fixed_path_progress_timeout', default_value='120.0', description='Maximum stationary time in fixed-path mode'),

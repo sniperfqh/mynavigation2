@@ -5,6 +5,7 @@
 #define NAV2_REGULATED_MODULES__REGULATED_NAVIGATOR_HPP_
 
 #include <cstdint>
+#include <chrono>
 #include <memory>
 #include <mutex>
 #include <optional>
@@ -27,6 +28,8 @@
 #include "nav2_regulated_modules/motion_state_subscriber.hpp"
 #include "nav2_regulated_modules/navigation_state.hpp"
 #include "nav2_regulated_modules/planning_module.hpp"
+#include "nav2_regulated_modules/detail/autonomous_fixed_path.hpp"
+#include "std_msgs/msg/string.hpp"
 #include "nav2_util/lifecycle_node.hpp"
 #include "nav2_util/collision_state.hpp"
 #include "std_msgs/msg/u_int8.hpp"
@@ -84,6 +87,37 @@ class RegulatedNavigator : public nav2_util::LifecycleNode
   nav2_util::CallbackReturn on_shutdown(const rclcpp_lifecycle::State &) override;
 
 private:
+  void beginFixedAutonomy();
+  void monitorFixedAutonomy();
+  void freezeAutonomousPath(const nav_msgs::msg::Path & path);
+  void followFrozenSegment(bool resume);
+  void finishFrozenSegment();
+  void onFixedExecutionStatus(const std_msgs::msg::String::SharedPtr message);
+  bool fixedVelocityStopped();
+  nav_msgs::msg::Path frozen_path_;
+  std::vector<detail::FixedSegment> frozen_segments_;
+  std::size_t frozen_segment_ = 0;
+  std::size_t frozen_cursor_ = 0;
+  std::size_t frozen_dispatch_first_ = 0;
+  uint64_t frozen_fingerprint_ = 0;
+  bool frozen_plan_requested_ = false;
+  bool frozen_follow_inflight_ = false;
+  bool frozen_localization_wait_ = false;
+  std::size_t frozen_outstanding_follows_ = 0;
+  int64_t frozen_execution_id_ = 0;
+  int64_t frozen_last_dispatch_id_ = 0;
+  std::string frozen_phase_;
+  double frozen_wait_since_ = 0.0;
+  double frozen_status_since_ = 0.0;
+  double frozen_obstacle_since_ = -1.0;
+  std::optional<double> frozen_inhibited_since_;
+  std::optional<double> frozen_stable_since_;
+  std::optional<std::chrono::steady_clock::time_point> frozen_soft_pause_since_;
+  std::string frozen_localization_reason_;
+  rclcpp::Subscription<std_msgs::msg::String>::SharedPtr frozen_status_sub_;
+  rclcpp_lifecycle::LifecyclePublisher<std_msgs::msg::String>::SharedPtr frozen_localization_gate_pub_;
+  rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr frozen_path_pub_;
+
   // 仅接受 autonomous 且激活的有效单点 Pose；behavior_tree 非空会拒绝。
   // 这里只校验请求，规划发生在接受后的处理函数，不通过此函数切换启动模式。
   rclcpp_action::GoalResponse handlePoseGoal(const rclcpp_action::GoalUUID & uuid, const std::shared_ptr<const NavigateToPose::Goal> goal);

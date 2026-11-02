@@ -37,11 +37,20 @@ def run_case(node, mode, collision=False, feedback='/motion_state', directory=No
         try:
             time.sleep(1.2)
             discovery_deadline = time.monotonic() + 10
-            selected = [publishers[4][0], publishers[5][0]] if mode == 'remote' else [publishers[i][0] for i in (0, 1, 4, 5)]
+            selected = [publishers[i][0] for i in (4, 5, 6)] if mode == 'remote' else [publishers[i][0] for i in (0, 1, 4, 5, 6)]
             while any(pub.get_subscription_count() == 0 for pub in selected):
                 if time.monotonic() > discovery_deadline:
                     raise RuntimeError('DDS discovery timeout: ' + str(capture))
                 rclpy.spin_once(node, timeout_sec=0.05)
+            # 发布者已匹配且其他反馈正常，也不能在接收 ChassisControl 前刷速度快照。
+            publishers[4][0].publish(publishers[4][1])
+            time.sleep(1.1)
+            text = (root / 'nav2_regulated_modules/velocity_diagnostics.log').read_text() if directory is None else ''
+            assert 'velocity ros_time=' not in text
+            assert 'velocity ros_time=' not in capture.read_text()
+            # 首帧为零速度同样解锁；暂不发布其余来源，保留 missing 诊断。
+            publishers[6][0].publish(publishers[6][1])
+            time.sleep(0.1)
             start = time.monotonic()
             assert publishers[4][0].get_subscription_count() == 1, 'MotionState source subscribed more than once'
             while time.monotonic() - start < 3.2:
@@ -100,16 +109,23 @@ def run_case(node, mode, collision=False, feedback='/motion_state', directory=No
 
 
 # 通过提高诊断采样频率触发滚动文件，验证大小／备份和跨文件来源标识，不测试车辆旋转。
-def run_rotation():
+def run_rotation(node):
     root = pathlib.Path(tempfile.mkdtemp(prefix='velocity-rotation-'))
     executable = get_package_prefix('nav2_regulated_modules') + '/lib/nav2_regulated_modules/velocity_diagnostics_node'
+    publisher = node.create_publisher(ChassisControl, '/downstream/chassis_control', 10)
     with (root / 'console.log').open('w') as output:
         process = subprocess.Popen([executable, '--ros-args', '-p', 'velocity_file_log_frequency:=1000.0', '-p', 'log_dir:=' + str(root)], stdout=output, stderr=subprocess.STDOUT)
         try:
+            deadline = time.monotonic() + 10
+            while publisher.get_subscription_count() == 0:
+                assert time.monotonic() < deadline, 'ChassisControl subscription discovery timeout'
+                rclpy.spin_once(node, timeout_sec=0.05)
+            publisher.publish(ChassisControl())
             time.sleep(14)
         finally:
             process.send_signal(signal.SIGINT)
             process.wait(timeout=10)
+            node.destroy_publisher(publisher)
     files = list((root / 'nav2_regulated_modules').glob('velocity_diagnostics*.log'))
     assert process.returncode == 0 and len(files) >= 2, files
     assert all(p.stat().st_size <= 10 * 1024 * 1024 for p in files)
@@ -128,7 +144,7 @@ if __name__ == '__main__':
         run_case(node, 'remote')
         run_case(node, 'fixed_path', feedback='motion_state', shared_controller=True)
         run_case(node, 'fixed_path', directory='/proc/velocity-diagnostics-test')
-        run_rotation()
+        run_rotation(node)
     finally:
         node.destroy_node()
         rclpy.shutdown()

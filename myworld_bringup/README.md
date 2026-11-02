@@ -133,7 +133,7 @@ FollowPath → Controller Server → /cmd_vel_nav
 
 自主模式 RViz 默认启用 `MPPI Trajectories`，订阅 `/trajectories`（`visualization_msgs/msg/MarkerArray`），显示 MPPI 采样候选及优化轨迹；仅在 MPPI 跟踪计算时更新，起步旋转或末端专用控制阶段可能保留上次轨迹。默认每 15 条候选取一条、每 5 个时间点取一点，以减少可视化负载；轨迹可视化仍可能影响 50 Hz 控制周期。固定路径仍使用原 RViz 配置。
 
-默认自主模式通过入口覆盖导航器规划器 ID，使用 `SmacHybrid`（Hybrid-A*）规划，`simple_smoother` 平滑路径，执行“起步转向对齐 → MPPI 跟踪 → 末端位置收敛 → 制动停稳 → 终点朝向对齐 → 连续停稳检查”。MPPI 的 0.02 s 模型步长对应 50 Hz 控制配置，75 步预测 1.5 s、300 条候选；配置频率不等于实测运行频率。
+默认自主模式直接读取 `params/myworld2.yaml`：导航器 `planner_id` 和规划服务器 `selected_planner` 均为 `SmacHybrid`（Hybrid-A*），`SmacHybrid.motion_model_for_search` 为 `REEDS_SHEPP`（RS，搜索允许前进／倒车）。入口不再写死覆盖这三个值；后续在该 YAML 中调整规划器和运动模型即可。服务器优先使用非空的 `selected_planner`，切换时建议同步修改导航器 `planner_id`。固定路径不调用全局规划，其控制参数保持原配置。`simple_smoother` 平滑路径，执行“起步转向对齐 → MPPI 跟踪 → 末端位置收敛 → 制动停稳 → 终点朝向对齐 → 连续停稳检查”。MPPI 的 0.02 s 模型步长对应 50 Hz 控制配置，75 步预测 1.5 s、300 条候选；配置频率不等于实测运行频率。
 
 自主包装复用 RotationShim，内部明确选择 MPPI；距离终点 1 m 内连续降低 MPPI 速度约束，进入 0.15 m 后由专用末端位置控制接管，超过 0.25 m 才退回 MPPI。末端线速度／角速度上限默认分别为 0.05 m/s／0.1 rad/s，可由参数文件覆盖；朝向位置目标误差 >20° 时先原地对齐，<10° 后前进。进入位置容差的一半（默认 1.5 cm）后制动，轮速连续 0.2 s 达标再对齐终点航向；末端旋转根据当前角速度预留制动角度，越过目标后先给零速，待角速度减小后再修正。漂出 3 cm 后重新收敛位置。位置仍需 ≤3 cm、航向约 ≤9°、线／角速度 ≤0.01 m/s／0.05 rad/s，且连续达标 0.5 s；没有放宽容差或锁存失效的位置精度。末端前进、旋转和实际轮速下的制动路径都执行足迹碰撞预测，普通 MPPI 碰撞代价项仍生效；实际超调量需结合底盘验证。
 
@@ -241,3 +241,9 @@ ros2 run tf2_ros tf2_echo base_link base_scan
 UART 空闲时可能不周期发零速，停稳需要新鲜轮速等证据。统一日志参数见[速度日志](../nav2_regulated_modules/doc/velocity_logging.md)。独立状态源启停的最新验收未完成，不能由本 README 推断通过。
 
 场景资源见 [models/](models/)、[params/](params/)、[urdf/](urdf/)、[rviz/](rviz/)，依赖与安装见 [package.xml](package.xml)、[CMakeLists.txt](CMakeLists.txt)。
+
+## 第四种模式 autonomous_fixed
+
+Collision Monitor 默认不启动，速度平滑器直接输出 `/cmd_vel`。外部 `/collision_state` 门控和控制器局部 Costmap 足迹检查沿用原配置；本次默认值调整需下次启动导航时生效。
+
+运行验证先在 `/home/forlinx/lidar_slam/colcon_ws` 执行 `ros2 launch cartographer_ros cartographer.launch.py`，确认新鲜定位与导航时间源一致。再执行 `ros2 launch myworld_bringup entry.launch.py operation_mode:=autonomous_fixed`；默认使用 Gazebo，外部传感器入口显式加 `use_gazebo:=false`。完整方案、一次规划约束及暂停恢复规则见 [自主固定路径架构](../nav2_regulated_modules/doc/autonomous_fixed_architecture.md) 。

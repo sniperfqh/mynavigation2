@@ -18,7 +18,7 @@ namespace nav2_regulated_modules
 // 这里只校验请求，规划发生在接受后的处理函数，不通过此函数切换启动模式。
 rclcpp_action::GoalResponse RegulatedNavigator::handlePoseGoal(const rclcpp_action::GoalUUID &, const std::shared_ptr<const NavigateToPose::Goal> goal)
 {
-  if (operation_mode_ != NavigationMode::AUTONOMOUS)
+  if (operation_mode_ != NavigationMode::AUTONOMOUS && operation_mode_ != NavigationMode::AUTONOMOUS_FIXED)
   {
     LOG_WARN("当前模式不接受自主单点导航目标");
     return rclcpp_action::GoalResponse::REJECT;
@@ -90,6 +90,11 @@ void RegulatedNavigator::handlePoseAccepted(const std::shared_ptr<NavigatePoseHa
   task_.start_time = now();
   task_.last_progress_time = task_.start_time;
   LOG_INFO("接受单点导航任务，generation={}，frame={}，goal=({:.3f}, {:.3f})", task_.generation, task_.goal.header.frame_id, task_.goal.pose.position.x, task_.goal.pose.position.y);
+  if (operation_mode_ == NavigationMode::AUTONOMOUS_FIXED)
+  {
+    beginFixedAutonomy();
+    return;
+  }
   startPlanning(false);
 }
 
@@ -114,7 +119,7 @@ void RegulatedNavigator::handlePosesAccepted(const std::shared_ptr<NavigatePoses
 // 非 autonomous 或未激活时忽略；接管同样递增任务代次。
 void RegulatedNavigator::onTopicGoal(const geometry_msgs::msg::PoseStamped::SharedPtr goal)
 {
-  if (operation_mode_ != NavigationMode::AUTONOMOUS)
+  if (operation_mode_ != NavigationMode::AUTONOMOUS && operation_mode_ != NavigationMode::AUTONOMOUS_FIXED)
   {
     LOG_WARN("当前模式忽略 goal_pose");
     return;
@@ -132,6 +137,11 @@ void RegulatedNavigator::onTopicGoal(const geometry_msgs::msg::PoseStamped::Shar
   task_.start_time = now();
   task_.last_progress_time = task_.start_time;
   LOG_INFO("接受 goal_pose 任务，generation={}，frame={}，goal=({:.3f}, {:.3f})", task_.generation, task_.goal.header.frame_id, task_.goal.pose.position.x, task_.goal.pose.position.y);
+  if (operation_mode_ == NavigationMode::AUTONOMOUS_FIXED)
+  {
+    beginFixedAutonomy();
+    return;
+  }
   startPlanning(false);
 }
 
@@ -152,7 +162,7 @@ void RegulatedNavigator::publishFeedback()
   double remaining = task_.distance_remaining;
   double eta = current_speed_ > 0.03 ? task_.distance_remaining / current_speed_ : 0.0;
   int16_t recoveries = static_cast<int16_t>(task_.recovery_count);
-  if (operation_mode_ == NavigationMode::AUTONOMOUS)
+  if (operation_mode_ == NavigationMode::AUTONOMOUS || operation_mode_ == NavigationMode::AUTONOMOUS_FIXED)
   {
     auto goal = task_.goal;
     goal.header.stamp = current_pose.header.stamp;

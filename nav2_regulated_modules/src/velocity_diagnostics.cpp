@@ -56,6 +56,8 @@ public:
     const auto smoother_topic = declare_parameter("smoother_output_topic", std::string("cmd_vel"));
     const auto feedback_topic = declare_parameter("smoother_feedback_topic", std::string("/motion_state"));
     const auto controller_feedback = declare_parameter("controller_feedback_topic", std::string("/odometry"));
+    const auto chassis_topic = declare_parameter("chassis_input_topic", std::string("/downstream/chassis_control"));
+    std::shared_ptr<Stage> chassis;
     log_->info("velocity diagnostics mode={} file={} file_enabled={} file_hz={} console_hz={} collision={} smoother_feedback={} feedback_mode={}", mode_, path, sinks.size() > 1, file_hz, console_hz, collision, feedback_topic, declare_parameter("smoother_feedback_mode", std::string("CLOSED_LOOP")));
     if (mode_ != "remote")
     {
@@ -65,13 +67,7 @@ public:
       {
         addTwist("collision_out/final_cmd", "cmd_vel");
       }
-      const auto chassis_topic = declare_parameter("chassis_input_topic", std::string("/downstream/chassis_control"));
-      auto chassis = addStage("chassis_control_in", chassis_topic, "ChassisControl");
-      subscriptions_.push_back(create_subscription<byd_custom_msgs::msg::ChassisControl>(chassis_topic, rclcpp::SensorDataQoS(), [this, chassis](byd_custom_msgs::msg::ChassisControl::ConstSharedPtr msg)
-      {
-        chassis->op = msg->op;
-        update(chassis, msg->linear_velocity, msg->angular_velocity);
-      }));
+      chassis = addStage("chassis_control_in", chassis_topic, "ChassisControl");
       const auto chassis_output = declare_parameter("chassis_output_topic", std::string("/control_to_uart"));
       if (chassis_output != "/control_to_uart")
       {
@@ -80,6 +76,15 @@ public:
       addFeedback("controller_feedback", controller_feedback);
       addFeedback("smoother_feedback", feedback_topic);
     }
+    subscriptions_.push_back(create_subscription<byd_custom_msgs::msg::ChassisControl>(chassis_topic, rclcpp::SensorDataQoS(), [this, chassis](byd_custom_msgs::msg::ChassisControl::ConstSharedPtr msg)
+    {
+      chassis_control_received_ = true;
+      if (chassis)
+      {
+        chassis->op = msg->op;
+        update(chassis, msg->linear_velocity, msg->angular_velocity);
+      }
+    }));
     addFeedback("chassis_feedback", "/motion_state");
     addControlRes(mode_ == "remote" ? "remote_out" : "uart_out", "/control_to_uart");
     for (size_t i = 0; i < stages_.size(); ++i)
@@ -209,6 +214,11 @@ private:
   // age 用单调时钟，ros_time 用节点时钟；高频快照可能重复 count，不代表收到同频新数据。
   void snapshot(spdlog::level::level_enum level)
   {
+    // 首次收到 ChassisControl 后才输出周期快照，保留后续 stale 状态供停车诊断。
+    if (!chassis_control_received_)
+    {
+      return;
+    }
     const auto steady = std::chrono::steady_clock::now();
     const auto ros_time = now().seconds();
     std::string frame;
@@ -229,6 +239,7 @@ private:
   // 单线程执行器串行执行订阅和采样，无需占用控制节点的锁。
   std::string mode_;
   double stale_seconds_ = 0.2;
+  bool chassis_control_received_ = false;
   std::vector<std::shared_ptr<Stage>> stages_;
   std::vector<rclcpp::SubscriptionBase::SharedPtr> subscriptions_;
   rclcpp::TimerBase::SharedPtr file_timer_;

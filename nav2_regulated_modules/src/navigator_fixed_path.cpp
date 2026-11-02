@@ -348,6 +348,11 @@ void RegulatedNavigator::publishFixedPath(const nav_msgs::msg::Path & path)
 // 是否还属于当前有效任务由 task_ 与上层状态机决定；不从已结束任务恢复。
 void RegulatedNavigator::resumeCurrentTask()
 {
+  if (operation_mode_ == NavigationMode::AUTONOMOUS_FIXED)
+  {
+    followFrozenSegment(true);
+    return;
+  }
   if (task_.type == TaskType::NAVIGATION_SERVICE)
   {
     if (task_.active_path.poses.empty())

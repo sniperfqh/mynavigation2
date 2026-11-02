@@ -28,6 +28,7 @@ find_package(spdlog_wrapper REQUIRED)
 find_package(visualization_msgs REQUIRED)
 find_package(nav2_rotation_shim_controller REQUIRED)
 find_package(nav2_controller REQUIRED)
+find_package(nav2_smac_planner REQUIRED)
 
 # 协调器进程将按职责拆分的 navigator_* 文件链接在一起，共享同一 RegulatedNavigator 实例状态。
 add_executable(regulated_navigator_node
@@ -38,6 +39,7 @@ add_executable(regulated_navigator_node
   src/navigator_goal_handler.cpp
   src/navigator_planning.cpp
   src/navigator_fixed_path.cpp
+  src/navigator_autonomous_fixed.cpp
   src/navigator_control.cpp
   src/navigator_monitor.cpp
   src/navigator_task_manager.cpp
@@ -77,6 +79,27 @@ add_library(nav2_regulated_modules_autonomous_controller SHARED src/autonomous_m
 target_include_directories(nav2_regulated_modules_autonomous_controller PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>)
 target_compile_features(nav2_regulated_modules_autonomous_controller PUBLIC cxx_std_17)
 ament_target_dependencies(nav2_regulated_modules_autonomous_controller nav2_rotation_shim_controller nav2_controller nav2_core nav2_costmap_2d nav2_util geometry_msgs nav_msgs rclcpp rclcpp_lifecycle pluginlib tf2 tf2_ros)
+
+add_library(nav2_regulated_modules_autonomous_fixed_controller SHARED src/autonomous_fixed_controller.cpp)
+target_include_directories(nav2_regulated_modules_autonomous_fixed_controller PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>)
+target_compile_features(nav2_regulated_modules_autonomous_fixed_controller PUBLIC cxx_std_17)
+ament_target_dependencies(nav2_regulated_modules_autonomous_fixed_controller nav2_core nav2_costmap_2d nav2_util geometry_msgs nav_msgs std_msgs rclcpp rclcpp_lifecycle pluginlib tf2 tf2_ros tf2_geometry_msgs)
+target_link_libraries(nav2_regulated_modules_autonomous_fixed_controller nav2_regulated_modules_fixed_path_controller)
+install(TARGETS nav2_regulated_modules_autonomous_fixed_controller LIBRARY DESTINATION lib)
+install(FILES include/nav2_regulated_modules/autonomous_fixed_controller.hpp DESTINATION include/nav2_regulated_modules)
+install(FILES include/nav2_regulated_modules/fixed_path_controller.hpp DESTINATION include/nav2_regulated_modules)
+install(FILES include/nav2_regulated_modules/detail/fixed_path_start_speed_guard.hpp DESTINATION include/nav2_regulated_modules/detail)
+install(FILES include/nav2_regulated_modules/detail/autonomous_fixed_path.hpp DESTINATION include/nav2_regulated_modules/detail)
+install(FILES include/nav2_regulated_modules/detail/autonomous_fixed_terminal_review.hpp DESTINATION include/nav2_regulated_modules/detail)
+install(FILES include/nav2_regulated_modules/detail/autonomous_fixed_terminal_trim.hpp DESTINATION include/nav2_regulated_modules/detail)
+pluginlib_export_plugin_description_file(nav2_core autonomous_fixed_controller_plugin.xml)
+
+# 仅第四模式装载此包装；复用一次 Hybrid A* 后，在冻结前校正格心偏差。
+add_library(nav2_regulated_modules_autonomous_fixed_planner SHARED src/autonomous_fixed_hybrid_planner.cpp)
+target_compile_features(nav2_regulated_modules_autonomous_fixed_planner PUBLIC cxx_std_17)
+ament_target_dependencies(nav2_regulated_modules_autonomous_fixed_planner nav2_smac_planner nav2_core nav2_costmap_2d nav2_util geometry_msgs nav_msgs rclcpp rclcpp_lifecycle pluginlib tf2 tf2_ros tf2_geometry_msgs)
+install(TARGETS nav2_regulated_modules_autonomous_fixed_planner LIBRARY DESTINATION lib)
+pluginlib_export_plugin_description_file(nav2_core autonomous_fixed_planner_plugin.xml)
 
 # 诊断进程独立于控制周期；边界可视化也只发布显示消息，不进入速度计算。
 add_executable(velocity_diagnostics_node src/velocity_diagnostics.cpp)
@@ -125,12 +148,29 @@ include(CTest)
 install(PROGRAMS tools/collision_action_test.py DESTINATION lib/${PROJECT_NAME})
 # 以下注册纯算法／Launch／窗口测试；CTest 执行与 colcon 构建是两个步骤，未执行不能宣称测试通过。
 if(BUILD_TESTING)
+  add_executable(autonomous_fixed_terminal_review_test test/autonomous_fixed_terminal_review_test.cpp)
+  target_include_directories(autonomous_fixed_terminal_review_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_compile_features(autonomous_fixed_terminal_review_test PRIVATE cxx_std_17)
+  add_test(NAME autonomous_fixed_terminal_review_test COMMAND autonomous_fixed_terminal_review_test)
+  add_executable(autonomous_fixed_controller_test test/autonomous_fixed_controller_test.cpp)
+  target_include_directories(autonomous_fixed_controller_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_compile_features(autonomous_fixed_controller_test PRIVATE cxx_std_17)
+  ament_target_dependencies(autonomous_fixed_controller_test nav2_core nav2_controller nav2_costmap_2d nav2_util geometry_msgs nav_msgs std_msgs rclcpp rclcpp_lifecycle tf2 tf2_ros tf2_geometry_msgs)
+  target_link_libraries(autonomous_fixed_controller_test nav2_regulated_modules_autonomous_fixed_controller)
+  add_test(NAME autonomous_fixed_controller_test COMMAND autonomous_fixed_controller_test)
+  set_tests_properties(autonomous_fixed_controller_test PROPERTIES ENVIRONMENT "ROS_DOMAIN_ID=194;ROS_LOCALHOST_ONLY=1" TIMEOUT 30)
+  add_executable(autonomous_fixed_path_test test/autonomous_fixed_path_test.cpp)
+  target_include_directories(autonomous_fixed_path_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_compile_features(autonomous_fixed_path_test PRIVATE cxx_std_17)
+  ament_target_dependencies(autonomous_fixed_path_test nav_msgs tf2 tf2_geometry_msgs)
+  add_test(NAME autonomous_fixed_path_test COMMAND autonomous_fixed_path_test)
   find_package(Python3 REQUIRED COMPONENTS Interpreter)
   add_test(NAME collision_action_tool_test COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/test_collision_action_tool.py)
   add_test(NAME logging_routing_test COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/test_logging_routing.py)
   add_test(NAME velocity_logging_launch_test COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/velocity_logging_launch_test.py)
   add_test(NAME collision_launch_test COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/test_collision_launch.py)
   add_test(NAME autonomous_launch_test COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/test_autonomous_launch.py)
+  add_test(NAME autonomous_fixed_launch_test COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/test/test_autonomous_fixed_launch.py)
   add_executable(autonomous_navigation_test test/autonomous_navigation_test.cpp)
   target_include_directories(autonomous_navigation_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_compile_features(autonomous_navigation_test PRIVATE cxx_std_17)

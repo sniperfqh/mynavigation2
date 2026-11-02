@@ -24,7 +24,7 @@ bool RegulatedNavigator::dependenciesReady()
 // generation 标识任务，plan_sequence 标识该任务的规划轮次；两者均匹配才接受回调。
 void RegulatedNavigator::startPlanning(const bool replanning)
 {
-  if (operation_mode_ != NavigationMode::AUTONOMOUS)
+  if (operation_mode_ != NavigationMode::AUTONOMOUS && operation_mode_ != NavigationMode::AUTONOMOUS_FIXED)
   {
     LOG_ERROR("非 autonomous 模式禁止进入全局规划");
     return;
@@ -32,6 +32,15 @@ void RegulatedNavigator::startPlanning(const bool replanning)
   if (!active_ || task_.type == TaskType::NONE || planning_active_)
   {
     return;
+  }
+  if (operation_mode_ == NavigationMode::AUTONOMOUS_FIXED)
+  {
+    if (replanning || frozen_plan_requested_)
+    {
+      failTask("autonomous_fixed 禁止再次调用全局规划");
+      return;
+    }
+    frozen_plan_requested_ = true;
   }
   if (!dependenciesReady())
   {
@@ -65,6 +74,11 @@ void RegulatedNavigator::startPlanning(const bool replanning)
     // 接受响应先验证任务及规划轮次；本轮被拒绝才计入失败，旧响应不能覆盖当前句柄。
     options.goal_response_callback = [this, generation, sequence](auto handle)
     {
+      if (operation_mode_ == NavigationMode::AUTONOMOUS_FIXED && !isCurrentPlan(generation, sequence) && handle)
+      {
+        compute_poses_client_->async_cancel_goal(handle);
+        return;
+      }
       if (isCurrentPlan(generation, sequence))
       {
         active_compute_poses_goal_ = handle;
@@ -103,6 +117,11 @@ void RegulatedNavigator::startPlanning(const bool replanning)
     // 接受响应先验证任务及规划轮次；本轮被拒绝才计入失败，旧响应不能覆盖当前句柄。
     options.goal_response_callback = [this, generation, sequence](auto handle)
     {
+      if (operation_mode_ == NavigationMode::AUTONOMOUS_FIXED && !isCurrentPlan(generation, sequence) && handle)
+      {
+        compute_pose_client_->async_cancel_goal(handle);
+        return;
+      }
       if (isCurrentPlan(generation, sequence))
       {
         active_compute_pose_goal_ = handle;
@@ -144,6 +163,11 @@ bool RegulatedNavigator::isCurrentPlan(const uint64_t generation, const uint64_t
 // 平滑拒绝、失败或返回空路径时回退原始 Path；不把回退当成平滑已成功。
 void RegulatedNavigator::onPathReady(const nav_msgs::msg::Path & path)
 {
+  if (operation_mode_ == NavigationMode::AUTONOMOUS_FIXED)
+  {
+    freezeAutonomousPath(path);
+    return;
+  }
   task_.consecutive_planning_failures = 0;
   pending_raw_path_ = path;
   if (updating_path_)
@@ -209,6 +233,11 @@ void RegulatedNavigator::onPathReady(const nav_msgs::msg::Path & path)
 // 不满足继续条件时进入恢复，而不是在本函数直接改变规划算法。
 void RegulatedNavigator::handlePlanningFailure(const std::string & reason)
 {
+  if (operation_mode_ == NavigationMode::AUTONOMOUS_FIXED)
+  {
+    failTask(reason);
+    return;
+  }
   ++task_.consecutive_planning_failures;
   if (updating_path_ && active_follow_goal_ && task_.consecutive_planning_failures < planning_module_.maxFailures())
   {
