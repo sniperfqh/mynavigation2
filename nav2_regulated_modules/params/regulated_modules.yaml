@@ -1193,9 +1193,9 @@ myagv_keyboard_control:
     # 遥控线加加速度上限，单位米每三次方秒。
     linear_accel_jerk_limit: 4.0
     # 遥控线减速度上限，单位米每二次方秒。
-    linear_decel_limit: 4.0
+    linear_decel_limit: 2.0
     # 遥控线减速加加速度上限，单位米每三次方秒。
-    linear_decel_jerk_limit: 8.0
+    linear_decel_jerk_limit: 4.0
     # 遥控角加速度上限，单位弧度每二次方秒。
     angular_accel_limit: 1.0
     # 遥控角加加速度上限，单位弧度每三次方秒。
