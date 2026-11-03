@@ -275,6 +275,8 @@ regulated_navigator:
     progress_min_translation: 0.1
     # 上游紧急零速指令发布话题。
     stop_cmd_vel_topic: "cmd_vel_nav"
+    # 导航器速度观测及 autonomous_fixed 停稳判断使用实车 MotionState。
+    velocity_odom_topic: "/motion_state"
     # 底盘控制指令订阅话题。
     chassis_input_topic: "/downstream/chassis_control"
     # 底盘串口控制指令发布话题。
