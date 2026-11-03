@@ -62,6 +62,8 @@ Smac 内部平滑属于这一次请求；关闭额外 `SmoothPath`。输出通�
 
 ## 启动与配置
 
+`myworld_bringup` 仿真速度反馈统一为 `/motion_state` 的 `byd_custom_msgs/msg/MotionState`，与实车控制反馈接口一致。Gazebo 原始 `/odometry` 仅保留为转换输入；控制包装、导航器停稳判断与速度观测、平滑器和诊断使用 `v_car/w_car`，保留源 Header。控制包装及导航器按话题末段 `motion_state` 选择消息类型，其余反馈话题保留 Odometry 兼容。消息只转换为内部速度快照，不提供定位位姿；原 TF、速度时效、停稳和恢复阈值保持。独立规控入口的导航器 `velocity_odom_topic` 仍需由其配置提供正确反馈接口，实车 YAML 本轮保持。
+
 运行验证必须先在独立终端启动主人指定的定位模块，并保持运行：
 
 ```bash

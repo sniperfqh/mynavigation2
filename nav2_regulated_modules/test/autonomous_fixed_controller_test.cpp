@@ -5,6 +5,7 @@
 #include "nav2_costmap_2d/costmap_filters/filter_values.hpp"
 #include <iostream>
 #include <thread>
+#include <limits>
 
 namespace
 {
@@ -29,10 +30,12 @@ geometry_msgs::msg::PoseStamped point(const double x, const double yaw = 0.0)
 
 int main(int argc, char ** argv)
 {
+  const bool motion_feedback = argc > 1 && std::string(argv[1]) == "--motion-state";
+  const std::string feedback_topic = motion_feedback ? "/fixed_controller_test/motion_state" : "/fixed_controller_test/odom";
   rclcpp::init(argc, argv);
   auto parent = std::make_shared<rclcpp_lifecycle::LifecycleNode>("fixed_controller_test");
   parent->declare_parameter("controller_frequency", 100.0);
-  parent->declare_parameter("odom_topic", "/fixed_controller_test/odom");
+  parent->declare_parameter("odom_topic", feedback_topic);
   parent->declare_parameter("tracking.tracker.desired_linear_vel", 0.5);
   auto map = std::make_shared<nav2_costmap_2d::Costmap2DROS>("fixed_test_costmap");
   const std::vector<rclcpp::Parameter> map_parameters =
@@ -58,14 +61,23 @@ int main(int argc, char ** argv)
   parent->declare_parameter("cusp.rot_stopped_velocity", 0.05);
   cusp_checker.initialize(parent, "cusp", map);
   nav2_core::GoalChecker * active_checker = &checker;
-  auto odom_pub = parent->create_publisher<nav_msgs::msg::Odometry>("/fixed_controller_test/odom", 10);
-  odom_pub->on_activate();
+  auto odom_pub = motion_feedback ? nullptr : parent->create_publisher<nav_msgs::msg::Odometry>(feedback_topic, 10);
+  auto motion_pub = motion_feedback ? parent->create_publisher<byd_custom_msgs::msg::MotionState>(feedback_topic, 10) : nullptr;
+  if (motion_pub)
+  {
+    motion_pub->on_activate();
+  }
+  else
+  {
+    odom_pub->on_activate();
+  }
   rclcpp::executors::SingleThreadedExecutor executor;
   executor.add_node(parent->get_node_base_interface());
-  const auto compute = [&](const geometry_msgs::msg::PoseStamped & input, const bool feedback = true, const double linear = 0.0)
+  const auto compute = [&](const geometry_msgs::msg::PoseStamped & input, const bool feedback = true, const double linear = 0.0, const double angular = 0.0, const double source_age = 0.0)
   {
     geometry_msgs::msg::Twist measured;
     measured.linear.x = linear;
+    measured.angular.z = angular;
     geometry_msgs::msg::TransformStamped transform;
     transform.header.frame_id = "map";
     transform.header.stamp = parent->now();
@@ -76,9 +88,20 @@ int main(int argc, char ** argv)
     if (feedback)
     {
       nav_msgs::msg::Odometry odom;
-      odom.header.stamp = parent->now();
+      odom.header.stamp = parent->now() - rclcpp::Duration::from_seconds(source_age);
       odom.twist.twist = measured;
-      odom_pub->publish(odom);
+      if (motion_pub)
+      {
+        byd_custom_msgs::msg::MotionState motion;
+        motion.header = odom.header;
+        motion.v_car = linear;
+        motion.w_car = angular;
+        motion_pub->publish(motion);
+      }
+      else
+      {
+        odom_pub->publish(odom);
+      }
     }
     std::this_thread::sleep_for(std::chrono::milliseconds(12));
     executor.spin_some();
@@ -100,6 +123,17 @@ int main(int argc, char ** argv)
     command = compute(point(0));
   }
   require(command.twist.linear.x > 0.0, "forward path produces positive velocity");
+  command = compute(point(0), true, 0.0, 0.0, 1.0);
+  require(command.twist.linear.x == 0.0 && command.twist.angular.z == 0.0, "newly received feedback retains its stale source timestamp");
+  for (int i = 0; i < 20; ++i)
+  {
+    command = compute(point(0));
+  }
+  require(command.twist.linear.x > 0.0, "fresh feedback resumes the same path");
+  command = compute(point(0), true, std::numeric_limits<double>::quiet_NaN());
+  require(command.twist.linear.x == 0.0 && command.twist.angular.z == 0.0, "invalid linear feedback commands zero");
+  command = compute(point(0), true, 0.0, std::numeric_limits<double>::infinity());
+  require(command.twist.linear.x == 0.0 && command.twist.angular.z == 0.0, "invalid angular feedback commands zero");
   path.poses.back() = point(-0.2);
   controller.setPlan(path);
   for (int i = 0; i < 15; ++i)
@@ -107,6 +141,8 @@ int main(int argc, char ** argv)
     command = compute(point(0));
   }
   require(command.twist.linear.x < 0.0, "reverse path produces negative velocity without 180 degree rotation");
+  command = compute(point(0), true, -0.01, -0.01);
+  require(command.twist.linear.x < 0.0, "signed reverse and angular feedback remains valid");
   path.poses.back() = point(0.2);
   controller.setPlan(path);
   for (int i = 0; i < 65; ++i)
@@ -197,5 +233,5 @@ int main(int argc, char ** argv)
   executor.remove_node(parent->get_node_base_interface());
   map->on_cleanup(rclcpp_lifecycle::State());
   rclcpp::shutdown();
-  std::cout << "Real controller forward/reverse/strict arrival/yaw/stale feedback/footprint checks passed; no motion command published\n";
+  std::cout << (motion_feedback ? "MotionState" : "Odometry") << " controller forward/reverse/strict arrival/yaw/stale feedback/footprint checks passed; no motion command published\n";
 }

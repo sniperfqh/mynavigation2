@@ -40,7 +40,7 @@ ros2 run nav2_regulated_modules collision_action_test.py \
 ```
 
 `Ctrl+C` 结束；`--max-legs 4` 可运行一轮；`--a X Y --b X Y` 覆盖端点，
-`--odom-topic /odometry`、`--base-frame base_link` 可匹配实际反馈接口。
+默认反馈为 `/motion_state` 的 MotionState；`--base-frame base_link` 可匹配实际车体坐标系。旧仿真原始反馈仍可显式选择 `--odom-topic /odometry`。
 输出目录必须尚不存在。工具请求速度固定为 1.5 m/s，不调整现有控制上限。
 开始前要求新鲜轮速连续停稳 1 秒。底盘发布者在空闲时可能存在但不发消息，不能仅因其存在就要求周期零指令；已收到的非零或非法指令仍拒绝起步。运动阶段的输出缺帧检查保持生效。
 
@@ -60,13 +60,13 @@ ros2 run nav2_regulated_modules collision_action_test.py \
 
 | 参数 | `--runtime sim` 默认 | `--runtime real` 默认 |
 |---|---|---|
-| 反馈话题／类型 | `/odometry`／`nav_msgs/msg/Odometry` | `/motion_state`／`byd_custom_msgs/msg/MotionState` |
+| 反馈话题／类型 | `/motion_state`／`byd_custom_msgs/msg/MotionState` | `/motion_state`／`byd_custom_msgs/msg/MotionState` |
 | 调度 | `cruise` | `periodic` |
 | 返程方向 | `forward` | `backward` |
 | 程数 | 0，持续运行 | 4 |
 | 周期状态保持秒数：4／3／2／1／0 | 4／3／3／3／3 | 12／4／4／3／3 |
 
-两种场景均可用 `--feedback-topic` 覆盖话题，消息类型由 `--runtime` 决定。实车读取 `v_car/w_car`，保留倒车负号；`--odom-topic` 仅作为仿真兼容参数，不能与 `--feedback-topic` 同时提供。实车不接受 `--odom-topic`。
+两种场景均可用 `--feedback-topic` 覆盖话题，默认读取 `v_car/w_car` 并保留倒车负号。实车始终使用 MotionState；仿真按话题末段 `motion_state` 使用 MotionState，其余名称保留 Odometry 兼容。`--odom-topic` 仅作为旧仿真 Odometry 兼容参数，不能与 `--feedback-topic` 同时提供。实车不接受 `--odom-topic`。
 
 可显式覆盖调度、返程方向、程数和周期时长；`--max-legs 0` 表示持续运行。路线过短、任务提前完成或观察窗不足时，未覆盖的状态与恢复项为 UNAVAILABLE，不能仅凭默认四程推断完整碰撞验收通过。
 

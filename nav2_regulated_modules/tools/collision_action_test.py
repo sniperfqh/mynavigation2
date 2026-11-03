@@ -20,7 +20,7 @@ def parse_args(argv=None):
     parser.add_argument('--a', nargs=2, type=float)
     parser.add_argument('--b', nargs=2, type=float)
     parser.add_argument('--base-frame', default='base_link')
-    parser.add_argument('--feedback-topic', help='real: MotionState；sim: Odometry')
+    parser.add_argument('--feedback-topic', help='默认 /motion_state；仿真其他末段名称的话题保留 Odometry 兼容')
     parser.add_argument('--odom-topic', help='仿真 Odometry 话题，兼容既有命令')
     parser.add_argument('--max-legs', type=int, help='real 默认 4；sim 默认 0（持续）；0 始终表示持续')
     parser.add_argument('--schedule', choices=['cruise', 'periodic'])
@@ -35,14 +35,17 @@ def parse_args(argv=None):
         parser.error('实车只接收 MotionState；请使用 --feedback-topic，不使用 --odom-topic')
     if args.feedback_topic is not None and args.odom_topic is not None:
         parser.error('--feedback-topic 与 --odom-topic 不可同时指定')
+    if args.odom_topic is not None and args.odom_topic.rsplit('/', 1)[-1] == 'motion_state':
+        parser.error('motion_state 使用 MotionState；请使用 --feedback-topic')
     args.a = args.a if args.a is not None else [9.16, -4.37]
     args.b = args.b if args.b is not None else [13.2, -.47]
     args.feedback_topic = (args.feedback_topic if args.feedback_topic is not None else
                            args.odom_topic if args.odom_topic is not None else
-                           '/motion_state' if real else '/odometry')
+                           '/motion_state')
     if not args.feedback_topic.strip():
         parser.error('反馈话题不能为空')
-    args.feedback_type = 'byd_custom_msgs/msg/MotionState' if real else 'nav_msgs/msg/Odometry'
+    motion_feedback = real or (args.odom_topic is None and args.feedback_topic.rsplit('/', 1)[-1] == 'motion_state')
+    args.feedback_type = 'byd_custom_msgs/msg/MotionState' if motion_feedback else 'nav_msgs/msg/Odometry'
     args.max_legs = args.max_legs if args.max_legs is not None else (4 if real else 0)
     args.schedule = args.schedule or ('periodic' if real else 'cruise')
     args.return_direction = args.return_direction or ('backward' if real else 'forward')
@@ -57,9 +60,9 @@ def parse_args(argv=None):
     return args
 
 
-def feedback_velocity(message, runtime):
-    """按明确场景取反馈速度；实车不把 Odometry 当成 MotionState。"""
-    if runtime == 'real':
+def feedback_velocity(message, feedback_type):
+    """按选定消息类型读取速度，仿真与实车默认均为 MotionState。"""
+    if feedback_type == 'byd_custom_msgs/msg/MotionState':
         return message.v_car, message.w_car
     return message.twist.twist.linear.x, message.twist.twist.angular.z
 
@@ -407,10 +410,10 @@ def main(argv=None):
     for topic in ['/cmd_vel_nav', '/cmd_vel']:
         subscriptions.append(node.create_subscription(Twist, topic, lambda m,t=topic: receive(t,m.linear.x,m.angular.z), qos_profile_sensor_data))
     subscriptions.append(node.create_subscription(ControlRes, '/control_to_uart', lambda m: receive('/control_to_uart',m.v,m.w), qos_profile_sensor_data))
-    feedback_class = MotionState if args.runtime == 'real' else Odometry
+    feedback_class = MotionState if args.feedback_type == 'byd_custom_msgs/msg/MotionState' else Odometry
     subscriptions.append(node.create_subscription(
         feedback_class, args.feedback_topic,
-        lambda m: receive(args.feedback_topic, *feedback_velocity(m, args.runtime)), qos_profile_sensor_data))
+        lambda m: receive(args.feedback_topic, *feedback_velocity(m, args.feedback_type)), qos_profile_sensor_data))
     qos = QoSProfile(depth=10, reliability=ReliabilityPolicy.RELIABLE, durability=DurabilityPolicy.TRANSIENT_LOCAL)
     for topic in ['/navigation_service', '/follow_path']:
         subscriptions.append(node.create_subscription(GoalStatusArray, topic+'/_action/status', lambda m,t=topic: statuses.__setitem__(t,m.status_list), qos))

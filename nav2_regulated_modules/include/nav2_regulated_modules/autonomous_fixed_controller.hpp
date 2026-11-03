@@ -9,6 +9,7 @@
 #include "nav2_regulated_modules/detail/autonomous_fixed_terminal_trim.hpp"
 #include "nav2_costmap_2d/footprint_collision_checker.hpp"
 #include "nav_msgs/msg/odometry.hpp"
+#include "byd_custom_msgs/msg/motion_state.hpp"
 #include "std_msgs/msg/string.hpp"
 
 namespace nav2_regulated_modules
@@ -46,7 +47,7 @@ private:
   std::unique_ptr<nav2_costmap_2d::FootprintCollisionChecker<nav2_costmap_2d::Costmap2D *>> collision_;
   rclcpp_lifecycle::LifecycleNode::SharedPtr node_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr status_pub_;
-  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr odom_sub_;
+  rclcpp::SubscriptionBase::SharedPtr odom_sub_;
   rclcpp::Subscription<std_msgs::msg::String>::SharedPtr localization_gate_sub_;
   nav_msgs::msg::Odometry odom_;
   std::chrono::steady_clock::time_point odom_received_;

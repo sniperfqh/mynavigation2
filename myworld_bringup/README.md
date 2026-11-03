@@ -47,8 +47,8 @@ Gazebo 可通过 `headless:=true` 在后台运行；不需要 RViz 时可传入 
 | `/scan` | `sensor_msgs/msg/LaserScan`，雷达扫描，坐标系 `base_scan` |
 | `/scan/points` | `sensor_msgs/msg/PointCloud2`，同一仿真雷达的点云 |
 | `/imu`、`/joint_states` | 仿真 IMU 和左右轮关节状态 |
-| `/odometry` | Gazebo 里程计 `nav_msgs/msg/Odometry` |
-| `/motion_state` | 由 `/odometry` 转换的车辆线速度和角速度；升降及货架字段为零 |
+| `/odometry` | Gazebo 原始 `nav_msgs/msg/Odometry`，保留为转换输入 |
+| `/motion_state` | `byd_custom_msgs/msg/MotionState`，与实车一致的速度反馈；升降及货架字段为零 |
 | `/map` | 来自 `models/myworld2/myworld2.yaml` 的静态占据栅格 |
 | `/cmd_vel` | 可选的 `geometry_msgs/msg/Twist` 速度输入，由 Gazebo 差速底盘接收 |
 
@@ -109,13 +109,14 @@ ros2 launch myworld_bringup entry.launch.py \
 | collision | fixed_path 默认启用外部状态门控与区域可视化；自主模式门控和可视化关闭，Collision Monitor 各模式均默认 false |
 | 启动延迟 | autonomous／fixed_path 栈共用 `navigation_stack_start_delay`，默认沿用 `fixed_path_stack_start_delay=3.0`；RViz 5 s；延迟不保证外部定位已就绪 |
 
-`map:=...` 对两种导航模式均可显式覆盖默认地图。`ign_partition` 默认按 ROS_DOMAIN_ID 与启动 PID 生成；外部 Ignition 工具需连接相同 partition。只有显式设置 `use_gazebo:=false` 时，才关闭仿真与桥接，并要求外部提供 `/scan`、`/odometry`、`/motion_state`；Cartographer 本身不生成这些传感器与速度数据。
+`map:=...` 对两种导航模式均可显式覆盖默认地图。`ign_partition` 默认按 ROS_DOMAIN_ID 与启动 PID 生成；外部 Ignition 工具需连接相同 partition。只有显式设置 `use_gazebo:=false` 时，才关闭仿真与桥接，并要求外部提供 `/scan`、`/motion_state` 及定位所需的其他输入；Cartographer 本身不生成这些传感器与速度数据。默认规控速度反馈不再要求外部 `/odometry`。
 
 ## 反馈与速度链
 
 ```text
 Gazebo /odom → ROS 桥接重映射 → /odometry (Odometry)
   → odom_to_motion_state.py → /motion_state (MotionState，继承 Header)
+    → Controller Server／regulated_navigator／velocity_smoother／速度诊断
 外部定位 → map→base_link；Robot State Publisher → 机器人内部静态 TF
 autonomous: NavigateToPose／NavigateThroughPoses／goal_pose
   → regulated_navigator → Planner → 路径 Smoother → FollowPath
@@ -125,7 +126,9 @@ FollowPath → Controller Server → /cmd_vel_nav
   → controlpub → /control_to_uart
 ```
 
-控制器反馈和导航器旧速度日志的话题为 `/odometry`；平滑器与底盘闭环读取 `/motion_state`，导航器的旧速度日志仅在对应日志开关启用时订阅。ROS 侧话题直接配置在 `params/myworld2.yaml`，桥接负责将 Gazebo `/odom` 重映射为 ROS `/odometry`；入口不再读取 YAML 并动态修改话题。自主模式控制器、速度平滑器和默认诊断快照为 50 Hz；固定路径模式保持原设置，Gazebo 里程计配置保持 100 Hz，实际墙钟接收频率需要单独测量。
+控制器、导航器速度观测与 `autonomous_fixed` 停稳判断、平滑器、底盘闭环及独立速度诊断统一读取 `/motion_state` 的 `v_car/w_car`；定位位姿仍来自 TF。导航器旧日志仅在对应开关启用时打印，第四模式即使关闭旧日志也订阅速度反馈用于停稳判断。ROS 侧话题配置在 `params/myworld2.yaml`，桥接继续将 Gazebo `/odom` 重映射为原始 `/odometry`，转换节点保留源 Header，不用当前时间掩盖过期反馈。自主模式控制器、速度平滑器和默认诊断快照为 50 Hz；固定路径及 `autonomous_fixed` 保持 100 Hz，Gazebo 里程计配置保持 100 Hz，实际墙钟接收频率需要单独测量。
+
+当前 `entry.launch.py` 和 `simulation_only.launch.py` 保留已有转换节点；独立使用旧 `ros_ign_bridge.launch.py` 时由该桥接入口转换原始 `/odom`，旧 `navigation_launch.py` 的速度话题覆盖也统一为 `/motion_state`。这些入口不应在同一 ROS 域重复启动。未启用的 BT／TEB 参数块及定位使用的原始 Odometry 保留，不把位姿接口改为仅含运动状态的消息。
 
 系统时间模式重写桥接传感器和必要时间戳，不发布仿真 `/clock`；暂停 Gazebo 时系统时间上的超时继续。外部定位必须使用一致时间基准。定位跳变取消保护默认 false，TF 丢失保护仍存在。
 

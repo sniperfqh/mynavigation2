@@ -1,7 +1,7 @@
 """Navigation entry: external localization exclusively publishes map -> base_link.
 
-Subscribe to /scan with the base_link -> base_scan extrinsics. /odometry is
-velocity feedback for controllers; /motion_state feeds the smoother.
+Subscribe to /scan with the base_link -> base_scan extrinsics. Raw /odometry
+is converted to /motion_state for controllers, the navigator and the smoother.
 All modes default to headless Gazebo with its feedback bridges.
 use_gazebo:=false switches to external sensor and velocity inputs.
 No Gazebo bottom-chassis TF or substitute localization is published here.

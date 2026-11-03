@@ -26,6 +26,7 @@ ros2 launch nav2_regulated_modules regulated_modules.launch.py operation_mode:=f
 - `status` 分为 `missing`、`invalid`、`stale`、`valid`；默认超过 0.2 秒未更新为 stale。missing 的零值只是占位值，不代表停稳。
 - 导航额外记录 `ChassisControl` 支路输入（`vx/wz` 是原始请求字段，`op` 表示方向，未收到时 `op=-1`）；导航记录控制器输出／平滑器输入、平滑器输出、启用时的碰撞监控输出、控制器反馈、平滑器反馈、底盘反馈及串口出口；remote 记录 `/control_to_uart` 的 `ControlRes.v/w` 和 `/motion_state` 的实际反馈。遥控输入是键盘事件，没有输入速度话题。
 - 控制器、平滑器的反馈话题取自同一参数 YAML；`/motion_state` 使用 `MotionState.v_car/w_car`，其他反馈话题使用 `Odometry.twist`。
+- `myworld_bringup` 仿真已将控制器与导航器速度反馈统一为 `/motion_state`；三路反馈诊断复用同一个 MotionState 来源。原始 `/odometry` 只供桥接转换，不再作为默认规控速度观测源。
 
 ## 边界
 

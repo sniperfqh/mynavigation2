@@ -198,13 +198,21 @@ void RegulatedNavigator::onSmoothedVelocity(const geometry_msgs::msg::Twist::Sha
   has_smoothed_velocity_ = true;
 }
 
-// 记录 Odometry 的完整最新样本，仅用于速度链观察。
-// 这里不会将里程计位置转换为地图定位。
+// 保留源 Header 和实测速度，供速度观测及 autonomous_fixed 停稳判断。
 void RegulatedNavigator::onVelocityOdometry(const nav_msgs::msg::Odometry::SharedPtr odometry)
 {
   std::lock_guard<std::mutex> lock(velocity_mutex_);
   latest_velocity_odometry_ = *odometry;
   has_velocity_odometry_ = true;
+}
+
+void RegulatedNavigator::onVelocityMotionState(const byd_custom_msgs::msg::MotionState::SharedPtr motion)
+{
+  auto odometry = std::make_shared<nav_msgs::msg::Odometry>();
+  odometry->header = motion->header;
+  odometry->twist.twist.linear.x = motion->v_car;
+  odometry->twist.twist.angular.z = motion->w_car;
+  onVelocityOdometry(odometry);
 }
 
 // 先在锁内复制三路快照，再在锁外写日志，减少回调持锁时间。

@@ -21,7 +21,8 @@ from ament_index_python.packages import get_package_prefix
 from geometry_msgs.msg import TransformStamped, PoseStamped, Twist
 from lifecycle_msgs.msg import Transition
 from lifecycle_msgs.srv import ChangeState
-from nav_msgs.msg import Odometry, Path as NavPath
+from nav_msgs.msg import Path as NavPath
+from byd_custom_msgs.msg import MotionState
 from nav2_msgs.action import ComputePathToPose, ComputePathThroughPoses, FollowPath, NavigateToPose
 from std_msgs.msg import String
 from tf2_ros import TransformBroadcaster
@@ -43,7 +44,7 @@ class Driver(Node):
         self.frozen = []
         self.group = ReentrantCallbackGroup()
         self.tf = TransformBroadcaster(self)
-        self.odom = self.create_publisher(Odometry, '/odometry', 10)
+        self.motion = self.create_publisher(MotionState, '/motion_state', 10)
         self.status = self.create_publisher(String, 'autonomous_fixed/execution_status', 10)
         self.raw = self.create_publisher(Twist, 'cmd_vel_nav', 10)
         self.final = self.create_publisher(Twist, 'cmd_vel', 10)
@@ -65,12 +66,10 @@ class Driver(Node):
             transform.transform.translation.x = self.x
             transform.transform.rotation.w = 1.0
             self.tf.sendTransform(transform)
-        odom = Odometry()
-        odom.header.stamp = stamp
-        odom.header.frame_id = 'map'
-        odom.pose.pose.position.x = self.x
-        odom.pose.pose.orientation.w = 1.0
-        self.odom.publish(odom)
+        motion = MotionState()
+        motion.header.stamp = stamp
+        motion.header.frame_id = 'base_link'
+        self.motion.publish(motion)
 
     def unused(self, goal):
         raise AssertionError('Multi-point planner must not be called')
@@ -141,6 +140,7 @@ def main():
     prefix = Path(get_package_prefix('nav2_regulated_modules'))
     log = (output / 'navigator.log').open('w')
     parameters = {'operation_mode': 'autonomous_fixed', 'planner_id': 'SmacHybrid',
+                  'velocity_odom_topic': '/motion_state',
                   'use_smoother': 'false', 'legacy_velocity_logging': 'false',
                   'collision_state_enabled': 'false', 'progress_timeout': '1.0',
                   'localization_timeout': '0.15', 'localization_stable_duration': '0.15',

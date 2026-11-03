@@ -70,13 +70,31 @@ void AutonomousFixedPathController::configure(const rclcpp_lifecycle::LifecycleN
   status_pub_ = node_->create_publisher<std_msgs::msg::String>("autonomous_fixed/execution_status", rclcpp::QoS(10));
   // Controller Server 在加载插件后才构造 OdomSubscriber，故在这里先声明同一参数。
   nav2_util::declare_parameter_if_not_declared(node_, "odom_topic", rclcpp::ParameterValue(std::string("odom")));
-  odom_sub_ = node_->create_subscription<nav_msgs::msg::Odometry>(node_->get_parameter("odom_topic").as_string(), rclcpp::SensorDataQoS(), [this](nav_msgs::msg::Odometry::ConstSharedPtr sample)
+  const auto odom_topic = node_->get_parameter("odom_topic").as_string();
+  // 与 Controller Server 一致：motion_state 使用底盘反馈，其余话题保留 Odometry 兼容。
+  if (odom_topic.substr(odom_topic.find_last_of('/') + 1) == "motion_state")
   {
-    std::lock_guard<std::mutex> lock(mutex_);
-    odom_ = *sample;
-    odom_received_ = std::chrono::steady_clock::now();
-    has_odom_ = true;
-  });
+    odom_sub_ = node_->create_subscription<byd_custom_msgs::msg::MotionState>(odom_topic, rclcpp::SensorDataQoS(), [this](byd_custom_msgs::msg::MotionState::ConstSharedPtr sample)
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      odom_ = nav_msgs::msg::Odometry();
+      odom_.header = sample->header;
+      odom_.twist.twist.linear.x = sample->v_car;
+      odom_.twist.twist.angular.z = sample->w_car;
+      odom_received_ = std::chrono::steady_clock::now();
+      has_odom_ = true;
+    });
+  }
+  else
+  {
+    odom_sub_ = node_->create_subscription<nav_msgs::msg::Odometry>(odom_topic, rclcpp::SensorDataQoS(), [this](nav_msgs::msg::Odometry::ConstSharedPtr sample)
+    {
+      std::lock_guard<std::mutex> lock(mutex_);
+      odom_ = *sample;
+      odom_received_ = std::chrono::steady_clock::now();
+      has_odom_ = true;
+    });
+  }
   localization_gate_sub_ = node_->create_subscription<std_msgs::msg::String>("autonomous_fixed/localization_gate", rclcpp::QoS(10), [this](std_msgs::msg::String::ConstSharedPtr sample)
   {
     std::lock_guard<std::mutex> lock(mutex_);

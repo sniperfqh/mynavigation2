@@ -12,7 +12,8 @@ from rclpy.action import ActionClient
 from rclpy.qos import QoSProfile, DurabilityPolicy, qos_profile_sensor_data
 from action_msgs.msg import GoalStatusArray
 from geometry_msgs.msg import Twist
-from nav_msgs.msg import Odometry, Path as NavPath, OccupancyGrid
+from nav_msgs.msg import Path as NavPath, OccupancyGrid
+from byd_custom_msgs.msg import MotionState
 from nav2_msgs.action import NavigateToPose, NavigateThroughPoses
 from rcl_interfaces.srv import GetParameters
 from std_msgs.msg import String
@@ -58,7 +59,7 @@ def main():
         elif isinstance(message, GoalStatusArray):
             planner_ids.update(bytes(s.goal_info.goal_id.uuid).hex() for s in message.status_list)
 
-    for topic, msg_type, qos in [('/odometry', Odometry, qos_profile_sensor_data),
+    for topic, msg_type, qos in [('/motion_state', MotionState, qos_profile_sensor_data),
                                  ('/cmd_vel_nav', Twist, 10), ('/cmd_vel', Twist, 10),
                                  ('/plan', NavPath, 10), ('/autonomous_fixed/plan', NavPath, QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL)),
                                  ('/autonomous_fixed/execution_status', String, 10),
@@ -96,11 +97,11 @@ def main():
         return transform.transform.translation.x, transform.transform.translation.y, yaw, age
 
     def stopped():
-        sample = latest.get('/odometry')
+        sample = latest.get('/motion_state')
         if sample is None or time.monotonic() - sample[0] > 0.2:
             return False
-        velocity = sample[1].twist.twist
-        return abs(velocity.linear.x) <= 0.01 and abs(velocity.angular.z) <= 0.05
+        velocity = sample[1]
+        return abs(velocity.v_car) <= 0.01 and abs(velocity.w_car) <= 0.05
 
     def corridor_free(start, target):
         sample = latest.get('/map')

@@ -328,7 +328,14 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   {
     controller_velocity_sub_ = create_subscription<geometry_msgs::msg::Twist>(controller_cmd_vel_topic_, velocity_qos, std::bind(&RegulatedNavigator::onControllerVelocity, this, std::placeholders::_1));
     smoothed_velocity_sub_ = create_subscription<geometry_msgs::msg::Twist>(smoothed_cmd_vel_topic_, velocity_qos, std::bind(&RegulatedNavigator::onSmoothedVelocity, this, std::placeholders::_1));
-    velocity_odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(velocity_odom_topic_, velocity_qos, std::bind(&RegulatedNavigator::onVelocityOdometry, this, std::placeholders::_1));
+    if (velocity_odom_topic_.substr(velocity_odom_topic_.find_last_of('/') + 1) == "motion_state")
+    {
+      velocity_odom_sub_ = create_subscription<byd_custom_msgs::msg::MotionState>(velocity_odom_topic_, velocity_qos, std::bind(&RegulatedNavigator::onVelocityMotionState, this, std::placeholders::_1));
+    }
+    else
+    {
+      velocity_odom_sub_ = create_subscription<nav_msgs::msg::Odometry>(velocity_odom_topic_, velocity_qos, std::bind(&RegulatedNavigator::onVelocityOdometry, this, std::placeholders::_1));
+    }
   }
   // 普通发布器用于绝对速度基准；它不是最终底盘速度出口。
   speed_limit_pub_ = this->create_publisher<nav2_msgs::msg::SpeedLimit>( speed_limit_topic_, rclcpp::QoS(10));

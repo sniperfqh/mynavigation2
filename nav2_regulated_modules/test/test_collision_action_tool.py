@@ -20,7 +20,8 @@ class EvidenceTest(unittest.TestCase):
     def test_runtime_defaults_and_explicit_overrides(self):
         sim = tool.parse_args(['--output-dir', '/tmp/not-created'])
         self.assertEqual((sim.runtime, sim.feedback_topic, sim.schedule, sim.return_direction, sim.max_legs),
-                         ('sim', '/odometry', 'cruise', 'forward', 0))
+                         ('sim', '/motion_state', 'cruise', 'forward', 0))
+        self.assertEqual(sim.feedback_type, 'byd_custom_msgs/msg/MotionState')
         self.assertEqual(sim.state_durations, [4, 3, 3, 3, 3])
         real_args = ['--runtime', 'real', '--a', '0', '0', '--b', '30', '0',
                      '--output-dir', '/tmp/not-created']
@@ -36,6 +37,10 @@ class EvidenceTest(unittest.TestCase):
         self.assertEqual(explicit.state_durations, [5, 4, 3, 2, 1])
         self.assertEqual(tool.parse_args(['--output-dir', '/tmp/not-created', '--odom-topic', '/odom']).feedback_topic,
                          '/odom')
+        legacy = tool.parse_args(['--output-dir', '/tmp/not-created', '--odom-topic', '/odometry'])
+        self.assertEqual(legacy.feedback_type, 'nav_msgs/msg/Odometry')
+        with redirect_stderr(StringIO()), self.assertRaises(SystemExit):
+            tool.parse_args(['--output-dir', '/tmp/not-created', '--odom-topic', '/motion_state'])
 
     def test_invalid_real_route_or_feedback_is_rejected_before_ros(self):
         base = ['--runtime', 'real', '--output-dir', '/tmp/not-created']
@@ -50,10 +55,10 @@ class EvidenceTest(unittest.TestCase):
             self.assertEqual(error.exception.code, 2)
 
     def test_feedback_conversion_preserves_reverse_and_angular_speed(self):
-        self.assertEqual(tool.feedback_velocity(SimpleNamespace(v_car=-1.2, w_car=.04), 'real'), (-1.2, .04))
+        self.assertEqual(tool.feedback_velocity(SimpleNamespace(v_car=-1.2, w_car=.04), 'byd_custom_msgs/msg/MotionState'), (-1.2, .04))
         odom = SimpleNamespace(twist=SimpleNamespace(twist=SimpleNamespace(
             linear=SimpleNamespace(x=-.9), angular=SimpleNamespace(z=-.03)) ))
-        self.assertEqual(tool.feedback_velocity(odom, 'sim'), (-.9, -.03))
+        self.assertEqual(tool.feedback_velocity(odom, 'nav_msgs/msg/Odometry'), (-.9, -.03))
 
     def test_summary_requires_all_states_both_directions_and_recovery(self):
         records = [dict(direction=d, state=s, status='PASS') for d in (1, -1) for s in range(5)]

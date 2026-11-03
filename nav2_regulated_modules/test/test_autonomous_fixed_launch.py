@@ -12,6 +12,14 @@ SPEC.loader.exec_module(MODULE)
 
 
 class AutonomousFixedLaunchTest(unittest.TestCase):
+    def test_simulation_feedback_matches_real_motion_state(self):
+        simulation = yaml.safe_load((ROOT.parent / 'myworld_bringup/params/myworld2.yaml').read_text())
+        real = yaml.safe_load((ROOT / 'params/regulated_modules.yaml').read_text())
+        for config in [simulation, real]:
+            self.assertEqual(config['controller_server']['ros__parameters']['odom_topic'], '/motion_state')
+            self.assertEqual(config['velocity_smoother']['ros__parameters']['odom_topic'], '/motion_state')
+        self.assertEqual(simulation['regulated_navigator']['ros__parameters']['velocity_odom_topic'], '/motion_state')
+
     def test_collision_routing_for_standalone_and_composition(self):
         from test_collision_launch import CollisionLaunchTest
         resolver = CollisionLaunchTest()

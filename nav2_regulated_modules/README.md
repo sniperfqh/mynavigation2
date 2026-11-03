@@ -58,7 +58,7 @@ FollowPath → Controller Server → /cmd_vel_nav
 启用 Collision Monitor 时：平滑器 → /cmd_vel_collision_in → Collision Monitor → /cmd_vel
 ```
 
-控制器、导航器默认读取 `/odometry` 的 Odometry；平滑器及底盘闭环使用 `/motion_state` 的 MotionState。`v_car/w_car` 映射到线／角速度；反馈过期、定位缺失、取消和正常到点分别处理。TF 须提供新鲜 `map→base_link`，或由明确的 TF 链组合得到；不把原始里程计位置当作地图定位。
+实车 YAML 的控制器和平滑器读取 `/motion_state` 的 MotionState；`myworld_bringup` 仿真也将控制器、导航器速度观测和停稳判断统一到该接口。控制包装及导航器按反馈话题末段 `motion_state` 选择 MotionState，其余话题保留 Odometry 兼容；独立使用规控入口时，导航器 `velocity_odom_topic` 仍以所选 YAML 和原默认值为准，本轮未修改实车 YAML。`v_car/w_car` 映射到线／角速度并保留源 Header；反馈过期、定位缺失、取消和正常到点分别处理。TF 须提供新鲜 `map→base_link`，或由明确的 TF 链组合得到；不把原始里程计位置当作地图定位。
 
 `regulated_navigator` 另监听 `/downstream/chassis_control`，收到该支路有效命令才处理底盘请求。部署时须核对最终控制源，避免键盘直控与导航转发同时竞争 `/control_to_uart`。
 

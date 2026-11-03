@@ -42,8 +42,12 @@ def generate_launch_description():
         package='ros_gz_bridge', executable='parameter_bridge', name='gazebo_clock_bridge',
         condition=IfCondition(use_sim_time), parameters=[{'use_sim_time': True}],
         arguments=['/clock@rosgraph_msgs/msg/Clock[gz.msgs.Clock'], output='screen')
+    motion_state = Node(
+        package='myworld_bringup', executable='odom_to_motion_state.py', name='odom_to_motion_state',
+        parameters=[{'use_sim_time': use_sim_time, 'input_topic': '/odom',
+                     'output_topic': '/motion_state'}], output='screen')
     return LaunchDescription([
         DeclareLaunchArgument('use_sim_time', default_value='false', choices=['true', 'false'],
                               description='Use system timestamps by default; true restores Gazebo time'),
-        bridge, tf_system_time, clock_bridge,
+        bridge, tf_system_time, clock_bridge, motion_state,
     ])

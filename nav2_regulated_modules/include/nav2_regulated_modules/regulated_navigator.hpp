@@ -207,9 +207,9 @@ private:
   // 记录平滑后 Twist 供诊断；不再对速度限幅或二次发布。
   // 旧快照可持续存在，消费者应另行理解采样新鲜度。
   void onSmoothedVelocity(const geometry_msgs::msg::Twist::SharedPtr velocity);
-  // 记录 Odometry 的完整最新样本，仅用于速度链观察。
-  // 这里不会将里程计位置转换为地图定位。
+  // 缓存速度反馈，供速度观测和 autonomous_fixed 连续停稳判断；不作为地图定位。
   void onVelocityOdometry(const nav_msgs::msg::Odometry::SharedPtr odometry);
+  void onVelocityMotionState(const byd_custom_msgs::msg::MotionState::SharedPtr motion);
   // 先在锁内复制三路快照，再在锁外写日志，减少回调持锁时间。
   // 没有任何样本时不打印；独立订阅的 latest 值不能当作同步传感器帧。
   void logVelocityChain();
@@ -352,7 +352,7 @@ private:
   rclcpp::Subscription<geometry_msgs::msg::PoseStamped>::SharedPtr goal_sub_;
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr controller_velocity_sub_;
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr smoothed_velocity_sub_;
-  rclcpp::Subscription<nav_msgs::msg::Odometry>::SharedPtr velocity_odom_sub_;
+  rclcpp::SubscriptionBase::SharedPtr velocity_odom_sub_;
   rclcpp::Publisher<nav2_msgs::msg::SpeedLimit>::SharedPtr speed_limit_pub_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr stop_cmd_pub_;
   rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr fixed_path_pub_;
