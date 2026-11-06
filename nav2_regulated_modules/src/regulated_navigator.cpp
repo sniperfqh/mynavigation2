@@ -21,6 +21,9 @@ RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : na
   declare_parameter("global_frame", "map");
   declare_parameter("robot_base_frame", "base_link");
   declare_parameter("operation_mode", "autonomous");
+  declare_parameter("tf_diagnostics_enabled", true);
+  declare_parameter("tf_diagnostics_log_frequency", 1.0);
+  declare_parameter("tf_diagnostics_map_base_frequency", 100.0);
   // 节点内置回退仍为 false；fixed_path 项目入口会按模式与启用开关统一注入 true／false。
   declare_parameter("collision_state_enabled", false);
   declare_parameter("collision_state_topic", "/collision_state");
@@ -342,6 +345,10 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
 
   tf_buffer_ = std::make_unique<tf2_ros::Buffer>(get_clock());
   tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
+  if (operation_mode_ == NavigationMode::FIXED_PATH && get_parameter("tf_diagnostics_enabled").as_bool())
+  {
+    tf_diagnostics_ = std::make_unique<TfDiagnostics>(*this, *tf_buffer_, global_frame_, robot_base_frame_, get_parameter("tf_diagnostics_log_frequency").as_double(), get_parameter("tf_diagnostics_map_base_frequency").as_double());
+  }
   const auto feedback_period = std::chrono::duration<double>(1.0 / feedback_frequency_);
   feedback_timer_ = create_wall_timer(std::chrono::duration_cast<std::chrono::milliseconds>(feedback_period), std::bind(&RegulatedNavigator::publishFeedback, this));
   monitor_timer_ = create_wall_timer(200ms, std::bind(&RegulatedNavigator::monitorTask, this));
@@ -463,6 +470,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_cleanup(const rclcpp_lifecycle:
     has_smoothed_velocity_ = false;
     has_velocity_odometry_ = false;
   }
+  tf_diagnostics_.reset();
   tf_listener_.reset();
   tf_buffer_.reset();
   LOG_INFO("独立规控导航器已清理");

@@ -40,6 +40,10 @@ ros2 launch nav2_regulated_modules regulated_modules.launch.py \
 
 直接入口不启动 Gazebo、AMCL、合成 TF 或合成雷达。默认地图为 `/userdata/map/pbstream/out.yaml`；用 `map:=...` 覆盖。可用 `ros2 launch nav2_regulated_modules regulated_modules.launch.py --show-args` 查看安装版本支持的参数，实际值受 YAML、Launch 重写及显式实参共同影响。
 
+默认 `fixed_path` 入口采用满载纵向运动限值：最终速度平滑输出的正常加速度／减速度幅值均不超过 0.3 m/s²，jerk 不超过 1.0 m/s³，覆盖前进／后退起步、途中变速、减速和换向；停车规划减速度仍为 YAML 的 0.2 m/s²。限制作用于指令，底盘实测加速度与上装振动仍需实车验收。当前不识别负重，空载固定路径同样使用此档。仅重写平滑器四项限值的 x 分量，保留角向、共享 YAML、投影计距及终点判据；autonomous／autonomous_fixed／remote 和显式 `adaptive_goal_braking_enabled:=true` 分支保持原配置。0→0.3 m/s 的理想斜坡约 1.3 s，高速加减速所需时间／距离也随之增加。
+
+自定义参数文件中更严格的纵向限值继续沿用。当前 S 曲线以加／减速度幅值的较小值约束两向运动；若自定义停车规划减速度高于该有效限值，Launch 会明确报错，避免按无法达到的减速度估计停车距离。
+
 场景入口的 `myworld_bringup/params/myworld2.yaml` 将导航器 `planner_id`、规划服务器 `selected_planner` 配置为 `SmacHybrid`，并设置 `SmacHybrid.motion_model_for_search=REEDS_SHEPP`（RS，允许前进／倒车搜索）。场景 Launch 显式传入空的 `autonomous_planner_id`，让这三个值以参数文件为准。直接启动本规控 Launch 时，`autonomous_planner_id` 默认 `SmacHybrid`，仅自主模式同步覆盖导航器 `planner_id` 和服务器 `selected_planner`；显式传空可沿用 YAML，fixed_path／remote 忽略该实参。运动模型始终读取指定 YAML。已运行的导航栈需重新启动才加载文件改动。
 
 自主模式专用修复包括 TF 源时间戳校验、有效旋转／末端误差进度、真正恢复后重建计时基准；fixed_path／remote 不进入这些新分支。Controller 的 PoseProgressChecker 和较小位移阈值也只在 autonomous 的参数重写中启用。场景入口额外传 `autonomous_mppi_profile=true`，在 `MPPI` ID 下选择 `AutonomousMPPIController`（内部为 MPPI），并选择 `AutonomousStoppedGoalChecker`；直接入口默认该开关 false，保留原 RPP 选择。共享 YAML、FixedPathController 和固定路径 GoalChecker 未改。
@@ -118,6 +122,7 @@ ros2 run nav2_regulated_modules collision_action_test.py \
 统一速度诊断默认开启：自主模式文件快照 50 Hz、固定路径／remote 100 Hz，终端摘要 1 Hz；默认日志目录 `/tmp/nav2_logs`，可通过 `log_dir` 改到数据盘。`ROS_LOG_DIR` 管理 ROS Launch 日志，两者独立。`enable_legacy_velocity_logs=false` 默认抑制重复摘要，关闭统一诊断后回退旧记录。
 
 - [速度日志](doc/velocity_logging.md)：字段、异步滚动、S 曲线及缺失／过期状态。
+- [固定路径 TF 诊断](doc/tf_diagnostics.md)：map→base_link 默认 100 Hz 采样打印、直接边逐条接收打印、控制器消费记录及逐边／时钟摘要。
 - [固定路径架构](doc/fixed_path_architecture.md)：既有模块与控制流程分析，其中旧的 Collision Monitor 默认开启描述以本 README 的当前默认表为准。
 - [分开验收](doc/action_only_acceptance.md)：速度停稳与定位采样质量分开评价。
 - [测试工具](tools/README.md)：工具运行前提及会修改环境的实验边界。

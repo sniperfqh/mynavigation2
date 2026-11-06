@@ -1,6 +1,7 @@
-"""Check autonomous-only parameter changes without starting ROS nodes."""
+"""Check mode-specific parameter changes without starting ROS nodes."""
 import importlib.util
 import ast
+import copy
 from pathlib import Path
 import tempfile
 import unittest
@@ -17,6 +18,15 @@ spec.loader.exec_module(module)
 
 
 class AutonomousLaunchTest(unittest.TestCase):
+    def expected_fixed_path_limits(self, document, namespace=''):
+        expected = copy.deepcopy(document)
+        config = expected[namespace] if namespace else expected
+        smoother = config['velocity_smoother']['ros__parameters']
+        for name, value in [('max_accel', 0.3), ('max_decel', -0.3),
+                            ('max_accel_jerk', 1.0), ('max_decel_jerk', 1.0)]:
+            smoother[name][0] = value
+        return expected
+
     def resolve(self, mode, profile, namespace='', planner_id=''):
         source = ROOT.parent / 'myworld_bringup/params/myworld2.yaml'
         context = LaunchContext()
@@ -27,12 +37,14 @@ class AutonomousLaunchTest(unittest.TestCase):
         baseline = RewrittenYaml(**kwargs).perform(context)
         return yaml.safe_load(Path(resolved).read_text()), yaml.safe_load(Path(baseline).read_text())
 
-    def test_fixed_and_remote_are_byte_equivalent_parameters(self):
+    def test_fixed_motion_limits_and_remote_compatibility(self):
         for mode in ['fixed_path', 'remote']:
             for profile in [False, True]:
                 for namespace in ['', 'robot']:
                     with self.subTest(mode=mode, profile=profile, namespace=namespace):
                         resolved, baseline = self.resolve(mode, profile, namespace)
+                        if mode == 'fixed_path':
+                            baseline = self.expected_fixed_path_limits(baseline, namespace)
                         self.assertEqual(resolved, baseline)
 
     def test_simulation_planner_override_is_autonomous_only(self):
@@ -53,6 +65,8 @@ class AutonomousLaunchTest(unittest.TestCase):
                             self.assertEqual(server[server['selected_planner']]['motion_model_for_search'],
                                              'REEDS_SHEPP')
                         else:
+                            if mode == 'fixed_path':
+                                baseline = self.expected_fixed_path_limits(baseline)
                             self.assertEqual(resolved, baseline)
 
     def test_autonomous_mppi_wrapper_and_settle(self):

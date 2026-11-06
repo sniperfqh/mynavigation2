@@ -4,6 +4,8 @@
 #ifndef NAV2_REGULATED_MODULES__FIXED_PATH_CONTROLLER_HPP_
 #define NAV2_REGULATED_MODULES__FIXED_PATH_CONTROLLER_HPP_
 
+#include "nav2_regulated_modules/detail/tf_timing.hpp"
+
 #include <cstddef>
 #include <memory>
 #include <mutex>
@@ -83,8 +85,8 @@ private:
   // 只在当前 nearest_index 及其之后搜索最近离散点，避免进度倒退。
   // 输出是路径索引而非弧长；同距离候选保留先遇点。
   std::size_t findNearestIndex(const geometry_msgs::msg::PoseStamped & robot_pose);
-  // 当前位置到选定路径点的距离加上后续折线长度，单位 m。
-  // 这与到终点的直线距离不同，弯道与偏离路径时不能混用。
+  // 从最近点相邻有效线段的投影进度计算剩余弧长，单位 m。
+  // 不把横向偏差或已走过的点距加回行程；最近点搜索和停车判据保持独立。
   double remainingDistance(std::size_t start_index, const geometry_msgs::msg::PoseStamped & robot_pose) const;
   // 从 start_index 向前累计离散弧长，返回首个达到前视距离的路径点。
   // 若余下路径不够长，沿末段单位切线外推；外推只服务曲率计算，不改变业务终点。
@@ -187,6 +189,10 @@ private:
   int alignment_stable_cycles_ { 1 };
   rclcpp::Time last_error_log_time_ { 0, 0, RCL_ROS_TIME };
   bool error_log_initialized_ { false };
+  bool tf_diagnostics_enabled_ = false;
+  double tf_diagnostics_log_frequency_ = 100.0;
+  std::int64_t last_tf_diagnostic_steady_ns_ = 0;
+  detail::TfTiming tf_timing_;
 };
 
 }

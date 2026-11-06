@@ -28,6 +28,7 @@
 #include "nav2_regulated_modules/motion_state_subscriber.hpp"
 #include "nav2_regulated_modules/navigation_state.hpp"
 #include "nav2_regulated_modules/planning_module.hpp"
+#include "nav2_regulated_modules/tf_diagnostics.hpp"
 #include "nav2_regulated_modules/detail/autonomous_fixed_path.hpp"
 #include "std_msgs/msg/string.hpp"
 #include "nav2_util/lifecycle_node.hpp"
@@ -362,6 +363,7 @@ private:
   rclcpp::TimerBase::SharedPtr velocity_log_timer_;
   std::unique_ptr<tf2_ros::Buffer> tf_buffer_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+  std::unique_ptr<TfDiagnostics> tf_diagnostics_;
 };
 
 }

@@ -22,13 +22,16 @@ from nav2_common.launch import RewrittenYaml
 
 
 class NavigationRewrittenYaml(RewrittenYaml):
-    """Keep fixed_path/remote rewrites unchanged; select autonomous settings lazily."""
+    """Apply mode-specific motion profiles without changing the shared YAML."""
 
     def __init__(self, **kwargs):
         self.navigation_kwargs = kwargs
         super().__init__(**kwargs)
 
     def perform(self, context):
+        if (LaunchConfiguration('operation_mode').perform(context) == 'fixed_path'
+                and LaunchConfiguration('adaptive_goal_braking_enabled', default='false').perform(context).lower() != 'true'):
+            return self.loaded_fixed_path_parameters(context)
         if LaunchConfiguration('operation_mode').perform(context) == 'autonomous_fixed':
             return self.fixed_parameters(context)
         if LaunchConfiguration('operation_mode').perform(context) != 'autonomous':
@@ -90,6 +93,41 @@ class NavigationRewrittenYaml(RewrittenYaml):
                 'regulated_navigator.ros__parameters.autonomous_terminal_distance': profile['autonomous_terminal_distance'],
             })
         return RewrittenYaml(**{**self.navigation_kwargs, 'param_rewrites': rewrites}).perform(context)
+
+    def loaded_fixed_path_parameters(self, context):
+        """Bound ordinary fixed-path longitudinal motion throughout the task."""
+        import tempfile
+        baseline = super().perform(context)
+        with open(baseline, encoding='utf-8') as stream:
+            document = yaml.safe_load(stream)
+        namespace = perform_substitutions(context, normalize_to_list_of_substitutions(self.navigation_kwargs.get('root_key') or ''))
+        config = document[namespace] if namespace else document
+        smoother = config['velocity_smoother']['ros__parameters']
+        # Preserve lateral/angular limits and controller braking geometry; only the x axis changes.
+        limits = {
+            'max_accel': (0.3, [2.0, 0.0, 3.2]),
+            'max_decel': (-0.3, [-2.0, 0.0, -3.2]),
+            'max_accel_jerk': (1.0, [6.0, 0.0, 4.0]),
+            'max_decel_jerk': (1.0, [8.0, 0.0, 6.0]),
+        }
+        for name, (longitudinal, default) in limits.items():
+            values = list(smoother.get(name, default))
+            if len(values) != 3:
+                raise ValueError(f'{name} must contain x, y and angular limits')
+            current = float(values[0])
+            if not math.isfinite(current) or current * longitudinal <= 0.0:
+                raise ValueError(f'{name} must have a finite x limit with the correct sign')
+            values[0] = max(current, longitudinal) if longitudinal < 0.0 else min(current, longitudinal)
+            smoother[name] = values
+        # The existing S-curve uses the smaller acceleration/deceleration magnitude for both.
+        effective_deceleration = min(smoother['max_accel'][0], -smoother['max_decel'][0])
+        planned_deceleration = float(config['controller_server']['ros__parameters']['FixedPathController'].get('goal_linear_deceleration', 0.25))
+        if not math.isfinite(planned_deceleration) or planned_deceleration <= 0.0 or planned_deceleration > effective_deceleration:
+            raise ValueError('fixed_path goal_linear_deceleration must be positive and no greater than the effective longitudinal S-curve limit')
+        output = tempfile.NamedTemporaryFile(mode='w', delete=False)
+        yaml.safe_dump(document, output)
+        output.close()
+        return output.name
 
     def fixed_parameters(self, context):
         """Fourth-mode profile; never rewrite the three existing mode profiles."""
@@ -327,7 +365,7 @@ def generate_launch_description():
     effective_progress_timeout = ParameterValue(
         PythonExpression([fixed_path_progress_timeout, " if '", operation_mode,"' == 'fixed_path' else (120.0 if '", operation_mode, "' == 'autonomous_fixed' else 10.0)"]),value_type=float)
     adaptive_fixed_path = PythonExpression(["'", operation_mode, "' == 'fixed_path' and '", adaptive_goal_braking_enabled, "'.lower() == 'true'"])
-    # 仅在显式启用自适应固定路径时约束正常减速；默认保持原速度平滑器参数。
+    # 显式自适应分支保留既有覆盖；默认 fixed_path 限值由 NavigationRewrittenYaml 设置。
     fixed_path_smoother_deceleration = ParameterValue([PythonExpression(["-1.0 if (", adaptive_fixed_path, ") else -2.0"]),0.0, -3.2], value_type=list[float])
     fixed_path_immediate_stop = ParameterValue(adaptive_fixed_path, value_type=bool)
     fixed_path_smoother_params = {

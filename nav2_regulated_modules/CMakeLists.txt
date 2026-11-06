@@ -23,6 +23,7 @@ find_package(pluginlib REQUIRED)
 find_package(byd_custom_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(tf2_msgs REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(spdlog_wrapper REQUIRED)
 find_package(visualization_msgs REQUIRED)
@@ -34,6 +35,7 @@ find_package(nav2_smac_planner REQUIRED)
 add_executable(regulated_navigator_node
   src/regulated_navigator_node.cpp
   src/regulated_navigator.cpp
+  src/tf_diagnostics.cpp
   src/chassis_control_subscriber.cpp
   src/motion_state_subscriber.cpp
   src/navigator_goal_handler.cpp
@@ -62,6 +64,7 @@ ament_target_dependencies(regulated_navigator_node
   byd_custom_msgs
   tf2
   tf2_ros
+  tf2_msgs
   tf2_geometry_msgs
   spdlog_wrapper
   visualization_msgs
@@ -88,7 +91,10 @@ target_link_libraries(nav2_regulated_modules_autonomous_fixed_controller nav2_re
 install(TARGETS nav2_regulated_modules_autonomous_fixed_controller LIBRARY DESTINATION lib)
 install(FILES include/nav2_regulated_modules/autonomous_fixed_controller.hpp DESTINATION include/nav2_regulated_modules)
 install(FILES include/nav2_regulated_modules/fixed_path_controller.hpp DESTINATION include/nav2_regulated_modules)
+install(FILES include/nav2_regulated_modules/tf_diagnostics.hpp DESTINATION include/nav2_regulated_modules)
+install(FILES include/nav2_regulated_modules/detail/tf_timing.hpp DESTINATION include/nav2_regulated_modules/detail)
 install(FILES include/nav2_regulated_modules/detail/fixed_path_start_speed_guard.hpp DESTINATION include/nav2_regulated_modules/detail)
+install(FILES include/nav2_regulated_modules/detail/fixed_path_progress.hpp DESTINATION include/nav2_regulated_modules/detail)
 install(FILES include/nav2_regulated_modules/detail/autonomous_fixed_path.hpp DESTINATION include/nav2_regulated_modules/detail)
 install(FILES include/nav2_regulated_modules/detail/autonomous_fixed_terminal_review.hpp DESTINATION include/nav2_regulated_modules/detail)
 install(FILES include/nav2_regulated_modules/detail/autonomous_fixed_terminal_trim.hpp DESTINATION include/nav2_regulated_modules/detail)
@@ -141,7 +147,7 @@ install(DIRECTORY
 pluginlib_export_plugin_description_file(nav2_core fixed_path_controller_plugin.xml)
 ament_export_include_directories(include)
 ament_export_libraries(nav2_regulated_modules_fixed_path_controller)
-ament_export_dependencies(nav2_core nav2_costmap_2d pluginlib nav2_controller nav2_rotation_shim_controller)
+ament_export_dependencies(nav2_core nav2_costmap_2d pluginlib nav2_controller nav2_rotation_shim_controller tf2_msgs)
 
 include(CTest)
 # 将 collision 测试客户端安装为 ros2 run 可执行脚本；安装不代表它会随 Launch 自动运行。
@@ -204,6 +210,10 @@ if(BUILD_TESTING)
   target_include_directories(path_sample_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_compile_features(path_sample_test PRIVATE cxx_std_17)
   add_test(NAME path_sample_test COMMAND path_sample_test)
+  add_executable(fixed_path_progress_test test/fixed_path_progress_test.cpp)
+  target_include_directories(fixed_path_progress_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+  target_compile_features(fixed_path_progress_test PRIVATE cxx_std_17)
+  add_test(NAME fixed_path_progress_test COMMAND fixed_path_progress_test)
   add_executable(fixed_path_start_speed_guard_test test/fixed_path_start_speed_guard_test.cpp)
   target_include_directories(fixed_path_start_speed_guard_test PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
   target_compile_features(fixed_path_start_speed_guard_test PRIVATE cxx_std_17)

@@ -17,9 +17,11 @@
 #include "nav2_regulated_modules/detail/terminal_position.hpp"
 #include "nav2_regulated_modules/detail/terminal_lookahead.hpp"
 #include "nav2_regulated_modules/detail/braking_margin.hpp"
+#include "nav2_regulated_modules/detail/fixed_path_progress.hpp"
 #include "nav2_regulated_modules/fixed_path_speed_profile.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <limits>
 #include <stdexcept>
@@ -52,6 +54,16 @@ void FixedPathController::configure(const rclcpp_lifecycle::LifecycleNode::WeakP
   plugin_name_ = std::move(name);
   logger_ = node->get_logger();
   clock_ = node->get_clock();
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".tf_diagnostics_enabled", rclcpp::ParameterValue(plugin_name_ == "FixedPathController"));
+  nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".tf_diagnostics_log_frequency", rclcpp::ParameterValue(100.0));
+  node->get_parameter(plugin_name_ + ".tf_diagnostics_enabled", tf_diagnostics_enabled_);
+  node->get_parameter(plugin_name_ + ".tf_diagnostics_log_frequency", tf_diagnostics_log_frequency_);
+  if (tf_diagnostics_enabled_ && (!std::isfinite(tf_diagnostics_log_frequency_) || tf_diagnostics_log_frequency_ <= 0.0 || tf_diagnostics_log_frequency_ > 100.0))
+  {
+    throw nav2_core::PlannerException("TF diagnostics frequency must be in (0, 100] Hz");
+  }
+  tf_timing_ = detail::TfTiming();
+  last_tf_diagnostic_steady_ns_ = 0;
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".desired_linear_vel", rclcpp::ParameterValue(1.5));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".lookahead_dist", rclcpp::ParameterValue(0.45));
   nav2_util::declare_parameter_if_not_declared(node, plugin_name_ + ".min_lookahead_dist", rclcpp::ParameterValue(0.25));
@@ -308,6 +320,22 @@ geometry_msgs::msg::TwistStamped FixedPathController::computeVelocityCommands(co
   if (!transformPose(global_plan_.header.frame_id, pose, robot_pose))
   {
     throw nav2_core::PlannerException("Unable to transform robot pose into fixed path frame");
+  }
+  // 只观察本周期真正参与距离／曲率计算的位姿，不改变 TF 查询或新鲜度判据。
+  if (tf_diagnostics_enabled_)
+  {
+    const auto ros_ns = clock_->now().nanoseconds();
+    const auto wall_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    const auto steady_ns = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+    const auto stamp_ns = static_cast<std::int64_t>(robot_pose.header.stamp.sec) * 1000000000LL + robot_pose.header.stamp.nanosec;
+    tf_timing_.observe(stamp_ns, ros_ns, wall_ns, steady_ns);
+    if (last_tf_diagnostic_steady_ns_ == 0 || tf_diagnostics_log_frequency_ >= 1.0 / control_duration_ || static_cast<double>(steady_ns - last_tf_diagnostic_steady_ns_) * 1e-9 >= 1.0 / tf_diagnostics_log_frequency_)
+    {
+      const auto input_stamp_ns = static_cast<std::int64_t>(pose.header.stamp.sec) * 1000000000LL + pose.header.stamp.nanosec;
+      LOG_DEBUG("TF_CONTROL plugin={} input_frame={} input_stamp_ns={} used_frame={} base={} used_stamp_ns={} ros_ns={} wall_ns={} steady_ns={} age_s={:.6f} window_age_min_s={:.6f} window_age_max_s={:.6f} sample_gap_max_s={:.6f} repeats_total={} backwards_total={} zero_total={} xy=({:.6f},{:.6f}) yaw={:.6f} measured_v={:.6f} measured_w={:.6f}", plugin_name_, pose.header.frame_id, input_stamp_ns, robot_pose.header.frame_id, costmap_ros_->getBaseFrameID(), stamp_ns, ros_ns, wall_ns, steady_ns, static_cast<double>(ros_ns - stamp_ns) * 1e-9, tf_timing_.min_arrival_age_s, tf_timing_.max_arrival_age_s, tf_timing_.max_gap_s, tf_timing_.repeats, tf_timing_.backwards, tf_timing_.zero_stamps, robot_pose.pose.position.x, robot_pose.pose.position.y, tf2::getYaw(robot_pose.pose.orientation), velocity.linear.x, velocity.angular.z);
+      last_tf_diagnostic_steady_ns_ = steady_ns;
+      tf_timing_.resetWindow();
+    }
   }
   geometry_msgs::msg::Pose pose_tolerance;
   geometry_msgs::msg::Twist velocity_tolerance;
@@ -730,15 +758,14 @@ std::size_t FixedPathController::findNearestIndex(const geometry_msgs::msg::Pose
   return best_index;
 }
 
-// 当前位置到选定路径点的距离加上后续折线长度，单位 m。
-// 这与到终点的直线距离不同，弯道与偏离路径时不能混用。
+// 在最近点相邻的有效路径段上投影，剩余弧长等于总弧长减去投影进度，单位 m。
+// 不把车到身后最近点的距离加回行程，避免最近点切换产生制动距离台阶。
 double FixedPathController::remainingDistance(const std::size_t start_index, const geometry_msgs::msg::PoseStamped & robot_pose) const
 {
-  double distance = poseDistance(robot_pose, global_plan_.poses[start_index]);
-  // 当前位姿到最近路径点的距离加上其后各段弧长，得到控制器使用的剩余行程。
-  for (std::size_t index = start_index + 1; index < global_plan_.poses.size(); ++index)
+  const double distance = detail::projectedRemainingDistance(start_path_points_, start_index, robot_pose.pose.position.x, robot_pose.pose.position.y);
+  if (!std::isfinite(distance))
   {
-    distance += poseDistance(global_plan_.poses[index - 1], global_plan_.poses[index]);
+    throw nav2_core::PlannerException("Unable to project robot pose onto fixed path");
   }
   return distance;
 }
