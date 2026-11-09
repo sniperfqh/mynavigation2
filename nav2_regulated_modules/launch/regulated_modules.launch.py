@@ -452,17 +452,22 @@ def generate_launch_description():
         default_value=os.path.join(bringup_dir, 'params', 'regulated_modules.yaml'),
         description='Full path to the ROS 2 parameters file')
 
-    # 指定 RViz 显示配置文件。
+    # 三种导航模式分别提供独立配置；显式指定文件时沿用用户选择。
     declare_rviz_config_file_cmd = DeclareLaunchArgument(
         'rviz_config_file',
-        default_value=os.path.join(bringup_dir, 'rviz', 'nav2_default_view.rviz'),
-        # default_value=os.path.join(bringup_dir, 'rviz', 'myrviz2.rviz'),
+        default_value=[os.path.join(bringup_dir, 'rviz'), '/', PythonExpression([
+            "'", operation_mode, "' if '", operation_mode,
+            "' in ('autonomous_fixed', 'autonomous', 'fixed_path') else 'nav2_default_view'"
+        ]), '.rviz'],
         description='Full path to the RViz config file')
 
-    # 按需启动 RViz，不影响导航算法节点。
+    # 导航默认由另一终端打开 RViz；遥控模式保留原默认值。
     declare_use_rviz_cmd = DeclareLaunchArgument(
         'use_rviz',
-        default_value='True',
+        default_value=PythonExpression([
+            "'false' if '", operation_mode,
+            "' in ('autonomous_fixed', 'autonomous', 'fixed_path') else 'true'"
+        ]),
         description='Whether to start RViz')
 
     # 决定是否让速度经过 Collision Monitor；同时影响速度话题路由。
@@ -882,6 +887,7 @@ def generate_launch_description():
                                        description='Position tolerance override; empty uses parameter YAML'))
     ld.add_action(DeclareLaunchArgument('use_path_smoother', default_value='',
                                        description='Override navigator path smoothing; empty uses parameter YAML'))
+    ld.add_action(declare_operation_mode_cmd)
     ld.add_action(declare_rviz_config_file_cmd)
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_collision_monitor_cmd)
@@ -891,7 +897,6 @@ def generate_launch_description():
     ld.add_action(declare_container_name_cmd)
     ld.add_action(declare_use_respawn_cmd)
     ld.add_action(declare_log_level_cmd)
-    ld.add_action(declare_operation_mode_cmd)
     ld.add_action(OpaqueFunction(function=resolve_braking_margin_arguments))
     ld.add_action(declare_adaptive_goal_braking_cmd)
     ld.add_action(declare_enable_localization_jump_detection_cmd)

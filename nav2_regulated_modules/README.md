@@ -50,6 +50,35 @@ ros2 launch nav2_regulated_modules regulated_modules.launch.py \
 
 自主 MPPI 包装负责起步对齐、末端专用位置收敛、制动停稳和终点朝向对齐；目标检查器保留位置／航向／速度阈值并要求连续达标 0.5 s。自主模式的控制频率为 50 Hz，MPPI 模型步长 0.02 s、75 步预测 1.5 s，场景自主包装的候选数为 300，MPPI 前进速度上限为 0.5 m/s；关闭包装仍保留自主模式的 50 Hz／MPPI 时间网格。自主速度平滑器及默认诊断快照同为 50 Hz，固定路径模式保持原有 100 Hz。不据此声称实际达到 50 Hz 或已通过导航任务验收。实现见 [autonomous_mppi_controller.cpp](src/autonomous_mppi_controller.cpp) 。
 
+## 独立打开 RViz
+
+直接启动 `regulated_modules.launch.py` 时，`autonomous_fixed`、`autonomous`、`fixed_path` 默认 `use_rviz:=false`，导航启动命令保持原样。`remote` 保留原 RViz 默认行为。场景包自己的 RViz 开关不受此项调整影响。
+
+另开终端，加载同一个工作空间环境后运行：
+
+```bash
+source /mnt/nvme/codex/nav2_demo/nav2_ws/install/setup.bash
+rviz2
+```
+
+在 RViz 的 `File → Open Config` 选择本包 `rviz/` 下的对应文件；也可通过 `-d` 直接加载：
+
+```bash
+rviz2 -d "$(ros2 pkg prefix --share nav2_regulated_modules)/rviz/autonomous_fixed.rviz"
+```
+
+| 模式 | 配置文件 | 默认启用的模式路径显示 |
+|---|---|---|
+| `autonomous_fixed` | [autonomous_fixed.rviz](rviz/autonomous_fixed.rviz) | `/autonomous_fixed/plan` 冻结路径 |
+| `autonomous` | [autonomous.rviz](rviz/autonomous.rviz) | `/plan`、`/local_plan` |
+| `fixed_path` | [fixed_path.rviz](rviz/fixed_path.rviz) | `/fixed_path_plan`、`/fixed_path_boundaries` |
+
+三份文件沿用原直接入口配置的视角、地图、TF、雷达、代价地图和工具面板，关闭其他模式专用路径的默认显示。固定路径和冻结路径的订阅使用 `Reliable`、`Transient Local`，发布端仍保留数据时，后打开 RViz 也可接收路径。原 `nav2_default_view.rviz` 保留。
+
+配置按默认无命名空间、实车时间使用。另一个终端需保持相同 `ROS_DOMAIN_ID` 及 DDS 通信设置。仿真时在 RViz 命令末尾添加 `--ros-args -p use_sim_time:=true`；此参数不随 `.rviz` 文件保存。使用命名空间时需按实际话题前缀调整配置及 RViz 命名空间。`.rviz` 只保存显示配置，不保存地图数据或实时消息。
+
+如需恢复随导航启动，传入 `use_rviz:=true`，默认按模式选取上述配置；自定义文件仍用 `rviz_config_file:=/absolute/path/view.rviz`。独立终端的 RViz 退出不会触发导航 Launch 的退出事件；内置 RViz 的原退出联动保持。
+
 ## 数据流与反馈
 
 自主包装的起步对齐按 Controller Server 提供的同一帧机器人位姿计算路径朝向；不再调用原 RotationShim 为路径采样点写 `now()` 的变换链。同坐标系不查询 TF，跨坐标系按该位姿时间戳零等待查询，缺失时报告失败并停车；保留起步旋转足迹检查和原定位时效门限。此改动只作用于自主插件，固定路径、共享 `nav2_util` 和 RotationShim 实现保持。未来外推导致的默认 100 ms 等待被去除，实际控制周期仍需运行测量。
