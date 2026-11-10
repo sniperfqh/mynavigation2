@@ -71,13 +71,41 @@ source install/local_setup.bash
 ros2 launch myagv_keyboard_control keyboard_control.launch.py
 ```
 
-也可以从规控主流程进入遥控模式：
+### 实车：从规控入口进入 remote
+
+先启动实际底盘通信链，在可交互终端运行以下命令；不要与上面的独立键盘 Launch 同时运行。该模式不启动导航器、地图规划或导航 Action，也不会因 `use_rviz` 的声明默认值而启动导航 RViz：
 
 ```bash
-ros2 launch nav2_regulated_modules regulated_modules.launch.py operation_mode:=remote
+ros2 launch nav2_regulated_modules regulated_modules.launch.py \
+  operation_mode:=remote use_rviz:=false use_sim_time:=false
 ```
 
-也可以直接运行并覆盖参数：
+按键与最大速度见上文。无默认交互终端时，可通过规控入口的 `keyboard_input_device:=/dev/pts/实际编号` 指定当前用户拥有的终端，不能照抄其他会话的设备路径。`Q` 会请求零速并退出；实际停止仍须由底盘反馈确认。单独运行键盘包时，覆盖项为其 `input_device`，不是规控入口的参数名。
+
+### 仿真：场景 remote 的输入协议不同
+
+当前场景遥控入口为：
+
+```bash
+ros2 launch myworld_bringup entry.launch.py \
+  operation_mode:=remote use_gazebo:=true headless:=true \
+  use_rviz:=false use_sim_time:=false
+```
+
+该入口只启动仿真和 `/downstream/chassis_control` 的 ChassisControl→Twist 网关，不启动本包键盘节点。本包发布 `/control_to_uart` 的 ControlRes，二者类型与话题都不同；因此不能把启动本包当作已经接通仿真遥控。现有仿真用法是[按场景说明周期发布 ChassisControl](../myworld_bringup/README.md#remote仿真遥控-topic)，其超时和停车逻辑由场景网关负责。若需键盘驱动该仿真，须另行提供匹配的消息适配，当前入口未提供。
+
+仿真／实车 remote 都不接收导航 Action。若仅需观察已有地图、TF 或雷达，另一个加载同一环境的终端可运行：
+
+```bash
+rviz2 -d "$(ros2 pkg prefix --share nav2_regulated_modules)/rviz/nav2_default_view.rviz" \
+  --ros-args -p use_sim_time:=false
+```
+
+remote 不自动提供地图或定位；对应显示是否可用取决于外部数据。只有全部系统改用仿真时钟且有 `/clock` 时才将 RViz 的时间参数同步为 true，不以运行 Gazebo 为唯一依据。不要用 RViz 导航目标工具控制 remote。
+
+### 直接运行节点并覆盖参数
+
+以下方式与上述入口互斥：
 
 ```bash
 ros2 run myagv_keyboard_control myagv_keyboard_control_node --ros-args \

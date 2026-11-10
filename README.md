@@ -1,16 +1,15 @@
 # mynavigation2
 
-本仓库是 nav2_demo 项目当前开发的 Nav2 源码，直接位于 `nav2_ws/src/navigation2/`，没有另一份工作空间源码副本。基于 ROS 2 Humble，包含标准 Nav2、无 BT 三模式规控、自定义底盘接口和仿真场景。
+本仓库是 nav2_demo 项目当前开发的 Nav2 源码，直接位于 `nav2_ws/src/navigation2/`，没有另一份工作空间源码副本。基于 ROS 2 Humble，包含标准 Nav2、无 BT 四模式规控、自定义底盘接口和仿真场景。
 
 ## 入口选择
 
 | 用途 | 入口 | 定位与环境 |
 |---|---|---|
-| 推荐规控：remote／autonomous／fixed_path | [nav2_regulated_modules](nav2_regulated_modules/README.md) | 外部定位、传感器、轮速和底盘通信；不启动仿真 |
-| 当前仓库场景仿真 | [myworld_bringup](myworld_bringup/README.md) | Ignition、桥接和三模式包装；定位须外部启动 |
-| 标准 BT Nav2 兼容入口 | [myagv_test_bringup](myagv_test_bringup/README.md) | 默认面向实车、外部定位 |
+| 推荐规控：remote／autonomous／fixed_path／autonomous_fixed | [nav2_regulated_modules](nav2_regulated_modules/README.md) | 外部定位、传感器、轮速和底盘通信；不启动仿真 |
+| 当前仓库场景仿真 | [myworld_bringup](myworld_bringup/README.md) | Ignition、桥接和四模式装配；导航定位须外部启动 |
 | TurtleBot3 仿真 | [mytb3_bringup](mytb3_bringup/README.md) | 独立仿真时钟与场景配置 |
-| 另一套 myworld 仿真 | [myworld_bringup_sim](myworld_bringup_sim/README.md) | 保留兼容入口，不等同当前三模式包装 |
+| 另一套 myworld 仿真 | [myworld_bringup_sim](myworld_bringup_sim/README.md) | 保留兼容入口，不等同当前四模式装配 |
 | 键盘直接控制底盘 | [myagv_keyboard_control](myagv_keyboard_control/README.md) | 交互终端；直接输出 ControlRes |
 
 模式启动后不能热切换。导航模式要有新鲜的定位 TF 与速度反馈；启动进程、发现 Action 或加载配置均不等于车辆已具备运行条件。
@@ -38,7 +37,7 @@ sudo apt install ros-humble-libg2o
 
 ## 目录与构建
 
-源码含 55 个 ROS 包；54 个由当前 colcon 发现，nav2_system_tests 因 COLCON_IGNORE 默认跳过。嵌套 DWB 子包和 turtlebot3 按各自 package.xml 的名称构建，不能用仓库目录名代替包名。
+源码含 54 个 ROS 包；53 个由当前 colcon 发现，nav2_system_tests 因 COLCON_IGNORE 默认跳过。嵌套 DWB 子包和 turtlebot3 按各自 package.xml 的名称构建，不能用仓库目录名代替包名。
 
 命令从外层 nav2_demo 项目根目录开始；已在 nav2_ws 时跳过 cd。不在本源码仓库或包目录中运行 colcon，也不同时叠加 learningnav2_ws 环境。
 
@@ -65,56 +64,103 @@ source install/local_setup.bash
 
 ## 推荐运行与数据流
 
-加载环境后运行一个入口，地图路径按部署覆盖：
+每个终端加载 ROS 2 Humble 与同一个 `nav2_ws/install/local_setup.bash`，不要叠加学习工作空间。以下入口互斥，只运行当前需要的一条；已有后台时不重复启动。实车驱动和外部定位不由直接入口启动。导航三模式先设置可读地图文件，remote 不需要地图规划：
 
 ```bash
+MAP_FILE='/userdata/map/pbstream/out.yaml'
+test -r "$MAP_FILE"
+```
+
+### 四种模式的实车入口
+
+```bash
+# fixed_path：分段固定路径，使用 NavigationService。
 ros2 launch nav2_regulated_modules regulated_modules.launch.py \
-  operation_mode:=autonomous
+  operation_mode:=fixed_path use_rviz:=false use_sim_time:=false \
+  map:="${MAP_FILE:?先设置实际地图路径}"
 ```
-
-改为 `operation_mode:=fixed_path` 接收分段固定路径，改为 `remote` 进入键盘底盘直控。直接规控入口的导航模式默认使用 `/userdata/map/pbstream/out.yaml`，该文件必须存在，或传 `map:=实际地图绝对路径`；remote 模式不执行地图规划。
-
-直接规控入口默认读取 [regulated_modules.yaml](nav2_regulated_modules/params/regulated_modules.yaml) ：自主导航选择 `GridBasedAstar`（NavFn A*）＋`RPP`，固定路径选择 `FixedPathController`＋`fixed_path_goal_checker`。自主模式将控制器和速度平滑器频率重写为 50 Hz，默认诊断快照同为 50 Hz；固定路径保持原有 100 Hz；配置值与节点实际运行频率需分别核验。仓库虽有 TEB 源码，但这份规控 YAML 的控制器列表未注册 TEB。
-
-当前 `myworld_bringup entry.launch.py` 默认 `use_rviz:=true`、`use_sim_time:=false`，由外部定位提供 TF。自主／固定路径共用 `/userdata/map/pbstream/out.yaml` 地图、map／base_link 坐标系、反馈话题、RViz 配置和规控启动装配，导航栈默认均延迟 3 秒，RViz 延迟 5 秒。各模式均默认 `use_gazebo:=true`、`headless:=true`，启动后台 Gazebo 服务端、传感器桥接和速度反馈转换，不打开 Gazebo 窗口；自主模式的碰撞监控与区域可视化仍默认关闭。fixed_path 默认启用碰撞状态门控和区域可视化，Collision Monitor 仍默认关闭；remote 的默认地图为包内 `myworld2.yaml`，各模式均可通过 `map` 显式覆盖。显式 `use_gazebo:=false` 可改为接入外部 ROS 数据。入口直接传递 `params_file`，不再读写或生成 `noamcl_*.yaml`；坐标系与反馈话题直接配置在 `myworld2.yaml`，AMCL 保持禁用。
-
-默认场景自主模式在 [myworld2.yaml](myworld_bringup/params/myworld2.yaml) 基础上应用专用 MPPI 配置：控制频率 50 Hz、模型步长 0.02 s、75 步预测 1.5 s、300 条候选，前进速度上限 0.5 m/s。该上限通过自主模式重写 `MPPI.vx_max=0.5` 生效，共享 YAML 不修改。`MPPI` ID 选择独立自主包装，内部仍为 MPPI，增加起步转向、末端位置收敛、制动后航向对齐和连续 0.5 s 停稳检查；位置／航向容差保持。自主模式另修复 TF 时效、旋转进度与恢复计时；fixed_path 的参数与控制器实现保持，remote 不启动导航链。显式参数文件不再自动改写坐标系或反馈话题；`autonomous_mppi_profile:=false` 可关闭 MPPI 包装配置，但保留自主模式的 50 Hz／MPPI 时间网格；直接规控入口默认不启用该包装、实车参数仍选择 RPP。此处为实现与配置说明，实际运行效果另行验收。
-
-### 当前场景的自主与固定路径仿真
-
-在 `nav2_ws` 加载 `/opt/ros/humble/setup.bash` 和 `install/local_setup.bash` 后，按任务选择以下一个入口。两种模式不能同时启动或热切换；切换前先退出旧导航／仿真入口。本地 Cartographer 在独立终端按原方式启动，提供新鲜 `map→base_link`，其定位地图须与 `/userdata/map/pbstream/out.yaml` 一致。
-
-自主模式，使用 RViz 导航目标或标准导航 Action：
 
 ```bash
-ros2 launch myworld_bringup entry.launch.py operation_mode:=autonomous
+# remote：交互终端键盘输出 ControlRes，不启动导航链。
+ros2 launch nav2_regulated_modules regulated_modules.launch.py \
+  operation_mode:=remote use_rviz:=false use_sim_time:=false
 ```
 
-固定路径模式，使用业务分段路径 Action：
+```bash
+# autonomous_fixed：单点规划一次，冻结后按固定路径执行。
+ros2 launch nav2_regulated_modules regulated_modules.launch.py \
+  operation_mode:=autonomous_fixed use_rviz:=false use_sim_time:=false \
+  map:="${MAP_FILE:?先设置实际地图路径}"
+```
+
+```bash
+# autonomous：自主单点／多点导航，可重新规划。
+ros2 launch nav2_regulated_modules regulated_modules.launch.py \
+  operation_mode:=autonomous use_rviz:=false use_sim_time:=false \
+  map:="${MAP_FILE:?先设置实际地图路径}"
+```
+
+三个导航模式需要新鲜 `map→base_link`、`/scan`、`/motion_state` 和底盘执行链。Cartographer 在其实际部署工作空间中独立启动，地图／pbstream 与导航地图一致；本仓库规控入口不启动 AMCL。完整前提与模式参数见[实车操作说明](nav2_regulated_modules/README.md#实车四种模式的启动)。
+
+### 当前场景的四模式仿真
+
+先加载同一工作空间，导航模式沿用上面的 `MAP_FILE`。按模式只选一条；`use_rviz=false` 是以下示例的显式选择，不改变场景默认值：
 
 ```bash
 ros2 launch myworld_bringup entry.launch.py \
-  operation_mode:=fixed_path headless:=true use_rviz:=true \
-  enable_collision_state:=true use_collision_monitor:=false
+  operation_mode:=autonomous use_gazebo:=true headless:=true \
+  use_rviz:=false use_sim_time:=false map:="${MAP_FILE:?先设置实际地图路径}"
 ```
 
-| 项目 | 场景自主模式 | 场景固定路径模式 |
-|---|---|---|
-| 任务接口 | `/navigate_to_pose`、`/navigate_through_poses` 或 `/goal_pose` | `/navigation_service` |
-| 路径与跟踪 | `SmacHybrid` → 路径平滑 → 自主转向／接近包装＋MPPI | `NaviSegment[]` → 业务 Path → FixedPathController |
-| 默认目标检查器 | `stopped_goal_checker`，位置容差 0.03 m、连续停稳 0.5 s | `fixed_path_goal_checker`，位置容差 0.01 m |
-| 后台 Gazebo、桥接、速度转换 | 默认启动，不打开 Gazebo 窗口 | 相同 |
-| RViz2／地图／时钟 | RViz2 开启；地图 `/userdata/map/pbstream/out.yaml`；系统时间 | 相同 |
-| 外部碰撞状态／区域可视化 | 关闭 | 默认开启 |
-| Collision Monitor | 默认关闭 | 默认关闭 |
+```bash
+ros2 launch myworld_bringup entry.launch.py \
+  operation_mode:=fixed_path use_gazebo:=true headless:=true \
+  use_rviz:=false use_sim_time:=false map:="${MAP_FILE:?先设置实际地图路径}"
+```
 
-仿真提供 `/scan`（LaserScan）、`/odometry`（Odometry），转换节点提供 `/motion_state`（MotionState）；Cartographer 提供定位 TF。Map Server 发布 `/map` 不会生成定位 TF。雷达点缺失时先查 `/scan` 发布者与桥接，Nav2 等待 `map` TF 时再查 Cartographer 的数据输入、TF 连通性与时间基准。显式 `use_gazebo:=false` 会同时关闭仿真、桥接和速度转换，使用者须另行提供对应 ROS 数据。
+```bash
+ros2 launch myworld_bringup entry.launch.py \
+  operation_mode:=autonomous_fixed use_gazebo:=true headless:=true \
+  use_rviz:=false use_sim_time:=false map:="${MAP_FILE:?先设置实际地图路径}"
+```
 
-自主任务类型为 `nav2_msgs/action/NavigateToPose` 或 `NavigateThroughPoses`；固定路径为 `byd_custom_msgs/action/NavigationService`，两者的 Goal 字段不同。启动、任务接口、历史路径示例及只读排查命令见 [myworld_bringup/README.md](myworld_bringup/README.md)。本节描述场景配置，直接 `nav2_regulated_modules` 入口的参数文件和默认 RPP 控制器见上文。
+```bash
+ros2 launch myworld_bringup entry.launch.py \
+  operation_mode:=remote use_gazebo:=true headless:=true \
+  use_rviz:=false use_sim_time:=false
+```
+
+仿真导航模式由 entry 同时装配 Gazebo、桥接和规控，不能再重复启动直接规控入口。外部 Cartographer 仍提供定位 TF；Map Server 的 `/map` 不产生定位 TF。默认 `headless=true` 只关闭 Gazebo 图形窗口，导航三模式的内置 RViz 默认仍为 true，本文显式关闭以便独立打开。remote 不启动内置 RViz 或键盘，只接收仿真遥控 ChassisControl，详见[场景四模式说明](myworld_bringup/README.md#四种模式的仿真启动)。
+
+| 模式 | 直接规控默认选择 | 场景入口默认选择 | 任务接口 |
+|---|---|---|---|
+| remote | 键盘→`/control_to_uart`（ControlRes） | `/downstream/chassis_control`（ChassisControl）→网关→`/cmd_vel` | 无导航 Action，两种输入未自动互接 |
+| autonomous | SmacHybrid／DUBIN＋RPP | SmacHybrid／REEDS_SHEPP＋专用 MPPI | 单点、多点导航 Action 或 `/goal_pose` |
+| fixed_path | 业务 Path＋FixedPathController | 同类执行链，使用场景参数覆盖 | NavigationService |
+| autonomous_fixed | 项目 Hybrid／REEDS_SHEPP 一次搜索＋冻结执行 | 同类执行链，使用场景参数及模式重写 | 单点导航 Action 或 `/goal_pose`，拒绝多点 |
+
+直接 autonomous 的 `autonomous_planner_id` 默认 SmacHybrid，会覆盖共享 YAML 中旧的 GridBasedAstar 选择；显式传空才沿用 YAML。场景 autonomous 按 `myworld2.yaml` 选择规划器，并默认启用专用 MPPI；autonomous_fixed 独立覆盖为项目 Hybrid 包装、REEDS_SHEPP 和 10 m 距离查表。配置来自 YAML、Launch 重写和显式实参，不能只看 YAML 字面值。autonomous 控制／平滑默认 50 Hz，fixed_path 与 autonomous_fixed 为 100 Hz；这些不是实测频率。
+
+显式 `use_gazebo:=false` 会关闭场景的仿真、桥接和速度转换，要求外部提供对应输入，但仍保留场景参数与模型，不等于切回实车共享 YAML。remote 在这一组合下也不启动遥控网关或键盘，实车遥控应选择直接入口。
+
+### Action 与独立 RViz2 的选择
+
+三个导航模式默认系统时间。完整命令见[Action 下发与检查](nav2_regulated_modules/README.md#action-下发与结果检查)和[独立 RViz2](nav2_regulated_modules/README.md#独立打开-rviz2)；场景专用显示配置见[场景 RViz2](myworld_bringup/README.md#仿真-rviz2-与时间设置)。各终端加载同一环境并使用相同 ROS_DOMAIN_ID／DDS 设置。
+
+独立 RViz 的模式配置可按下例选择，先将 `MODE` 设置为 `autonomous`、`fixed_path` 或 `autonomous_fixed`；remote 只作可视化观察时使用 `nav2_default_view`：
+
+```bash
+: "${MODE:?先设置对应的RViz配置名}"
+rviz2 -d "$(ros2 pkg prefix --share nav2_regulated_modules)/rviz/$MODE.rviz" \
+  --ros-args -p use_sim_time:=false
+```
+
+只有整个定位／导航／桥接链切为仿真时间且有 `/clock` 时，才同步将独立 RViz 参数改为 true。autonomous 与 autonomous_fixed 可用 `Nav2 Goal` 工具拖动单点目标；fixed_path 必须通过 NavigationService 发送业务路径，remote 不下发导航目标。内置 RViz 的进程联动与独立进程不同，退出独立窗口不等于取消 Action。
 
 ```text
 autonomous: 导航目标 → regulated_navigator → Planner → 可选 Smoother → FollowPath
 fixed_path: NavigationService(NaviSegment[]) → 方向化 Path → FollowPath
+autonomous_fixed: 单点目标 → 一次 Hybrid 规划 → 冻结／分段 → FollowPath
 FollowPath → Controller Server → /cmd_vel_nav → Velocity Smoother
   → /cmd_vel → controlpub → /control_to_uart
 ```
@@ -124,21 +170,22 @@ FollowPath → Controller Server → /cmd_vel_nav → Velocity Smoother
 | 接口 | 类型／含义 |
 |---|---|
 | `/navigation_service` | `byd_custom_msgs/action/NavigationService`；仅 fixed_path 接受任务 |
-| `/navigate_to_pose`、`/navigate_through_poses` | 标准 Nav2 导航 Action；由所选入口提供 |
+| `/navigate_to_pose` | NavigateToPose；autonomous 与 autonomous_fixed 接受 |
+| `/navigate_through_poses` | NavigateThroughPoses；四模式入口中仅 autonomous 接受 |
 | `/follow_path` | `nav2_msgs/action/FollowPath`；Controller Server |
 | `/cmd_vel_nav`、`/cmd_vel` | Twist；控制输出与平滑／过滤后速度 |
-| `/odometry` | `nav_msgs/msg/Odometry`；当前 myworld entry 为控制器提供的仿真反馈；直接规控导航器旧速度日志的默认反馈话题 |
-| `/motion_state` | `byd_custom_msgs/msg/MotionState`；直接规控默认的控制器、平滑器与底盘闭环反馈；myworld entry 将仿真里程计转换后供平滑器与底盘闭环使用 |
+| `/odometry` | `nav_msgs/msg/Odometry`；场景桥接的原始仿真反馈，是 MotionState 转换输入 |
+| `/motion_state` | `byd_custom_msgs/msg/MotionState`；当前规控／场景默认供控制器、平滑器、导航器和底盘闭环使用 |
 | `/downstream/chassis_control` | ChassisControl；底盘指令支路，具体消费者随模式变化 |
 | `/control_to_uart` | ControlRes；ROS 底盘输出，不代表本仓库实现 UART 驱动 |
 
 以上为无命名空间入口约定，参数和 remapping 可改变实际名称。定位需提供 map→base_link 或完整等效 TF 链；合成 laserpub／map2base_tf 只用于隔离测试，当前生产入口不自动启动。
 
-反馈类型要与消费者匹配：控制器的 `OdomSubscriber`、平滑器的 `OdomSmoother` 和统一诊断按话题末级名称是否为 `motion_state` 选择 MotionState／Odometry；MotionState 速度取 `v_car/w_car`。导航器的 `velocity_odom_topic` 则仍是固定 Odometry 类型，只在启用旧速度日志时订阅，不能把它直接改成 MotionState 话题。实际控制反馈以 `controller_server.odom_topic` 为准，平滑反馈以 `velocity_smoother.odom_topic` 为准。
+反馈类型要与消费者匹配：控制器、平滑器、导航器和统一诊断按话题末级名称是否为 `motion_state` 选择 MotionState／Odometry；MotionState 速度取 `v_car/w_car` 并保留源 Header。实际控制反馈以 `controller_server.odom_topic` 为准，平滑反馈以 `velocity_smoother.odom_topic` 为准，导航器看 `velocity_odom_topic`。当前两套 YAML 已显式配置为 `/motion_state`；自定义文件省略导航器字段时，其 C++ 回退仍为 `/odometry`，不能把不同层默认值混为一谈。
 
 ## 自主路径 Action 命令行测试
 
-后台已启动 Cartographer 定位和自主 Nav2 时，在新终端加载同一工作空间即可，不要重复启动导航栈。以下命令对应无命名空间的 `myworld_bringup entry.launch.py operation_mode:=autonomous`；若启用了命名空间，给 Action、节点和服务名加上对应前缀。
+后台已启动 Cartographer 定位和规控时，在新终端加载同一工作空间即可，不要重复启动导航栈。单点命令适用于仿真／实车的 autonomous 与 autonomous_fixed，多点仅适用于 autonomous；两个自主模式均拒绝非空行为树，fixed_path 和 remote 不接受这些自主目标。若启用了命名空间，给 Action、节点和服务名加上对应前缀。
 
 ```bash
 source /opt/ros/humble/setup.bash
@@ -151,28 +198,31 @@ ros2 lifecycle get /controller_server
 ros2 action list -t
 ```
 
-应看到 `operation_mode=autonomous`、两个节点均为 `active`，以及 `/navigate_to_pose [nav2_msgs/action/NavigateToPose]`、`/navigate_through_poses [nav2_msgs/action/NavigateThroughPoses]`。发送前确认 `map→base_link` 定位 TF 可用、目标在当前地图可通行区域且没有其他任务执行；新目标会抢占当前任务。下面坐标仅演示消息格式，请先在 RViz 核对并替换，单点与多点示例分别执行，等待前一个任务结束后再发送下一个。
+先确认 `operation_mode` 与所选任务匹配、两个节点均为 `active`，以及 Action 类型正确；发现列表中存在多点 Action 并不代表 autonomous_fixed 会接受它。发送前确认定位 TF、目标通行性和实际轮速。下面坐标变量必须按当前地图设置，单点与多点分别执行；新目标可能抢占旧任务。
 
 ### 单点到达并停车
 
-下面向 `map` 坐标系的 `(11.0, -4.0)` 发送目标，终点航向为 0°（车头沿地图 +X 方向）。`--feedback` 持续打印反馈；自主 Action 不包含固定路径的 `navi_segment`、`motion_direction` 或 `max_speed` 字段，速度由控制器及平滑器配置决定。自研协调器不接受行为树 XML，`behavior_tree` 必须留空。
+在同一终端设置 `GOAL_X`、`GOAL_Y` 为当前地图的目标坐标，单位米；终点航向为 0°（车头沿地图 +X 方向）。`--feedback` 持续打印反馈；自主 Action 不包含固定路径的 `navi_segment`、`motion_direction` 或 `max_speed` 字段，速度由控制器及平滑器配置决定。两个自主模式的 `behavior_tree` 均必须留空。
 
 ```bash
+: "${GOAL_X:?先设置地图目标X}" "${GOAL_Y:?先设置地图目标Y}"
 ros2 action send_goal --feedback /navigate_to_pose \
   nav2_msgs/action/NavigateToPose \
-  "{pose: {header: {frame_id: map}, pose: {position: {x: 11.0, y: -4.0, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}, behavior_tree: ''}"
+  "{pose: {header: {frame_id: map}, pose: {position: {x: $GOAL_X, y: $GOAL_Y, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}, behavior_tree: ''}"
 ```
 
 修改终点位置时改 `position.x/y`；平面航向通过四元数 `orientation.z/w` 指定，`x/y` 保持 0。例如 90° 使用 `z: 0.7071067811865476, w: 0.7071067811865476`，180° 使用 `z: 1.0, w: 0.0`；不要把角度直接填入 `orientation.z`。
 
 ### 按顺序经过多个目标
 
-`poses` 是有序的目标数组，每个元素都需要坐标系、位置和有效四元数。示例先经过 `(11.0, -4.0)`，再到 `(12.0, -3.0)`，最终航向为 90°；这不是要求每个中间点都停车等待的站点任务。
+仅 autonomous 接受此请求。先设置 `VIA_X`、`VIA_Y` 和 `GOAL_X`、`GOAL_Y`；每个元素都需要坐标系、位置和有效四元数。示例中间点 yaw=0，终点 yaw=90°；这不是要求每个中间点都停车等待的站点任务。
 
 ```bash
+: "${VIA_X:?先设置中间点X}" "${VIA_Y:?先设置中间点Y}"
+: "${GOAL_X:?先设置地图目标X}" "${GOAL_Y:?先设置地图目标Y}"
 ros2 action send_goal --feedback /navigate_through_poses \
   nav2_msgs/action/NavigateThroughPoses \
-  "{poses: [{header: {frame_id: map}, pose: {position: {x: 11.0, y: -4.0, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}, {header: {frame_id: map}, pose: {position: {x: 12.0, y: -3.0, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.7071067811865476, w: 0.7071067811865476}}}], behavior_tree: ''}"
+  "{poses: [{header: {frame_id: map}, pose: {position: {x: $VIA_X, y: $VIA_Y, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.0, w: 1.0}}}, {header: {frame_id: map}, pose: {position: {x: $GOAL_X, y: $GOAL_Y, z: 0.0}, orientation: {x: 0.0, y: 0.0, z: 0.7071067811865476, w: 0.7071067811865476}}}], behavior_tree: ''}"
 ```
 
 消息字段见 [NavigateToPose.action](nav2_msgs/action/NavigateToPose.action) 和 [NavigateThroughPoses.action](nav2_msgs/action/NavigateThroughPoses.action)。
@@ -269,9 +319,8 @@ UART 适配节点在有效输入到来后才发布，空闲时可能静默；零
 | [laserpub](laserpub/README.md) | 测试节点：发布可配置的合成二维 LaserScan，供隔离功能验证使用；不能替代真实激光观测。 | colcon 可发现 |
 | [map2base_tf](map2base_tf/README.md) | 测试节点：周期发布固定位置的 map→base_link 动态 TF，供隔离接口验证；不实现定位算法。 | colcon 可发现 |
 | [myagv_keyboard_control](myagv_keyboard_control/README.md) | 遥控节点：读取终端按键，按速度、加速度和 jerk 约束生成 ControlRes 底盘命令。 | colcon 可发现 |
-| [myagv_test_bringup](myagv_test_bringup/README.md) | 启动包：提供面向外部定位与真实底盘的标准 BT Nav2 兼容入口、参数和可视化资源。 | colcon 可发现 |
 | [mytb3_bringup](mytb3_bringup/README.md) | 仿真启动包：组织 TurtleBot3 的 Ignition Gazebo、机器人描述、传感器桥接、定位与导航场景。 | colcon 可发现 |
-| [myworld_bringup](myworld_bringup/README.md) | 仿真启动包：组织仓库场景仿真与三模式规控入口；当前 entry 使用外部定位和系统时间适配。 | colcon 可发现 |
+| [myworld_bringup](myworld_bringup/README.md) | 仿真启动包：组织仓库场景仿真与四模式装配；当前 entry 使用外部定位和系统时间适配。 | colcon 可发现 |
 | [myworld_bringup_sim](myworld_bringup_sim/README.md) | 仿真启动包：保留另一套 myworld 场景启动、定位与导航配置；入口行为独立于 myworld_bringup。 | colcon 可发现 |
 | [nav2_amcl](nav2_amcl/README.md) | 定位节点：使用粒子滤波、运动模型与激光地图匹配估计二维位姿，向导航提供定位变换。 | colcon 可发现 |
 | [nav2_behavior_tree](nav2_behavior_tree/README.md) | 行为树插件库：提供规划、控制、恢复、条件与流程控制 BT 节点，供 BT Navigator 装载。 | colcon 可发现 |
@@ -292,7 +341,7 @@ UART 适配节点在有效输入到来后才发布，空闲时可能静默；零
 | [nav2_msgs](nav2_msgs/README.md) | 接口包：定义标准 Nav2 导航、规划、路径跟踪、平滑、行为及生命周期相关消息、服务和 Action。 | colcon 可发现 |
 | [nav2_navfn_planner](nav2_navfn_planner/README.md) | 规划插件：提供栅格 Dijkstra／A* 路径搜索，由 Planner Server 加载。 | colcon 可发现 |
 | [nav2_planner](nav2_planner/README.md) | 规划服务器：实现 ComputePathToPose／ComputePathThroughPoses Action，并管理全局规划插件与全局代价地图。 | colcon 可发现 |
-| [nav2_regulated_modules](nav2_regulated_modules/README.md) | 规控协调与插件包：提供 remote、autonomous、fixed_path 三模式入口、无 BT 任务协调、专用固定路径控制器和诊断工具。 | colcon 可发现 |
+| [nav2_regulated_modules](nav2_regulated_modules/README.md) | 规控协调与插件包：提供 remote、autonomous、fixed_path、autonomous_fixed 四模式入口、无 BT 任务协调、固定路径插件和诊断工具。 | colcon 可发现 |
 | [nav2_regulated_pure_pursuit_controller](nav2_regulated_pure_pursuit_controller/README.md) | 控制插件：提供受曲率、代价与目标接近约束的 Pure Pursuit 路径跟踪控制器。 | colcon 可发现 |
 | [nav2_rotation_shim_controller](nav2_rotation_shim_controller/README.md) | 控制插件：在需要时先对齐路径朝向，再把控制交给配置的内部控制器。 | colcon 可发现 |
 | [nav2_route](nav2_route/README.md) | 路网服务器与插件：从路网图搜索路线，并通过边评分和路线操作插件处理路线任务；不同于栅格 Planner Server。 | colcon 可发现 |

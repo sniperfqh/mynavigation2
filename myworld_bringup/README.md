@@ -9,11 +9,11 @@ This package owns the `myworld2` launch flow.
 
 ## 当前入口与前提
 
-[entry.launch.py](launch/entry.launch.py) 提供机器人内部 TF、三模式规控包装及可选的 Ignition Gazebo 仿真和传感器桥接；当前不启动 AMCL，不发布 Gazebo 底盘定位 TF。外部定位须提供新鲜 `map→base_link`，本包不替代定位。
+[entry.launch.py](launch/entry.launch.py) 支持 `remote`、`autonomous`、`fixed_path`、`autonomous_fixed` 四种模式，提供机器人内部 TF、模式对应的规控装配及可选的 Ignition Gazebo 仿真和传感器桥接；当前不启动 AMCL，不发布 Gazebo 底盘定位 TF。导航三模式的外部定位须提供新鲜 `map→base_link`，本包不替代定位。
 
 该入口的雷达、IMU、万向轮和底盘固定关系由 `robot_state_publisher` 发布到 `/tf_static`；左右驱动轮读取 `/joint_states`，通过 `/tf` 发布动态旋转关系，RViz 可随关节状态显示车轮转动。外部定位仍负责动态 `map→base_link`。外部定位若也发布同名内部 TF，仍需分别统一其发布者和父坐标系。
 
-两种导航模式共用同一张地图、机器人 TF 外参、雷达和速度反馈接口；任务输入、规划／控制流程与碰撞开关按模式选择：
+三个导航模式共用地图入口、机器人 TF 外参、雷达和速度反馈接口，但足迹、任务生成和控制配置仍按模式重写。遥控模式不启动导航链：
 
 | 项目 | 自主模式 `autonomous` | 固定路径模式 `fixed_path` |
 |---|---|---|
@@ -27,7 +27,12 @@ This package owns the `myworld2` launch flow.
 | Collision Monitor | 默认关闭 | 默认关闭 |
 | 碰撞区域可视化 | 默认关闭 | 默认开启；可视化不产生碰撞状态 |
 
-这里的控制器和容差取自默认 [myworld2.yaml](params/myworld2.yaml) 与入口覆盖；显式参数文件或启动参数可改变实际值。两种模式共用外围配置，任务处理流程仍不同，不能只替换 Action 名称并复用另一种消息结构。
+| 补充模式 | 任务输入 | 执行与显示 |
+|---|---|---|
+| `autonomous_fixed` | `/navigate_to_pose` 或 `/goal_pose`；拒绝多点 Action | Hybrid A*／REEDS_SHEPP 一次规划后冻结；专用固定路径执行链，100 Hz；默认显示冻结路径 |
+| `remote` | `/downstream/chassis_control`，ChassisControl | 仿真网关生成 `/cmd_vel`，不启动导航 Action、键盘节点或内置 RViz |
+
+这里的控制器和容差取自默认 [myworld2.yaml](params/myworld2.yaml) 与入口覆盖；显式参数文件或启动参数可改变实际值。各模式任务处理流程不同，不能只替换 Action 名称并复用另一种消息结构。
 
 ## 仅启动仿真和传感器
 
@@ -58,7 +63,7 @@ Gazebo 可通过 `headless:=true` 在后台运行；不需要 RViz 时可传入 
 
 若外部定位直接发布 `map → base_link`，可设置 `publish_odom_tf:=false`，关闭 Gazebo 里程计 TF 并采用 `base_link` 为模型根节点；外部系统提供 `/map` 时另设 `publish_map:=false`，同时检查外部模型不要重复发布同名内部 TF。独立仿真与 `entry.launch.py` 不应在同一 ROS 域重复运行，以免多个发布者使用相同话题和坐标系。
 
-## 两种导航模式的启动
+## 四种模式的仿真启动
 
 在 `nav2_ws` 加载本工作空间环境；首次使用先按[源码仓库构建说明](../README.md#目录与构建)完成构建，不叠加 `learningnav2_ws` 环境：
 
@@ -68,48 +73,110 @@ source /opt/ros/humble/setup.bash
 source install/local_setup.bash
 ```
 
-自主模式：
+导航三模式需在同一终端设置地图文件，并在独立终端加载实际定位工作空间，按原部署执行 `ros2 launch cartographer_ros cartographer.launch.py`。定位地图／pbstream 须与所选地图和仿真世界一致。两侧可以先启动等待数据；发送任务前必须确认 `/scan`、`/motion_state`、新鲜 TF 和规控 active，而不是仅等待固定启动延迟。
 
 ```bash
-ros2 launch myworld_bringup entry.launch.py operation_mode:=autonomous
+MAP_FILE='/userdata/map/pbstream/out.yaml'
+test -r "$MAP_FILE"
 ```
 
-固定路径模式：
+### autonomous：自主规划与 MPPI 跟踪
 
 ```bash
 ros2 launch myworld_bringup entry.launch.py \
-  operation_mode:=fixed_path headless:=true use_rviz:=true \
+  operation_mode:=autonomous use_gazebo:=true headless:=true \
+  use_rviz:=false use_sim_time:=false map:="${MAP_FILE:?先设置实际地图路径}"
+```
+
+### fixed_path：业务分段路径跟踪
+
+```bash
+ros2 launch myworld_bringup entry.launch.py \
+  operation_mode:=fixed_path use_gazebo:=true headless:=true \
+  use_rviz:=false use_sim_time:=false map:="${MAP_FILE:?先设置实际地图路径}" \
   enable_collision_state:=true use_collision_monitor:=false
 ```
 
-`operation_mode` 默认 autonomous，也可选 fixed_path 或 remote。自主／固定路径委托 nav2_regulated_modules；remote 在 `use_gazebo:=true` 时使用 ChassisControl→Twist 仿真网关，不启动导航控制链。已有同场景运行时不重复启动。
-
-在另一个已加载本地 Cartographer 工作空间环境的终端，按原定位方式单独启动 Cartographer；其地图／pbstream 须与上述地图坐标系一致。Gazebo 服务端和桥接提供 `/scan`、`/odometry`，转换节点提供 `/motion_state`，Cartographer 消费定位数据后发布 `map→base_link`。启动顺序可使两侧先等待数据，发送任务前应确认传感器、TF 和规控生命周期均就绪。
-
-模式启动后不能热切换。切换时先退出旧导航／仿真入口，再启动另一模式，避免重复 Gazebo、桥接、控制器和 RViz；原有 Cartographer 的地图、TF 和时间基准仍需与本次仿真一致。
-
-默认自主模式在 [myworld2.yaml](params/myworld2.yaml) 基础上，通过规控入口既有 RewrittenYaml 应用 `autonomous_mppi_profile=true`：50 Hz 控制／速度平滑／默认诊断、0.02 s 模型步长、75 步／300 条候选、1.5 s 预测，前进速度上限为 0.5 m/s。仅自主模式选择 `AutonomousMPPIController` 和连续停稳检查；fixed_path 仍选择原 FixedPathController、原参数与原 GoalChecker，remote 不启动导航链。入口不生成 `noamcl_*.yaml`，AMCL 保持禁用；自定义参数文件需配置坐标系与反馈话题，可用 `autonomous_mppi_profile:=false` 关闭自主 MPPI 包装配置。该开关不关闭自主模式的 50 Hz／MPPI 时间网格、TF 时效和进度修复。`myworld2_mppi.yaml` 仅保留为历史参数参考，不再自动加载。
-
-自主模式默认启动 Nav2、RViz2、后台 Gazebo 服务端、传感器桥接和 `/odometry`→`/motion_state` 转换，不打开 Gazebo 窗口，不启动碰撞监控或碰撞区域可视化。固定路径仿真保持原行为。激光与速度反馈由仿真提供，`map→base_link` 定位 TF 仍由用户单独启动的本地 Cartographer 提供。需要打开 Gazebo 窗口时使用：
+### autonomous_fixed：单点规划后冻结跟踪
 
 ```bash
 ros2 launch myworld_bringup entry.launch.py \
-  operation_mode:=autonomous use_gazebo:=true headless:=false use_rviz:=true
+  operation_mode:=autonomous_fixed use_gazebo:=true headless:=true \
+  use_rviz:=false use_sim_time:=false map:="${MAP_FILE:?先设置实际地图路径}"
 ```
+
+### remote：仿真遥控 Topic
+
+```bash
+ros2 launch myworld_bringup entry.launch.py \
+  operation_mode:=remote use_gazebo:=true headless:=true \
+  use_rviz:=false use_sim_time:=false
+```
+
+该分支启动仿真和 ChassisControl→Twist 网关，不包含键盘节点，不接受导航 Action。另一个加载同环境的终端可周期发送下例的前进指令；该示例会使仿真机器人运动，执行前应确认没有其他 `/cmd_vel` 发布者：
+
+```bash
+ros2 topic pub --rate 10 /downstream/chassis_control \
+  byd_custom_msgs/msg/ChassisControl \
+  '{op: 0, linear_velocity: 0.10, angular_velocity: 0.0, acceleration: 0.5}'
+```
+
+`op=0／1／2／3` 分别为前进／后退／左转／右转；速度字段用非负幅值，符号由 op 决定。结束发布后，当前网关在 0.5 s 命令超时后平滑减速，需确认 `/motion_state` 停稳；需持续请求零速时，把 `linear_velocity`、`angular_velocity` 均置 0 并继续发布。具体行为见 [chassis_control_to_twist.py](scripts/chassis_control_to_twist.py)。实车键盘输出 ControlRes，当前场景网关接收 ChassisControl，直接启动键盘包不会自动驱动这个网关。
+
+### 入口选择与外部输入
+
+四个入口互斥，启动后不能热切换。切换前先退出旧导航／仿真入口，避免重复 Gazebo、桥接和速度发布者。三个导航模式由场景包委托规控包启动，不再额外运行一份 `regulated_modules.launch.py`。已有同场景运行时，仅打开 RViz 或下发任务。
+
+使用真实传感器、底盘和定位时，优先使用[规控包的四模式实车命令](../nav2_regulated_modules/README.md#实车四种模式的启动)。如果确需保留场景参数和模型，把上述导航命令的 `use_gazebo` 改为 false，保留 `use_sim_time=false`，并由外部提供 `/scan`、`/motion_state`、定位及其他所需输入；这不自动切换为实车 YAML。场景 `remote use_gazebo=false` 不启动仿真遥控网关或键盘，不作为实车遥控入口。
+
+默认自主模式在 [myworld2.yaml](params/myworld2.yaml) 基础上，通过规控入口既有 RewrittenYaml 应用 `autonomous_mppi_profile=true`：50 Hz 控制／速度平滑／默认诊断、0.02 s 模型步长、75 步／300 条候选、1.5 s 预测，前进速度上限为 0.5 m/s。仅自主模式选择 `AutonomousMPPIController` 和连续停稳检查；fixed_path 仍选择原 FixedPathController、原参数与原 GoalChecker，remote 不启动导航链。入口不生成 `noamcl_*.yaml`，AMCL 保持禁用；自定义参数文件需配置坐标系与反馈话题，可用 `autonomous_mppi_profile:=false` 关闭自主 MPPI 包装配置。该开关不关闭自主模式的 50 Hz／MPPI 时间网格、TF 时效和进度修复。`myworld2_mppi.yaml` 仅保留为历史参数参考，不再自动加载。
+
+未显式覆盖时，三个导航模式均默认启动后台 Gazebo、桥接、速度转换、导航栈和 RViz，系统时间为默认时间源。上面的命令将 RViz 显式关闭，便于另开窗口；定位仍由外部提供。需要同时打开 Gazebo 窗口和内置 RViz，可将所选导航命令改为 `headless:=false use_rviz:=true`，例如：
+
+```bash
+ros2 launch myworld_bringup entry.launch.py \
+  operation_mode:=autonomous use_gazebo:=true headless:=false \
+  use_rviz:=true use_sim_time:=false map:="${MAP_FILE:?先设置实际地图路径}"
+```
+
+## 仿真 RViz2 与时间设置
+
+另开终端加载同一个 `nav2_ws`，按模式选择一个配置。以下使用系统时间，匹配 entry 默认值；只启动 RViz，不重复启动场景或导航：
+
+```bash
+rviz2 -d "$(ros2 pkg prefix --share myworld_bringup)/rviz/nav2_autonomous_view.rviz" \
+  --ros-args -p use_sim_time:=false
+```
+
+```bash
+rviz2 -d "$(ros2 pkg prefix --share myworld_bringup)/rviz/nav2_default_view.rviz" \
+  --ros-args -p use_sim_time:=false
+```
+
+```bash
+rviz2 -d "$(ros2 pkg prefix --share myworld_bringup)/rviz/nav2_autonomous_fixed_view.rviz" \
+  --ros-args -p use_sim_time:=false
+```
+
+三个命令依次用于 autonomous、fixed_path、autonomous_fixed；remote 如需观察，可使用通用 `nav2_default_view.rviz`，但不会因此产生导航服务器或地图定位。场景配置保留该场景的视角和显示项；使用直接规控入口时，也可选[规控包的模式配置](../nav2_regulated_modules/README.md#独立打开-rviz2)。
+
+autonomous 与 autonomous_fixed 在 Fixed Frame=`map`、定位与生命周期就绪后，可用 `Nav2 Goal` 点击位置并拖动方向，经面板发送单点 Action。只有 autonomous 支持多点 Action；fixed_path 应从业务 Action 下发路线，RViz 负责显示；remote 不使用导航目标工具。固定／冻结路径的保留消息能否显示仍取决于发布者存在和订阅 QoS，不以窗口打开成功作为验收。
+
+如果显式使用 `use_sim_time:=true`，entry 会桥接 `/clock`；定位与独立 RViz 等所有消费节点也必须切到 true。默认系统时间下不要因为有 Gazebo 就单独修改 RViz 时间。内置 RViz 从场景入口获得 `use_sim_time`；独立 RViz 则通过上述 ROS 参数显式设置。各终端还需使用相同的 ROS_DOMAIN_ID／DDS 配置。
 
 ## 默认资源与参数覆盖
 
 | 项目 | entry 当前生效选择 |
 |---|---|
-| 地图 | autonomous／fixed_path 共用 `/userdata/map/pbstream/out.yaml`；remote 使用 models/myworld2/myworld2.yaml，可用 `map` 覆盖 |
+| 地图 | 三个导航模式共用 `/userdata/map/pbstream/out.yaml`；remote 的 map 实参默认 models/myworld2/myworld2.yaml，但不启动导航地图服务；可显式覆盖 |
 | 世界 | models/myworld2/world_only.sdf，可用 `world_file` 覆盖 |
 | 参数 | 直接传递 params/myworld2.yaml，可用完整 `params_file` 覆盖；不生成 noamcl 临时参数文件 |
 | 时间 | `use_sim_time=false`，使用系统时间；设 true 恢复仿真时钟桥接 |
-| 界面 | 各模式均默认 `use_gazebo=true`、`headless=true`，启动后台仿真且不打开 Gazebo 窗口；导航模式默认 `use_rviz=true` |
+| 界面 | 各模式默认 `use_gazebo=true`、`headless=true`；三个导航模式默认 `use_rviz=true`，remote 不进入内置 RViz 分支 |
 | collision | fixed_path 默认启用外部状态门控与区域可视化；自主模式门控和可视化关闭，Collision Monitor 各模式均默认 false |
-| 启动延迟 | autonomous／fixed_path 栈共用 `navigation_stack_start_delay`，默认沿用 `fixed_path_stack_start_delay=3.0`；RViz 5 s；延迟不保证外部定位已就绪 |
+| 启动延迟 | 三个导航模式共用 `navigation_stack_start_delay`，默认沿用 `fixed_path_stack_start_delay=3.0`；RViz 5 s；延迟不保证外部定位已就绪 |
 
-`map:=...` 对两种导航模式均可显式覆盖默认地图。`ign_partition` 默认按 ROS_DOMAIN_ID 与启动 PID 生成；外部 Ignition 工具需连接相同 partition。只有显式设置 `use_gazebo:=false` 时，才关闭仿真与桥接，并要求外部提供 `/scan`、`/motion_state` 及定位所需的其他输入；Cartographer 本身不生成这些传感器与速度数据。默认规控速度反馈不再要求外部 `/odometry`。
+`map:=...` 对三个导航模式均可显式覆盖默认地图。`ign_partition` 默认按 ROS_DOMAIN_ID 与启动 PID 生成；外部 Ignition 工具需连接相同 partition。只有显式设置 `use_gazebo:=false` 时，才关闭仿真与桥接，并要求外部提供 `/scan`、`/motion_state` 及定位所需的其他输入；Cartographer 本身不生成这些传感器与速度数据。默认规控速度反馈不再要求外部 `/odometry`。
 
 ## 反馈与速度链
 
@@ -160,7 +227,7 @@ FollowPath → Controller Server → /cmd_vel_nav
 | `/navigate_through_poses` | `nav2_msgs/action/NavigateThroughPoses` | 有序的 `poses[]` |
 | `/goal_pose` | `geometry_msgs/msg/PoseStamped` | RViz 导航目标或外部目标话题 |
 
-发送目标前确认 `header.frame_id=map`、目标在当前地图可通行区域，并确认定位 TF 新鲜。可用 RViz 的导航目标工具或自己的 Action 客户端下发任务；消息字段见 [NavigateToPose.action](../nav2_msgs/action/NavigateToPose.action) 和 [NavigateThroughPoses.action](../nav2_msgs/action/NavigateThroughPoses.action)。固定路径的 `navi_segment`、`motion_direction`、`max_speed` 属于另一套 Action 协议，不能作为这些自主 Action 的字段。
+发送目标前确认 `header.frame_id=map`、目标在当前地图可通行区域，并确认定位 TF 新鲜。单点／多点命令、反馈与取消说明统一见[规控包 Action 用法](../nav2_regulated_modules/README.md#action-下发与结果检查)；同一组坐标变量必须按当前仿真或实车地图重新设置。消息字段见 [NavigateToPose.action](../nav2_msgs/action/NavigateToPose.action) 和 [NavigateThroughPoses.action](../nav2_msgs/action/NavigateThroughPoses.action)。固定路径的 `navi_segment`、`motion_direction`、`max_speed` 属于另一套 Action 协议，不能作为这些自主 Action 的字段。
 
 自主 Action 的 `distance_remaining` 使用“下游路径估计”和“当前请求目标的直线距离”的较大值，防止末端路径采样提前归零；ETA 包含转向及停稳估计，不参与成功判断。真正成功仍需位置、航向、轮速连续达标。`controller_server.log` 的 `Autonomous arrival waiting=POSITION/HEADING/VELOCITY/SETTLING` 可用于定位等待条件，`number_of_recoveries` 同时统计控制恢复和定位恢复。`nanosec: 0` 本身不是错误，应与 Duration 的 `sec` 一起读取。
 
@@ -170,7 +237,7 @@ FollowPath → Controller Server → /cmd_vel_nav
 
 起点距离、航向与起步保护可能导致先转向或低速接近，不能假定 Action 接受后立即达到 1.5 m/s。当前 fixed_path 使用专用目标检查器，终点航向只作诊断；停车入口、目标容差与独立定位精度分开评价。具体参数以传入 YAML 与 Launch 重写为准，见[规控包](../nav2_regulated_modules/README.md)。
 
-以下单段命令保留旧示例字段，**坐标来自历史地图**，发送前须核对当前地图、通行区域、定位和起点，不作为当前出生位姿说明：
+当前地图的参数化直线命令见[规控包固定路径 Action](../nav2_regulated_modules/README.md#固定路径-action仅-fixed_path)。以下保留历史几何例子，**坐标来自历史地图**，发送前须核对并替换当前地图、通行区域、定位和起点，不作为当前出生位姿或默认路线：
 
 ```bash
 ros2 action send_goal --feedback /navigation_service \
@@ -249,4 +316,4 @@ UART 空闲时可能不周期发零速，停稳需要新鲜轮速等证据。统
 
 Collision Monitor 默认不启动，速度平滑器直接输出 `/cmd_vel`。外部 `/collision_state` 门控和控制器局部 Costmap 足迹检查沿用原配置；本次默认值调整需下次启动导航时生效。
 
-运行验证先在 `/home/forlinx/lidar_slam/colcon_ws` 执行 `ros2 launch cartographer_ros cartographer.launch.py`，确认新鲜定位与导航时间源一致。再执行 `ros2 launch myworld_bringup entry.launch.py operation_mode:=autonomous_fixed`；默认使用 Gazebo，外部传感器入口显式加 `use_gazebo:=false`。完整方案、一次规划约束及暂停恢复规则见 [自主固定路径架构](../nav2_regulated_modules/doc/autonomous_fixed_architecture.md) 。
+启动使用上面的[第四模式仿真命令](#autonomous_fixed单点规划后冻结跟踪)，定位在其实际部署工作空间中单独启动，等待传感器、TF、生命周期和时间源就绪后再下发[单点 Action](../nav2_regulated_modules/README.md#单点-actionautonomous-与-autonomous_fixed) 或 RViz 目标。该模式拒绝多点 Action 和 NavigationService；对已有实车输入，优先采用[直接规控入口](../nav2_regulated_modules/README.md#实车四种模式的启动)，不要把默认 Gazebo 命令用于实车。完整方案、一次规划约束及暂停恢复规则见 [自主固定路径架构](../nav2_regulated_modules/doc/autonomous_fixed_architecture.md) 。
