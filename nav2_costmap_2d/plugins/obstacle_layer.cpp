@@ -39,13 +39,18 @@
 #include "nav2_costmap_2d/obstacle_layer.hpp"
 
 #include <algorithm>
+#include <chrono>  // ooii: per-source timing
+#include <iomanip>  // ooii: timing log formatting
+#include <map>  // ooii: per-source timing
 #include <memory>
+#include <sstream>  // ooii: timing log formatting
 #include <string>
 #include <vector>
 
 #include "pluginlib/class_list_macros.hpp"
 #include "sensor_msgs/point_cloud2_iterator.hpp"
 #include "nav2_costmap_2d/costmap_math.hpp"
+#include "spdlog_wrapper.hpp"  // ooii: obstacle_timing debug log
 
 PLUGINLIB_EXPORT_CLASS(nav2_costmap_2d::ObstacleLayer, nav2_costmap_2d::Layer)  using nav2_costmap_2d::NO_INFORMATION;
 using nav2_costmap_2d::LETHAL_OBSTACLE;
@@ -57,6 +62,28 @@ using rcl_interfaces::msg::ParameterType;
 
 namespace nav2_costmap_2d
 {
+
+// ooii: per-observation-source timing helpers (diagnostics only).
+namespace
+{
+using SteadyClock = std::chrono::steady_clock;
+
+inline double secondsSince(const SteadyClock::time_point & start)
+{
+  return std::chrono::duration<double>(SteadyClock::now() - start).count();
+}
+
+/// @brief Accumulates wall-clock time into a counter when it goes out of scope.
+struct ScopedTiming
+{
+  explicit ScopedTiming(double & accumulator)
+  : accumulator_(accumulator), start_(SteadyClock::now()) {}
+  ~ScopedTiming() {accumulator_ += secondsSince(start_);}
+
+  double & accumulator_;
+  SteadyClock::time_point start_;
+};
+}  // namespace
 
 ObstacleLayer::~ObstacleLayer() {
   dyn_params_handler_.reset();
@@ -338,24 +365,60 @@ void ObstacleLayer::updateBounds( double robot_x, double robot_y, double robot_y
   bool current = true;
   std::vector<Observation> observations, clearing_observations;
 
+  // ooii: per-observation-source timing, logged once per update as "obstacle_timing ...".
+  struct SourceTiming
+  {
+    double mark_seconds{0.0};
+    double clear_seconds{0.0};
+    double max_age_seconds{0.0};
+    unsigned int mark_observations{0};
+    unsigned int clear_observations{0};
+  };
+  std::map<std::string, SourceTiming> source_timing;  // ooii
+  const rclcpp::Time stamp_now = clock_->now();  // ooii: data age reference
+
   // get the marking observations
+  const auto marking_fetch_start = SteadyClock::now();  // ooii
   current = current && getMarkingObservations(observations);
+  const double marking_fetch_seconds = secondsSince(marking_fetch_start);  // ooii
 
   // get the clearing observations
+  const auto clearing_fetch_start = SteadyClock::now();  // ooii
   current = current && getClearingObservations(clearing_observations);
+  const double clearing_fetch_seconds = secondsSince(clearing_fetch_start);  // ooii
 
   // update the global current status
   current_ = current;
 
   // raytrace freespace
   for (unsigned int i = 0; i < clearing_observations.size(); ++i) {
-    raytraceFreespace(clearing_observations[i], min_x, min_y, max_x, max_y);
+    const Observation & clearing_observation = clearing_observations[i];
+    SourceTiming & timing = source_timing[  // ooii: attribute cost to its source
+      clearing_observation.source_.empty() ? "static" : clearing_observation.source_];
+    timing.clear_observations++;
+    if (clearing_observation.cloud_->header.stamp.sec != 0 ||
+      clearing_observation.cloud_->header.stamp.nanosec != 0)
+    {
+      const double age = (stamp_now - rclcpp::Time(
+        clearing_observation.cloud_->header.stamp, stamp_now.get_clock_type())).seconds();
+      timing.max_age_seconds = std::max(timing.max_age_seconds, std::max(0.0, age));
+    }
+    ScopedTiming timing_scope(timing.clear_seconds);  // ooii
+    raytraceFreespace(clearing_observation, min_x, min_y, max_x, max_y);
   }
 
   // place the new obstacles into a priority queue... each with a priority of zero to begin with
   for (std::vector<Observation>::const_iterator it = observations.begin(); it != observations.end(); ++it)
   {
     const Observation & obs = *it;
+    SourceTiming & source_stats = source_timing[obs.source_.empty() ? "static" : obs.source_];  // ooii
+    source_stats.mark_observations++;
+    if (obs.cloud_->header.stamp.sec != 0 || obs.cloud_->header.stamp.nanosec != 0) {
+      const double age = (stamp_now - rclcpp::Time(
+        obs.cloud_->header.stamp, stamp_now.get_clock_type())).seconds();
+      source_stats.max_age_seconds = std::max(source_stats.max_age_seconds, std::max(0.0, age));
+    }
+    ScopedTiming timing_scope(source_stats.mark_seconds);  // ooii
 
     const sensor_msgs::msg::PointCloud2 & cloud = *(obs.cloud_);
 
@@ -420,6 +483,21 @@ void ObstacleLayer::updateBounds( double robot_x, double robot_y, double robot_y
   }
 
   updateFootprint(robot_x, robot_y, robot_yaw, min_x, min_y, max_x, max_y);
+
+  // ooii: one structured line per update; per source: marking cost, raytrace cost and data age.
+  std::ostringstream timing_line;
+  timing_line << std::fixed << std::setprecision(6) <<
+    "obstacle_timing name=" << name_ <<
+    " fetch_mark=" << marking_fetch_seconds <<
+    " fetch_clear=" << clearing_fetch_seconds;
+  for (const auto & entry : source_timing) {
+    timing_line << ' ' << entry.first << ".mark=" << entry.second.mark_seconds <<
+      ' ' << entry.first << ".clear=" << entry.second.clear_seconds <<
+      ' ' << entry.first << ".age=" << entry.second.max_age_seconds <<
+      ' ' << entry.first << ".mark_msgs=" << entry.second.mark_observations <<
+      ' ' << entry.first << ".clear_msgs=" << entry.second.clear_observations;
+  }
+  LOG_DEBUG("{}", timing_line.str());  // ooii: "obstacle_timing ..."
 }
 
 void ObstacleLayer::updateFootprint( double robot_x, double robot_y, double robot_yaw, double * min_x, double * min_y, double * max_x, double * max_y) {

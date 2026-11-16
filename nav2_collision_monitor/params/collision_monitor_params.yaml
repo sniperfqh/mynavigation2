@@ -17,7 +17,8 @@ collision_monitor:
     polygons: ["PolygonStop"]
     PolygonStop:
       type: "polygon"
-      points: [0.3, 0.3, 0.3, -0.3, 0.0, -0.3, 0.0, 0.3]
+      #ooii points 为 VVF 字符串（polygon.cpp 按 PARAMETER_STRING 解析），不再是扁平数组
+      points: "[[0.3, 0.3], [0.3, -0.3], [0.0, -0.3], [0.0, 0.3]]"
       action_type: "stop"
       max_points: 3
       visualize: True
@@ -25,7 +26,8 @@ collision_monitor:
       enabled: True
     PolygonSlow:
       type: "polygon"
-      points: [0.4, 0.4, 0.4, -0.4, -0.4, -0.4, -0.4, 0.4]
+      #ooii points 为 VVF 字符串（polygon.cpp 按 PARAMETER_STRING 解析），不再是扁平数组
+      points: "[[0.4, 0.4], [0.4, -0.4], [-0.4, -0.4], [-0.4, 0.4]]"
       action_type: "slowdown"
       max_points: 3
       slowdown_ratio: 0.3

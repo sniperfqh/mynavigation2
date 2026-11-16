@@ -16,8 +16,12 @@
 // 按话题名缓存多边形，颜色由名称中的 stop／slow／approach 关键字推断；注释中的数组订阅代码不参与编译。
 #include <algorithm>
 #include <array>
+//ooii 速度标注：makeLabelText() 用 fixed/setprecision 拼 v/w 与框尺寸
+#include <cmath>
+#include <iomanip>
 #include <limits>
 #include <memory>
+#include <sstream>
 #include <string>
 #include <utility>
 // 注释掉的代码不参与编译。
@@ -26,6 +30,7 @@
 
 #include "geometry_msgs/msg/point.hpp"
 #include "geometry_msgs/msg/polygon_stamped.hpp"
+#include "geometry_msgs/msg/twist.hpp"
 #include "rclcpp/rclcpp.hpp"
 #include "visualization_msgs/msg/marker.hpp"
 #include "visualization_msgs/msg/marker_array.hpp"
@@ -106,14 +111,25 @@ class CollisionBoundaryVisualizer : public rclcpp::Node
 
     for (const auto & topic : polygon_topics)
     {
+      //ooii 与发布端对齐：transient_local，启动/重连时立即拿到最后一帧碰撞框，
+      // 避免"关闭界面再运行就不显示"
       auto subscription = create_subscription<geometry_msgs::msg::PolygonStamped>(
-        topic, rclcpp::SystemDefaultsQoS(),
+        topic, rclcpp::QoS(rclcpp::KeepLast(1)).transient_local(),
         [this, topic](geometry_msgs::msg::PolygonStamped::SharedPtr message)
         {
           handlePolygon(message, topic);
         });
       polygon_subs_.push_back(subscription);
     }
+
+    //ooii 订阅 cmd_vel：获取当前速度(v/w)，标注在框旁边，方便对比 VP 跳变 vs box 线性变化
+    cmd_vel_sub_ = create_subscription<geometry_msgs::msg::Twist>(
+      "cmd_vel", rclcpp::SensorDataQoS(),
+      [this](geometry_msgs::msg::Twist::SharedPtr msg)
+      {
+        cmd_vel_linear_ = msg->linear.x;
+        cmd_vel_angular_ = msg->angular.z;
+      });
   }
 
 
@@ -314,10 +330,41 @@ private:
     marker.pose.orientation.w = 1.0;
     marker.pose.position = labelPosition(polygon);
     marker.scale.z = 0.18;
-    marker.text = style.label;
+    //ooii 标签带上速度和框尺寸，方便对比 VP(跳变) vs box(线性变化)
+    marker.text = makeLabelText(polygon, style);
     setColor(marker, style);
     marker.frame_locked = true;
     return marker;
+  }
+
+  //ooii 生成标签文字：名称 + 速度 + 框尺寸(前/后/宽)，一眼看出跳变还是连续变化
+  std::string makeLabelText(
+    const geometry_msgs::msg::PolygonStamped & polygon,
+    const BoundaryStyle & style) const
+  {
+    double min_x = std::numeric_limits<double>::max();
+    double max_x = std::numeric_limits<double>::lowest();
+    double min_y = std::numeric_limits<double>::max();
+    double max_y = std::numeric_limits<double>::lowest();
+    for (const auto & p : polygon.polygon.points)
+    {
+      min_x = std::min(min_x, static_cast<double>(p.x));
+      max_x = std::max(max_x, static_cast<double>(p.x));
+      min_y = std::min(min_y, static_cast<double>(p.y));
+      max_y = std::max(max_y, static_cast<double>(p.y));
+    }
+    const double front = max_x;   // 前方距离(base_footprint 原点在车体中心偏后)
+    const double back = -min_x;   // 后方距离
+    const double width = max_y - min_y;
+
+    std::ostringstream oss;
+    oss << style.label << "\n"
+        << "v=" << std::fixed << std::setprecision(2) << cmd_vel_linear_
+        << " w=" << std::fixed << std::setprecision(2) << cmd_vel_angular_ << "\n"
+        << "F=" << std::fixed << std::setprecision(2) << front
+        << " B=" << std::fixed << std::setprecision(2) << back
+        << " W=" << std::fixed << std::setprecision(2) << width;
+    return oss.str();
   }
 
 
@@ -402,6 +449,10 @@ private:
   std::vector<rclcpp::Subscription<geometry_msgs::msg::PolygonStamped>::SharedPtr>
     polygon_subs_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_pub_;
+  //ooii cmd_vel 缓存：标注速度用
+  rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
+  double cmd_vel_linear_ = 0.0;
+  double cmd_vel_angular_ = 0.0;
 
 };
 

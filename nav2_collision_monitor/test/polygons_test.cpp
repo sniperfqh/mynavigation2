@@ -44,8 +44,22 @@ static const char FOOTPRINT_TOPIC[]{"footprint"};
 static const char POLYGON_PUB_TOPIC[]{"polygon"};
 static const char POLYGON_NAME[]{"TestPolygon"};
 static const char CIRCLE_NAME[]{"TestCircle"};
+//ooii 官方实现下 getCollisionTime()/getPointsInside() 按 source 名取点，
+//  用例中把点位挂在这个默认 source 名下。
+static const char TEST_SOURCE_NAME[]{"TestSource"};
+// 期望值：仍用扁平 double 数组做断言比对
 static const std::vector<double> SQUARE_POLYGON {0.5, 0.5, 0.5, -0.5, -0.5, -0.5, -0.5, 0.5};
 static const std::vector<double> ARBITRARY_POLYGON {1.0, 1.0, 1.0, 0.0, 2.0, 0.0, 2.0, -1.0, -1.0, -1.0, -1.0, 1.0};
+//ooii 配置值：<name>.points 走官方 VVF 字符串格式（与上游 Humble 及各 params/*.yaml 一致），
+//  不再是旧的扁平 double 数组。parseVVF 解析 [[x,y], ...]。
+static const char SQUARE_POLYGON_STR[]{"[[0.5, 0.5], [0.5, -0.5], [-0.5, -0.5], [-0.5, 0.5]]"};
+static const char ARBITRARY_POLYGON_STR[]{
+  "[[1.0, 1.0], [1.0, 0.0], [2.0, 0.0], [2.0, -1.0], [-1.0, -1.0], [-1.0, 1.0]]"};
+// 只有 3 个顶点：少于 getPolygonFromString 要求的 4 个
+static const char INCORRECT_POINTS_1_STR[]{"[[0.5, 0.5], [0.5, -0.5], [-0.5, -0.5]]"};
+// 最后一个点不是 [x, y] 数对
+static const char INCORRECT_POINTS_2_STR[]{
+  "[[0.5, 0.5], [0.5, -0.5], [-0.5, -0.5], [-0.5, 0.5], [0]]"};
 static const double CIRCLE_RADIUS{0.5};
 static const int MAX_POINTS{1};
 static const double SLOWDOWN_RATIO{0.7};
@@ -144,7 +158,7 @@ public:
 protected:
   // Working with parameters
   void setCommonParameters(const std::string & polygon_name, const std::string & action_type);
-  void setPolygonParameters(const std::vector<double> & points);
+  void setPolygonParameters(const char * points);
   void setCircleParameters(const double radius);
   bool checkUndeclaredParameter(const std::string & polygon_name, const std::string & param);
   // Creating routines
@@ -182,6 +196,14 @@ Tester::~Tester() {
 }
 
 void Tester::setCommonParameters(const std::string & polygon_name, const std::string & action_type) {
+  //ooii getCollisionTime()/getPointsInside() 已改为按 source 名取点（官方实现），
+  //  多边形只会统计与其关联的 source 的点。本用例直接传入点位，故先声明一个默认 source，
+  //  测试里用 TEST_SOURCE_NAME 作为 map 的键即可命中。
+  test_node_->declare_parameter(
+    "observation_sources", rclcpp::ParameterValue(std::vector<std::string>{TEST_SOURCE_NAME}));
+  test_node_->set_parameter(
+    rclcpp::Parameter("observation_sources", std::vector<std::string>{TEST_SOURCE_NAME}));
+
   test_node_->declare_parameter(polygon_name + ".action_type", rclcpp::ParameterValue(action_type));
   test_node_->set_parameter(rclcpp::Parameter(polygon_name + ".action_type", action_type));
 
@@ -204,10 +226,11 @@ void Tester::setCommonParameters(const std::string & polygon_name, const std::st
   test_node_->set_parameter(rclcpp::Parameter(polygon_name + ".polygon_pub_topic", POLYGON_PUB_TOPIC));
 }
 
-void Tester::setPolygonParameters(const std::vector<double> & points) {
+void Tester::setPolygonParameters(const char * points) {
   test_node_->declare_parameter(std::string(POLYGON_NAME) + ".footprint_topic", rclcpp::ParameterValue(FOOTPRINT_TOPIC));
   test_node_->set_parameter(rclcpp::Parameter(std::string(POLYGON_NAME) + ".footprint_topic", FOOTPRINT_TOPIC));
 
+  //ooii 必须是 string：polygon.cpp 用 PARAMETER_STRING + getPolygonFromString() 读取
   test_node_->declare_parameter(std::string(POLYGON_NAME) + ".points", rclcpp::ParameterValue(points));
   test_node_->set_parameter(rclcpp::Parameter(std::string(POLYGON_NAME) + ".points", points));
 }
@@ -235,7 +258,7 @@ bool Tester::checkUndeclaredParameter(const std::string & polygon_name, const st
 
 void Tester::createPolygon(const std::string & action_type) {
   setCommonParameters(POLYGON_NAME, action_type);
-  setPolygonParameters(SQUARE_POLYGON);
+  setPolygonParameters(SQUARE_POLYGON_STR);
 
   polygon_ = std::make_shared<PolygonWrapper>(test_node_, POLYGON_NAME, tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
   ASSERT_TRUE(polygon_->configure());
@@ -254,7 +277,8 @@ void Tester::createCircle(const std::string & action_type) {
 bool Tester::waitFootprint(const std::chrono::nanoseconds & timeout, std::vector<nav2_collision_monitor::Point> & footprint) {
   rclcpp::Time start_time = test_node_->now();
   while (rclcpp::ok() && test_node_->now() - start_time <= rclcpp::Duration(timeout)) {
-    polygon_->updatePolygon();
+    //ooii updatePolygon() 签名已改为接收当前速度（速度自适应框需要）；本用例只取 footprint，传零速即可。
+    polygon_->updatePolygon(nav2_collision_monitor::Velocity{0.0, 0.0, 0.0});
     polygon_->getPolygon(footprint);
     if (footprint.size() > 0) {
       return true;
@@ -271,7 +295,7 @@ TEST_F(Tester, testPolygonGetStopParameters) {
   // Check that common parameters set correctly
   EXPECT_EQ(polygon_->getName(), POLYGON_NAME);
   EXPECT_EQ(polygon_->getActionType(), nav2_collision_monitor::STOP);
-  EXPECT_EQ(polygon_->getMaxPoints(), MAX_POINTS);
+  EXPECT_EQ(polygon_->getMinPoints(), MAX_POINTS + 1);  //ooii max_points 已弃用，读回为 min_points = max_points + 1
   EXPECT_EQ(polygon_->isVisualize(), true);
 
   // Check that polygon set correctly
@@ -319,7 +343,7 @@ TEST_F(Tester, testPolygonGetSlowdownParameters) {
   // Check that common parameters set correctly
   EXPECT_EQ(polygon_->getName(), POLYGON_NAME);
   EXPECT_EQ(polygon_->getActionType(), nav2_collision_monitor::SLOWDOWN);
-  EXPECT_EQ(polygon_->getMaxPoints(), MAX_POINTS);
+  EXPECT_EQ(polygon_->getMinPoints(), MAX_POINTS + 1);  //ooii max_points 已弃用，读回为 min_points = max_points + 1
   EXPECT_EQ(polygon_->isVisualize(), true);
   // Check that slowdown_ratio is correct
   EXPECT_NEAR(polygon_->getSlowdownRatio(), SLOWDOWN_RATIO, EPSILON);
@@ -331,7 +355,7 @@ TEST_F(Tester, testPolygonGetApproachParameters) {
   // Check that common parameters set correctly
   EXPECT_EQ(polygon_->getName(), POLYGON_NAME);
   EXPECT_EQ(polygon_->getActionType(), nav2_collision_monitor::APPROACH);
-  EXPECT_EQ(polygon_->getMaxPoints(), MAX_POINTS);
+  EXPECT_EQ(polygon_->getMinPoints(), MAX_POINTS + 1);  //ooii max_points 已弃用，读回为 min_points = max_points + 1
   EXPECT_EQ(polygon_->isVisualize(), true);
   // Check that time_before_collision and simulation_time_step are correct
   EXPECT_NEAR(polygon_->getTimeBeforeCollision(), TIME_BEFORE_COLLISION, EPSILON);
@@ -344,7 +368,7 @@ TEST_F(Tester, testCircleGetParameters) {
   // Check that common parameters set correctly
   EXPECT_EQ(circle_->getName(), CIRCLE_NAME);
   EXPECT_EQ(circle_->getActionType(), nav2_collision_monitor::APPROACH);
-  EXPECT_EQ(circle_->getMaxPoints(), MAX_POINTS);
+  EXPECT_EQ(circle_->getMinPoints(), MAX_POINTS + 1);  //ooii max_points 已弃用，读回为 min_points = max_points + 1
 
   // Check that Circle-specific parameters were set correctly
   EXPECT_NEAR(circle_->getRadius(), CIRCLE_RADIUS, EPSILON);
@@ -371,7 +395,7 @@ TEST_F(Tester, testPolygonUndeclaredPoints) {
 
 TEST_F(Tester, testPolygonIncorrectActionType) {
   setCommonParameters(POLYGON_NAME, "incorrect_action_type");
-  setPolygonParameters(SQUARE_POLYGON);
+  setPolygonParameters(SQUARE_POLYGON_STR);
 
   polygon_ = std::make_shared<PolygonWrapper>(test_node_, POLYGON_NAME, tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
   ASSERT_FALSE(polygon_->configure());
@@ -380,10 +404,11 @@ TEST_F(Tester, testPolygonIncorrectActionType) {
 TEST_F(Tester, testPolygonIncorrectPoints1) {
   setCommonParameters(POLYGON_NAME, "stop");
 
-  std::vector<double> incorrect_points = SQUARE_POLYGON;
-  incorrect_points.resize(6);  // Not enough for triangle
-  test_node_->declare_parameter(std::string(POLYGON_NAME) + ".points", rclcpp::ParameterValue(incorrect_points));
-  test_node_->set_parameter(rclcpp::Parameter(std::string(POLYGON_NAME) + ".points", incorrect_points));
+  // 只有 3 个顶点，getPolygonFromString() 要求至少 4 个
+  test_node_->declare_parameter(
+    std::string(POLYGON_NAME) + ".points", rclcpp::ParameterValue(INCORRECT_POINTS_1_STR));
+  test_node_->set_parameter(
+    rclcpp::Parameter(std::string(POLYGON_NAME) + ".points", INCORRECT_POINTS_1_STR));
 
   polygon_ = std::make_shared<PolygonWrapper>(test_node_, POLYGON_NAME, tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
   ASSERT_FALSE(polygon_->configure());
@@ -392,10 +417,11 @@ TEST_F(Tester, testPolygonIncorrectPoints1) {
 TEST_F(Tester, testPolygonIncorrectPoints2) {
   setCommonParameters(POLYGON_NAME, "stop");
 
-  std::vector<double> incorrect_points = SQUARE_POLYGON;
-  incorrect_points.resize(9);  // Odd number of points
-  test_node_->declare_parameter(std::string(POLYGON_NAME) + ".points", rclcpp::ParameterValue(incorrect_points));
-  test_node_->set_parameter(rclcpp::Parameter(std::string(POLYGON_NAME) + ".points", incorrect_points));
+  // 末尾多出一个非 [x, y] 数对的元素
+  test_node_->declare_parameter(
+    std::string(POLYGON_NAME) + ".points", rclcpp::ParameterValue(INCORRECT_POINTS_2_STR));
+  test_node_->set_parameter(
+    rclcpp::Parameter(std::string(POLYGON_NAME) + ".points", INCORRECT_POINTS_2_STR));
 
   polygon_ = std::make_shared<PolygonWrapper>(test_node_, POLYGON_NAME, tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
   ASSERT_FALSE(polygon_->configure());
@@ -412,7 +438,16 @@ TEST_F(Tester, testCircleUndeclaredRadius) {
 }
 
 TEST_F(Tester, testPolygonUpdate) {
-  createPolygon("approach");
+  //ooii approach 多边形按官方语义由 footprint_topic 动态给形状，不配 .points。
+  //  本用例意在验证"收到 footprint 前形状未定、收到后被更新"，故必须不留静态 points：
+  //  沿用 setCommonParameters + 只声明 footprint_topic（与线上 FootprintApproach 一致）。
+  setCommonParameters(POLYGON_NAME, "approach");
+  test_node_->declare_parameter(std::string(POLYGON_NAME) + ".footprint_topic", rclcpp::ParameterValue(FOOTPRINT_TOPIC));
+  test_node_->set_parameter(rclcpp::Parameter(std::string(POLYGON_NAME) + ".footprint_topic", FOOTPRINT_TOPIC));
+
+  polygon_ = std::make_shared<PolygonWrapper>(test_node_, POLYGON_NAME, tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
+  ASSERT_TRUE(polygon_->configure());
+  polygon_->activate();
 
   std::vector<nav2_collision_monitor::Point> poly;
   polygon_->getPolygon(poly);
@@ -455,7 +490,7 @@ TEST_F(Tester, testPolygonGetPointsInsideEdge) {
   // Test for checking edge cases in raytracing algorithm.
   // All points are lie on the edge lines parallel to OX, where the raytracing takes place.
   setCommonParameters(POLYGON_NAME, "stop");
-  setPolygonParameters(ARBITRARY_POLYGON);
+  setPolygonParameters(ARBITRARY_POLYGON_STR);
 
   polygon_ = std::make_shared<PolygonWrapper>(test_node_, POLYGON_NAME, tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);
   ASSERT_TRUE(polygon_->configure());
@@ -498,12 +533,22 @@ TEST_F(Tester, testPolygonGetCollisionTime) {
   ASSERT_TRUE(waitFootprint(500ms, footprint));
   ASSERT_EQ(footprint.size(), 4u);
 
+  //ooii getCollisionTime() 现按 source 名取点，这里把点位包进以 TEST_SOURCE_NAME 为键的 map，
+  //  与 setCommonParameters() 里声明的 observation_sources 对应，保持原有断言不变。
+  auto collision_time = [this](const std::vector<nav2_collision_monitor::Point> & pts,
+      const nav2_collision_monitor::Velocity & velocity)
+    {
+      const std::unordered_map<std::string, std::vector<nav2_collision_monitor::Point>> map{
+        {TEST_SOURCE_NAME, pts}};
+      return polygon_->getCollisionTime(map, velocity);
+    };
+
   // Forward movement check
   nav2_collision_monitor::Velocity vel{0.5, 0.0, 0.0};  // 0.5 m/s forward movement
   // Two points 0.2 m ahead the footprint (0.5 m)
   std::vector<nav2_collision_monitor::Point> points{{0.7, -0.01}, {0.7, 0.01}};
   // Collision is expected to be ~= 0.2 m / 0.5 m/s seconds
-  EXPECT_NEAR(polygon_->getCollisionTime(points, vel), 0.4, SIMULATION_TIME_STEP);
+  EXPECT_NEAR(collision_time(points, vel), 0.4, SIMULATION_TIME_STEP);
 
   // Backward movement check
   vel = {-0.5, 0.0, 0.0};  // 0.5 m/s backward movement
@@ -511,7 +556,7 @@ TEST_F(Tester, testPolygonGetCollisionTime) {
   points.clear();
   points = {{-0.7, -0.01}, {-0.7, 0.01}};
   // Collision is expected to be in ~= 0.2 m / 0.5 m/s seconds
-  EXPECT_NEAR(polygon_->getCollisionTime(points, vel), 0.4, SIMULATION_TIME_STEP);
+  EXPECT_NEAR(collision_time(points, vel), 0.4, SIMULATION_TIME_STEP);
 
   // Sideway movement check
   vel = {0.0, 0.5, 0.0};  // 0.5 m/s sideway movement
@@ -519,7 +564,7 @@ TEST_F(Tester, testPolygonGetCollisionTime) {
   points.clear();
   points = {{-0.01, 0.6}, {0.01, 0.6}};
   // Collision is expected to be in ~= 0.1 m / 0.5 m/s seconds
-  EXPECT_NEAR(polygon_->getCollisionTime(points, vel), 0.2, SIMULATION_TIME_STEP);
+  EXPECT_NEAR(collision_time(points, vel), 0.2, SIMULATION_TIME_STEP);
 
   // Rotation check
   vel = {0.0, 0.0, 1.0};  // 1.0 rad/s rotation
@@ -537,7 +582,7 @@ TEST_F(Tester, testPolygonGetCollisionTime) {
   points = {{0.49, -0.01}, {0.49, 0.01}};
   // Collision is expected to be in ~= 45 degrees * M_PI / (180 degrees * 1.0 rad/s) seconds
   double exp_res = 45 / 180 * M_PI;
-  EXPECT_NEAR(polygon_->getCollisionTime(points, vel), exp_res, EPSILON);
+  EXPECT_NEAR(collision_time(points, vel), exp_res, EPSILON);
 
   // Two points are already inside footprint
   vel = {0.5, 0.0, 0.0};  // 0.5 m/s forward movement
@@ -545,7 +590,7 @@ TEST_F(Tester, testPolygonGetCollisionTime) {
   points.clear();
   points = {{0.1, -0.01}, {0.1, 0.01}};
   // Collision already appeared: collision time should be 0
-  EXPECT_NEAR(polygon_->getCollisionTime(points, vel), 0.0, EPSILON);
+  EXPECT_NEAR(collision_time(points, vel), 0.0, EPSILON);
 
   // All points are out of simulation prediction
   vel = {0.5, 0.0, 0.0};  // 0.5 m/s forward movement
@@ -553,7 +598,7 @@ TEST_F(Tester, testPolygonGetCollisionTime) {
   points.clear();
   points = {{1.1, -0.01}, {1.1, 0.01}};
   // There is no collision: return value should be negative
-  EXPECT_LT(polygon_->getCollisionTime(points, vel), 0.0);
+  EXPECT_LT(collision_time(points, vel), 0.0);
 }
 
 TEST_F(Tester, testPolygonPublish) {
@@ -579,7 +624,13 @@ TEST_F(Tester, testPolygonDefaultVisualize) {
   // Use default parameters, visualize should be false by-default
   test_node_->declare_parameter(std::string(POLYGON_NAME) + ".action_type", rclcpp::ParameterValue("stop"));
   test_node_->set_parameter(rclcpp::Parameter(std::string(POLYGON_NAME) + ".action_type", "stop"));
-  setPolygonParameters(SQUARE_POLYGON);
+  //ooii 官方实现要求节点级 observation_sources 已声明（production 由 yaml 提供），
+  //  否则 configure() 直接报 "parameter 'observation_sources' is not initialized"
+  test_node_->declare_parameter(
+    "observation_sources", rclcpp::ParameterValue(std::vector<std::string>{TEST_SOURCE_NAME}));
+  test_node_->set_parameter(
+    rclcpp::Parameter("observation_sources", std::vector<std::string>{TEST_SOURCE_NAME}));
+  setPolygonParameters(SQUARE_POLYGON_STR);
 
   // Create new polygon
   polygon_ = std::make_shared<PolygonWrapper>(test_node_, POLYGON_NAME, tf_buffer_, BASE_FRAME_ID, TRANSFORM_TOLERANCE);

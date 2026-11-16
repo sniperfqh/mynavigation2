@@ -8,6 +8,8 @@ add_library(${library_name} SHARED
   robot_utils.cpp
   node_thread.cpp
   odometry_utils.cpp
+  #ooii array_parser：parseVVF 实现，供 polygon 读取 "[...]" 字符串形状
+  array_parser.cpp
 )
 
 ament_target_dependencies(${library_name}

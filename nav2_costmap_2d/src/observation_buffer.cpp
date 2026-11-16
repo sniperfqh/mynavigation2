@@ -63,6 +63,8 @@ void ObservationBuffer::bufferCloud(const sensor_msgs::msg::PointCloud2 & cloud)
 
   // create a new observation on the list to be populated
   observation_list_.push_front(Observation());
+  // ooii: remember which observation source this cloud came from (per-sensor timing)
+  observation_list_.front().source_ = topic_name_;
 
   // check whether the origin frame has been set explicitly
   // or whether we should get it from the cloud

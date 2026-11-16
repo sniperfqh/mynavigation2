@@ -20,6 +20,8 @@
 #include <memory>
 #include <utility>
 #include <vector>
+//ooii 拼 .points 的 VVF 字符串用
+#include <sstream>
 #include <string>
 #include <limits>
 #include "nav2_msgs/msg/collision_monitor_state.hpp"
@@ -216,6 +218,12 @@ void Tester::setCommonParameters() {
 
   cm_->declare_parameter("stop_pub_timeout", rclcpp::ParameterValue(STOP_PUB_TIMEOUT));
   cm_->set_parameter(rclcpp::Parameter("stop_pub_timeout", STOP_PUB_TIMEOUT));
+
+  //ooii TwistSubscriber 的 enable_stamped_cmd_vel 默认 true（会去订阅 TwistStamped），
+  //  本用例收发的是裸 Twist，必须显式关掉；否则与已建的同名 Twist 订阅类型冲突：
+  //  "create_subscription() called for existing topic name rt/cmd_vel_in with incompatible type"
+  cm_->declare_parameter("enable_stamped_cmd_vel", rclcpp::ParameterValue(false));
+  cm_->set_parameter(rclcpp::Parameter("enable_stamped_cmd_vel", false));
 }
 
 void Tester::addPolygon(const std::string & polygon_name, const PolygonType type, const double size, const std::string & at) {
@@ -224,7 +232,12 @@ void Tester::addPolygon(const std::string & polygon_name, const PolygonType type
     cm_->set_parameter(rclcpp::Parameter(polygon_name + ".type", "polygon"));
 
     if (at != "approach") {
-      const std::vector<double> points {size, size, size, -size, -size, -size, -size, size};
+      //ooii .points 走官方 VVF 字符串格式（polygon.cpp 按 PARAMETER_STRING 解析），
+      //  旧的扁平 double 数组会报 "expected [string] got [double_array]"
+      std::ostringstream points_oss;
+      points_oss << "[[" << size << ", " << size << "], [" << size << ", " << -size << "], ["
+                 << -size << ", " << -size << "], [" << -size << ", " << size << "]]";
+      const std::string points = points_oss.str();
       cm_->declare_parameter(polygon_name + ".points", rclcpp::ParameterValue(points));
       cm_->set_parameter(rclcpp::Parameter(polygon_name + ".points", points));
     } else {  // at == "approach"
@@ -666,6 +679,10 @@ TEST_F(Tester, testCrossOver) {
   // 1. Obstacle is not in the slowdown zone, but less than TIME_BEFORE_COLLISION (ahead in 1.5 m).
   // Robot should approach the obstacle.
   publishPointCloud(2.5, curr_time);
+  //ooii Range source 也要喂数据：合并后引入了官方的 "invalid source -> STOP" 逻辑
+  //  （source 超时未收到数据即急停），只发 PointCloud 会让 Range 超时把车直接停住，
+  //  导致本步骤期望的 APPROACH 速度变成 0。与上游 Humble 用例保持一致。
+  publishRange(2.5, curr_time);
   ASSERT_TRUE(waitData(std::hypot(2.5, 0.01), 500ms, curr_time));
   publishCmdVel(3.0, 0.0, 0.0);
   ASSERT_TRUE(waitCmdVel(500ms));

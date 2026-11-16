@@ -1,0 +1,76 @@
+# 演示专用：让 collision_monitor 的三级边界由 /car_op_status 驱动。
+#
+# 这是**独立的小配置**，只给 collision_monitor 一个节点用，不并入 regulated_modules.yaml。
+# 生产 YAML 一个字都没改。
+#
+# 为什么必须单独一份：
+#   生产用的是 type: "velocity_polygon"，而 VelocityPolygon::getParameters 固定传
+#   use_dynamic_sub_topic=false，因此 velocity_polygon 无法订阅 polygon_sub_topic。
+#   想按外部状态切换整帧边界，只能用 type: "polygon" + polygon_sub_topic。
+#
+# 运行（另开终端，不要与生产入口同时起同名节点）：
+#   ros2 run nav2_collision_monitor collision_monitor \
+#     --ros-args --params-file <本文件> -r __node:=collision_monitor_demo
+#
+# 安全：cmd_vel_out_topic 默认发到 cmd_vel_car_op_demo，**不接 cmd_vel**，
+# 避免演示时误驱动实车。真要接入速度链再手动改这一行，并确认没有第二个节点也在发 cmd_vel。
+
+collision_monitor_demo:
+  ros__parameters:
+    use_sim_time: false
+    base_frame_id: "base_link"
+    odom_frame_id: "map"
+
+    # 输入接到标准速度链的上游话题名，但不主动占用 cmd_vel 输出。
+    cmd_vel_in_topic: "cmd_vel_collision_in"
+    cmd_vel_out_topic: "cmd_vel_car_op_demo"
+
+    transform_tolerance: 0.2
+    source_timeout: 0.5
+    base_shift_correction: true
+    stop_pub_timeout: 2.0
+    enable_stamped_cmd_vel: false
+
+    polygons: ["PolygonStopL3", "PolygonSlowL2", "PolygonSlowL1"]
+
+    # ---- L3 停止：订阅 car_op_zones/stop ----
+    PolygonStopL3:
+      type: "polygon"
+      action_type: "stop"
+      min_points: 3
+      visualize: true
+      enabled: true
+      polygon_pub_topic: "car_op_zones/echo_stop"
+      polygon_sub_topic: "car_op_zones/stop"
+      # 演示脚本按 --period 持续重发，volatile 就够；设 true 则后启动也能立刻拿到最后一帧。
+      polygon_subscribe_transient_local: true
+
+    # ---- L2 减速：订阅 car_op_zones/slow_l2 ----
+    PolygonSlowL2:
+      type: "polygon"
+      action_type: "slowdown"
+      slowdown_ratio: 0.6
+      min_points: 3
+      visualize: true
+      enabled: true
+      polygon_pub_topic: "car_op_zones/echo_slow_l2"
+      polygon_sub_topic: "car_op_zones/slow_l2"
+      polygon_subscribe_transient_local: true
+
+    # ---- L1 预警：订阅 car_op_zones/slow_l1 ----
+    PolygonSlowL1:
+      type: "polygon"
+      action_type: "slowdown"
+      slowdown_ratio: 0.8
+      min_points: 3
+      visualize: true
+      enabled: true
+      polygon_pub_topic: "car_op_zones/echo_slow_l1"
+      polygon_sub_topic: "car_op_zones/slow_l1"
+      polygon_subscribe_transient_local: true
+
+    observation_sources: ["scan"]
+    scan:
+      type: "scan"
+      topic: "/c200_lidar_node/scan"
+      enabled: true

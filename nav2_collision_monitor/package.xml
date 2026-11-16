@@ -12,14 +12,26 @@
 
   <depend>rclcpp</depend>
   <depend>rclcpp_components</depend>
+  <depend>rclcpp_lifecycle</depend>
   <depend>tf2</depend>
   <depend>tf2_ros</depend>
   <depend>tf2_geometry_msgs</depend>
   <depend>sensor_msgs</depend>
   <depend>geometry_msgs</depend>
+  <depend>std_msgs</depend>
+  <depend>visualization_msgs</depend>
   <depend>nav2_common</depend>
   <depend>nav2_util</depend>
   <depend>nav2_costmap_2d</depend>
+  <depend>nav2_msgs</depend>
+
+  <!-- 避障状态链（tools/ 下的 Python 节点与 obstacle_status launch） -->
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>tf2_msgs</exec_depend>
+  <exec_depend>byd_custom_msgs</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
 
   <!-- ooii 去噪：PCL RadiusOutlierRemoval -->
   <build_depend>libpcl-all-dev</build_depend>

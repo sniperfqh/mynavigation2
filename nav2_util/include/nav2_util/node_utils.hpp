@@ -171,6 +171,9 @@ void copy_all_parameters(const NodeT1 & parent, const NodeT2 & child)
   }
 }
 
+//ooii setSoftRealTimePriority：官方 Humble 新增，将本线程设为 SCHED_FIFO 软实时优先级
+void setSoftRealTimePriority();
+
 }  // namespace nav2_util
 
 #endif  // NAV2_UTIL__NODE_UTILS_HPP_

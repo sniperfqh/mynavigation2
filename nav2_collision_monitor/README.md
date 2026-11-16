@@ -14,7 +14,9 @@
 
 ### 本项目接入说明
 
-本包依据传感器过滤速度，与外部 `/collision_state` UInt8 门控独立。当前直接规控及 myworld_bringup 入口 `use_collision_monitor` 均默认 false，需显式启用才插入速度链；区域可视化不会产生碰撞判断。
+本包依据传感器过滤速度，与外部 `/collision_state` UInt8 门控独立。`regulated_modules.launch.py`、`myworld_bringup/entry.launch.py` 和 [launch/obstacle_status.launch.py](launch/obstacle_status.launch.py) 现在是同一套语义：`use_collision_monitor` 是碰撞检测模块（状态枚举链）总开关，Nav2 速度门由独立的 `use_collision_velocity_gate` 控制，两者均默认 false，需显式启用。区域可视化不会产生碰撞判断。碰撞区默认使用 `velocity_polygon`（按速度档切换），自研 box / 动态订阅框仍保留为 `type: "polygon"`。
+
+避障状态链（`car_op_zones.py`、`obstacle_status_translator.py`、`car_op_status_sim.py`）自 2026-10 起也放在本包，默认行为是只发布 `/collision_state` 与 `/obstacle_status_int`，不发布 `/cmd_vel`。`use_obstacle_status`（默认 true）只控制 translator 是否输出枚举。实车既可以跑 `regulated_modules.launch.py`，也可以单独跑 [launch/obstacle_status.launch.py](launch/obstacle_status.launch.py)，但不要同时开。说明见 [doc/OBSTACLE_STATUS.md](doc/OBSTACLE_STATUS.md)。
 
 构建命令统一从 `nav2_ws` 执行，详见[仓库构建与包索引](../README.md)；不在包源码目录运行 colcon。本文依据当前源码描述职责，包存在、可构建或包含测试文件均不代表完成运行验收。
 
@@ -95,3 +97,9 @@ Collision Monitor 是 Nav2 的速度安全监控节点。它订阅 LaserScan、P
 节点支持多个传感器 Source、多个几何区域和按优先级组合的行为。常用安全动作包括 STOP 停车、SLOWDOWN 按比例减速、APPROACH 前向预测以及其他速度限制。传感器数据会在机器人坐标系中处理，并通过 cmd_vel 输入与安全后的速度输出形成独立速度门。
 
 参数用于选择源 Topic、数据类型、坐标系、区域顶点、动作优先级、减速比例和停止时间。可启用调试多边形、源数据和状态指标。区域点越多，计算性能越低；在送入 Collision Monitor 前对点云裁剪或滤波可以降低开销。
+
+
+        ros2 bag record -o ~/bags/obstacle_real \
+  --qos-profile-overrides /tf_static:transient_local \
+  /c200_lidar_node/scan /tf /tf_static /car_op_status /motion_state /cmd_vel /odometry
+

@@ -19,7 +19,8 @@
 namespace nav2_collision_monitor
 {
 
-void transformPoints(const Pose & pose, std::vector<Point> & points) {
+void transformPoints(const Pose & pose, std::vector<Point> & points)
+{
   const double cos_theta = std::cos(pose.theta);
   const double sin_theta = std::sin(pose.theta);
 
@@ -40,7 +41,8 @@ void transformPoints(const Pose & pose, std::vector<Point> & points) {
   }
 }
 
-void projectState(const double & dt, Pose & pose, Velocity & velocity) {
+void projectState(const double & dt, Pose & pose, Velocity & velocity)
+{
   const double theta = velocity.tw * dt;
   const double cos_theta = std::cos(theta);
   const double sin_theta = std::sin(theta);

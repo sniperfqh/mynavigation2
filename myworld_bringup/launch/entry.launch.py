@@ -5,6 +5,15 @@ is converted to /motion_state for controllers, the navigator and the smoother.
 All modes default to headless Gazebo with its feedback bridges.
 use_gazebo:=false switches to external sensor and velocity inputs.
 No Gazebo bottom-chassis TF or substitute localization is published here.
+
+use_collision_monitor:=true starts the collision detection module: dynamic
+zones (car_op_zones.py --drive-monitor), the default status source, and (when
+use_obstacle_status is also true) the status enumerator. The module does not
+change velocity. use_obstacle_status defaults true and makes the translator
+publish /collision_state (UInt8) and /obstacle_status_int (Int32); it runs with
+--no-passthrough and never publishes /cmd_vel. The Nav2 collision_monitor
+velocity gate is separate and stays off unless use_collision_velocity_gate is
+true.
 """
 
 import os
@@ -31,7 +40,13 @@ def generate_launch_description():
     default_collision_visualization = PythonExpression(["'true' if '", operation_mode, "' == 'fixed_path' else 'false'"])
     use_gazebo = LaunchConfiguration('use_gazebo', default=default_use_gazebo)
     default_collision_monitor = 'false'
+    # use_collision_monitor 是碰撞检测模块（状态枚举链）总开关；速度门单独用
+    # use_collision_velocity_gate，二者互不影响。
     use_collision_monitor = LaunchConfiguration('use_collision_monitor', default=default_collision_monitor)
+    use_collision_velocity_gate = LaunchConfiguration('use_collision_velocity_gate', default='false')
+    use_obstacle_status = LaunchConfiguration('use_obstacle_status', default='true')
+    use_car_op_status_sim = LaunchConfiguration('use_car_op_status_sim', default='true')
+    car_op_status_value = LaunchConfiguration('car_op_status_value', default='0')
     use_collision_visualization = LaunchConfiguration('use_collision_visualization', default=default_collision_visualization)
     headless = LaunchConfiguration('headless', default='true')
     enable_localization_jump_detection = LaunchConfiguration('enable_localization_jump_detection', default='false')
@@ -115,8 +130,12 @@ def generate_launch_description():
         'use_rviz': 'false',
         'namespace': '',
         'use_namespace': 'false',
-        'use_collision_monitor': use_collision_monitor,
+        # regulated 的 use_collision_monitor 现在也是状态模块总开关；状态模块已在
+        # 下面的 Node 里独立启动，这里必须关掉避免重复节点。速度门单独转发。
+        'use_collision_monitor': 'false',
+        'use_collision_velocity_gate': use_collision_velocity_gate,
         'use_collision_visualization': use_collision_visualization,
+        'use_obstacle_status': 'false',
         'autostart': 'true',
         'use_composition': 'False',
         'container_name': 'nav2_regulated_container',
@@ -185,8 +204,12 @@ def generate_launch_description():
         DeclareLaunchArgument('use_rviz', default_value='true', description='Whether to start RViz'),
         DeclareLaunchArgument('use_gazebo', default_value=default_use_gazebo, description='Start Gazebo, sensor bridges and simulated velocity feedback; defaults true in all modes, with the GUI disabled by headless=true'),
         DeclareLaunchArgument('enable_collision_state', default_value='true', description='Enable fixed-path external collision-state gating'),
-        DeclareLaunchArgument('use_collision_monitor', default_value=default_collision_monitor, description='Enable Collision Monitor; defaults false in all modes'),
+        DeclareLaunchArgument('use_collision_monitor', default_value=default_collision_monitor, description='Start the collision detection module (dynamic zones + default status source); it publishes status only and never changes velocity'),
+        DeclareLaunchArgument('use_collision_velocity_gate', default_value='false', description='Start the Nav2 collision_monitor velocity gate separately; keep false when the status module is the intended collision behaviour'),
         DeclareLaunchArgument('use_collision_visualization', default_value=default_collision_visualization, description='Enable collision boundary visualization; defaults true for fixed_path, false for other modes'),
+        DeclareLaunchArgument('use_obstacle_status', default_value='true', description='With use_collision_monitor: start obstacle_status_translator and publish /collision_state (UInt8) and /obstacle_status_int (Int32). The translator never publishes /cmd_vel'),
+        DeclareLaunchArgument('use_car_op_status_sim', default_value='true', description='With use_collision_monitor: start the default car_op_status_sim source. It yields while another /car_op_status publisher exists and resumes afterwards'),
+        DeclareLaunchArgument('car_op_status_value', default_value='0', description='car_op_status_sim hold value 0-8 (0 = idle forward)'),
         DeclareLaunchArgument('headless', default_value='true', description='Run only the Ignition Gazebo server by default; false enables Gazebo GUI'),
         DeclareLaunchArgument('operation_mode', default_value='autonomous', choices=['remote', 'autonomous', 'fixed_path', 'autonomous_fixed'], description='Select the robot operation mode'),
         DeclareLaunchArgument('autonomous_mppi_profile', default_value='true', description='Apply rotation alignment, terminal approach and reduced MPPI sampling only in autonomous mode'),
@@ -244,6 +267,41 @@ def generate_launch_description():
         Node(condition=IfCondition(use_gazebo), package='myworld_bringup', executable='odom_to_motion_state.py', name='odom_to_motion_state', output='screen', parameters=[{'use_sim_time': use_sim_time,
                 'input_topic': '/odometry',
                 'output_topic': '/motion_state'}]),
+        # 碰撞检测模块：use_collision_monitor 是总开关；模块只发状态，不改速度。
+        # use_obstacle_status 默认 true，决定是否启动 translator 输出枚举：
+        # /collision_state (UInt8) 给 regulated，/obstacle_status_int (Int32) 给运控
+        # （见 nav2_collision_monitor/doc/OBSTACLE_STATUS.md）。
+        Node(condition=IfCondition(use_collision_monitor),
+             package='nav2_collision_monitor', executable='car_op_zones.py',
+             name='car_op_zones', output='screen',
+             parameters=[{'use_sim_time': use_sim_time}],
+             arguments=['--drive-monitor', '--frame-id', 'base_link', '--period', '0.1',
+                        '--profile', 'sim']),
+        # 默认状态源保住启动时的状态 0 边界框；它带 --yield-to-other-publishers，
+        # 窗口 4 再起 car_op_status_sim 时会自动让位，退出后恢复，
+        # 避免两个发布者同时发导致动态框跳闪。
+        Node(condition=IfCondition(PythonExpression([
+                 "'", use_collision_monitor, "'.lower() == 'true' and '",
+                 use_car_op_status_sim, "'.lower() == 'true'"])),
+             package='nav2_collision_monitor', executable='car_op_status_sim.py',
+             name='car_op_status_sim', output='screen',
+             parameters=[{'use_sim_time': use_sim_time}],
+             arguments=['--mode', 'hold', '--value', car_op_status_value,
+                        '--topic', '/car_op_status',
+                        '--yield-to-other-publishers']),
+        Node(condition=IfCondition(PythonExpression([
+                 "'", use_collision_monitor, "'.lower() == 'true' and '",
+                 use_obstacle_status, "'.lower() == 'true'"])),
+             package='nav2_collision_monitor', executable='obstacle_status_translator.py',
+             name='obstacle_status_translator', output='screen',
+             parameters=[{'use_sim_time': use_sim_time}],
+             arguments=['--scan-topic', '/scan',
+                        '--stop-topic', '/car_op_zones/stop',
+                        '--slow-l2-topic', '/car_op_zones/slow_l2',
+                        '--slow-l1-topic', '/car_op_zones/slow_l1',
+                        '--zone-frame', 'base_link',
+                        '--profile', 'sim',
+                        '--no-passthrough']),
         Node(condition=IfCondition(PythonExpression(gazebo_enabled + ["'", operation_mode, "' == 'remote'"])), package='myworld_bringup', executable='chassis_control_to_twist.py', name='chassis_control_to_twist', output='screen',
             parameters=[LaunchConfiguration('params_file'), {'use_sim_time': use_sim_time}]),
 

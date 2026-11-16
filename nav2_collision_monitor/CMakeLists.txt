@@ -15,6 +15,8 @@ find_package(nav2_common REQUIRED)
 find_package(nav2_util REQUIRED)
 find_package(nav2_costmap_2d REQUIRED)
 find_package(nav2_msgs REQUIRED)
+find_package(std_msgs REQUIRED)
+find_package(visualization_msgs REQUIRED)
 # ooii 去噪：PCL( RadiusOutlierRemoval 在 filters 模块)
 find_package(PCL REQUIRED COMPONENTS common filters)
 
@@ -39,6 +41,8 @@ set(dependencies
   nav2_util
   nav2_costmap_2d
   nav2_msgs
+  std_msgs
+  visualization_msgs
 )
 
 set(executable_name collision_monitor)
@@ -47,7 +51,9 @@ set(library_name ${executable_name}_core)
 add_library(${library_name} SHARED
   src/collision_monitor_node.cpp
   src/polygon.cpp
+  src/velocity_polygon.cpp
   src/circle.cpp
+  src/exclusion_zone.cpp  #ooii
   src/source.cpp
   src/scan.cpp
   src/pointcloud.cpp
@@ -94,6 +100,18 @@ install(DIRECTORY include/
 
 install(DIRECTORY launch DESTINATION share/${PROJECT_NAME})
 install(DIRECTORY params DESTINATION share/${PROJECT_NAME})
+
+# 避障状态链：由 launch/obstacle_status.launch.py 以 ros2 run 方式启动。
+install(PROGRAMS
+  tools/car_op_status_sim.py
+  tools/car_op_zones.py
+  tools/obstacle_status_translator.py
+  DESTINATION lib/${PROJECT_NAME})
+
+# car_op_zones.py 直接读取设计数据，不在脚本里重抄数值。
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/../doc/collision_zones/
+  DESTINATION share/${PROJECT_NAME}/collision_zones
+  FILES_MATCHING PATTERN "gen_zones.py" PATTERN "spec_table*.md")
 
 ### Testing ###
 

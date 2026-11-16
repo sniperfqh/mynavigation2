@@ -138,12 +138,15 @@ class NavigationRewrittenYaml(RewrittenYaml):
         namespace = perform_substitutions(context, normalize_to_list_of_substitutions(self.navigation_kwargs.get('root_key') or ''))
         config = document[namespace] if namespace else document
         # Only this mode uses the requested 0.8 x 0.6 m envelope and wider obstacle cost field.
-        footprint = '[[0.4, 0.3], [0.4, -0.3], [-0.4, -0.3], [-0.4, 0.3]]'
+        # ooiiautonomous_fixed 模式专用覆盖；YAML 里是 0.6/0.4，仅本模式用 0.8x0.6
+        #footprint = '[[0.4, 0.3], [0.4, -0.3], [-0.4, -0.3], [-0.4, 0.3]]'
+        footprint = '[[0.6, 0.4], [0.6, -0.4], [-0.6, -0.4], [-0.6, 0.4]]'
         for name in ['global_costmap', 'local_costmap']:
             costmap = config[name][name]['ros__parameters']
             costmap.update(footprint=footprint, footprint_padding=0.0)
             costmap.pop('robot_radius', None)
-            costmap['inflation_layer'].update(inflation_radius=0.90, cost_scaling_factor=2.5)
+            #inflation_radius=0.90,
+            costmap['inflation_layer'].update(inflation_radius=0.40, cost_scaling_factor=2.5)
         navigator = config['regulated_navigator']['ros__parameters']
         # Budget the error against the original action goal, including planner quantization.
         final_xy = float(navigator.get('autonomous_fixed_xy_tolerance', 0.01))
@@ -154,22 +157,13 @@ class NavigationRewrittenYaml(RewrittenYaml):
         speed = float(navigator.get('autonomous_fixed_max_speed', 0.5))
         short_pause_timeout = float(navigator.get('autonomous_fixed_short_pause_timeout', 0.5))
         resume_stable_duration = float(navigator.get('autonomous_fixed_resume_stable_duration', 0.15))
-        localization_timeout = float(navigator.get('localization_timeout', 0.3))
-        tracking_localization_timeout = float(navigator.get('autonomous_fixed_tracking_localization_timeout', max(0.6, localization_timeout)))
-        terminal_localization_distance = float(navigator.get('autonomous_fixed_terminal_localization_distance', 0.5))
-        if (not all(math.isfinite(value) and value > 0.0 for value in
-                    [localization_timeout, tracking_localization_timeout, terminal_localization_distance])
-                or tracking_localization_timeout < localization_timeout):
-            raise ValueError('autonomous_fixed localization timeouts and terminal distance must be positive; tracking timeout must cover the strict timeout')
         navigator.update(operation_mode='autonomous_fixed', planner_id='SmacHybrid',
                          controller_id='AutonomousFixedPathController',
                          goal_checker_id='autonomous_fixed_goal_checker', use_smoother=False,
                          progress_timeout=10.0, replan_frequency=1.0,
                          autonomous_fixed_xy_tolerance=final_xy,
                          autonomous_fixed_short_pause_timeout=short_pause_timeout,
-                         autonomous_fixed_resume_stable_duration=resume_stable_duration,
-                         autonomous_fixed_tracking_localization_timeout=tracking_localization_timeout,
-                         autonomous_fixed_terminal_localization_distance=terminal_localization_distance)
+                         autonomous_fixed_resume_stable_duration=resume_stable_duration)
         planner = config['planner_server']['ros__parameters']
         planner['planner_plugins'] = ['SmacHybrid']
         planner['selected_planner'] = 'SmacHybrid'
@@ -201,9 +195,7 @@ class NavigationRewrittenYaml(RewrittenYaml):
             'terminal_trim_max_distance': 0.03, 'terminal_trim_timeout': 5.0,
             'terminal_trim_max_attempts': 2, 'terminal_trim_confirm_duration': 0.2,
             'max_angular_velocity': 0.4, 'max_angular_acceleration': 0.8,
-            'localization_timeout': localization_timeout,
-            'tracking_localization_timeout': tracking_localization_timeout,
-            'terminal_localization_distance': terminal_localization_distance,
+            'localization_timeout': float(navigator.get('localization_timeout', 0.3)),
             'short_pause_timeout': short_pause_timeout,
             'resume_stable_duration': resume_stable_duration,
             'resume_distance': float(navigator.get('autonomous_fixed_resume_distance', 0.2)),
@@ -318,7 +310,8 @@ def start_velocity_diagnostics(context):
     smoother = config.get('velocity_smoother', {}).get('ros__parameters', {})
     navigator = config.get('regulated_navigator', {}).get('ros__parameters', {})
     controller = config.get('controller_server', {}).get('ros__parameters', {})
-    collision = LaunchConfiguration('use_collision_monitor').perform(context).lower() == 'true'
+    # 诊断里的 use_collision_monitor 指速度门；状态模块不改变速度链话题。
+    collision = LaunchConfiguration('use_collision_velocity_gate').perform(context).lower() == 'true'
     return [Node(package='nav2_regulated_modules', executable='velocity_diagnostics_node',
                  name='velocity_diagnostics', output='both', parameters=[{
                      'use_sim_time': ParameterValue(LaunchConfiguration('use_sim_time'), value_type=bool),
@@ -350,7 +343,15 @@ def generate_launch_description():
     params_file = LaunchConfiguration('params_file')
     rviz_config_file = LaunchConfiguration('rviz_config_file')
     use_rviz = LaunchConfiguration('use_rviz')
-    use_collision_monitor = LaunchConfiguration('use_collision_monitor')
+    # 与 entry.launch.py 相同的语义：use_collision_monitor 是碰撞检测模块总开关，
+    # 速度门由独立的 use_collision_velocity_gate 控制。
+    use_collision_monitor = LaunchConfiguration('use_collision_monitor', default='false')
+    use_collision_velocity_gate = LaunchConfiguration('use_collision_velocity_gate', default='false')
+    use_obstacle_status = LaunchConfiguration('use_obstacle_status', default='true')
+    use_car_op_status_sim = LaunchConfiguration('use_car_op_status_sim', default='true')
+    car_op_status_value = LaunchConfiguration('car_op_status_value', default='0')
+    scan_topic = LaunchConfiguration('scan_topic', default='/c200_lidar_node/scan')
+    zone_frame = LaunchConfiguration('zone_frame', default='base_link')
     use_collision_visualization = LaunchConfiguration('use_collision_visualization')
     use_composition = LaunchConfiguration('use_composition')
     container_name = LaunchConfiguration('container_name')
@@ -370,8 +371,9 @@ def generate_launch_description():
     is_remote = PythonExpression(["'", operation_mode, "' == 'remote'"])
     # 自主或固定路径模式启用规划、跟踪及规控节点。
     is_navigation = PythonExpression(["'", operation_mode, "' != 'remote'"])
-    # 启用碰撞监控时把平滑速度送入监控输入，否则直接送到 cmd_vel。
-    smoothed_cmd_vel_topic = PythonExpression(["'cmd_vel_collision_in' if '", use_collision_monitor,"'.lower() == 'true' else 'cmd_vel'"])
+    # 启用速度门时把平滑速度送入监控输入，否则直接送到 cmd_vel。
+    # 状态模块不参与速度链，所以这里只看 use_collision_velocity_gate。
+    smoothed_cmd_vel_topic = PythonExpression(["'cmd_vel_collision_in' if '", use_collision_velocity_gate,"'.lower() == 'true' else 'cmd_vel'"])
     # 固定路径采用独立进度超时，其余模式保持普通导航超时。
     effective_progress_timeout = ParameterValue(
         PythonExpression([fixed_path_progress_timeout, " if '", operation_mode,"' == 'fixed_path' else (120.0 if '", operation_mode, "' == 'autonomous_fixed' else 10.0)"]),value_type=float)
@@ -481,11 +483,44 @@ def generate_launch_description():
         ]),
         description='Whether to start RViz')
 
-    # 决定是否让速度经过 Collision Monitor；同时影响速度话题路由。
+    # 碰撞检测模块总开关：与 entry.launch.py 一致，只发状态、不改速度。
     declare_use_collision_monitor_cmd = DeclareLaunchArgument(
         'use_collision_monitor',
         default_value='false',
-        description='Whether to start Collision Monitor and insert it into the velocity chain')
+        description='Start the collision detection module (dynamic zones + default status source + translator when use_obstacle_status). Status only; never changes velocity')
+
+    # 独立的速度门开关；与状态模块互不影响，可单独或同时启用。
+    declare_use_collision_velocity_gate_cmd = DeclareLaunchArgument(
+        'use_collision_velocity_gate',
+        default_value='false',
+        description='Start the Nav2 collision_monitor velocity gate and insert it into the velocity chain')
+
+    # 枚举输出开关：只在模块开启时决定是否启动 translator。
+    declare_use_obstacle_status_cmd = DeclareLaunchArgument(
+        'use_obstacle_status',
+        default_value='true',
+        description='With use_collision_monitor: start obstacle_status_translator and publish /collision_state + /obstacle_status_int; it never publishes /cmd_vel')
+
+    # 默认 /car_op_status 状态源；其它发布者出现时自动让位。
+    declare_use_car_op_status_sim_cmd = DeclareLaunchArgument(
+        'use_car_op_status_sim',
+        default_value='true',
+        description='With use_collision_monitor: start the default /car_op_status source; it yields while another publisher exists')
+
+    declare_car_op_status_value_cmd = DeclareLaunchArgument(
+        'car_op_status_value',
+        default_value='0',
+        description='Default source hold value 0-8 (0 = idle forward)')
+
+    declare_scan_topic_cmd = DeclareLaunchArgument(
+        'scan_topic',
+        default_value='/c200_lidar_node/scan',
+        description='Laser scan topic used by the status module translator')
+
+    declare_zone_frame_cmd = DeclareLaunchArgument(
+        'zone_frame',
+        default_value='base_link',
+        description='Frame the dynamic zones and scan are projected into')
 
     # 默认启动碰撞区域 Marker 可视化，仍可通过启动参数关闭。
     declare_use_collision_visualization_cmd = DeclareLaunchArgument(
@@ -649,7 +684,7 @@ def generate_launch_description():
                 [('cmd_vel', 'cmd_vel_nav'),
                  ('cmd_vel_smoothed', smoothed_cmd_vel_topic)]),
             Node(
-                condition=IfCondition(use_collision_monitor),
+                condition=IfCondition(use_collision_velocity_gate),
                 package='nav2_collision_monitor',
                 executable='collision_monitor',
                 name='collision_monitor',
@@ -702,7 +737,7 @@ def generate_launch_description():
                             {'autostart': autostart},
                             {'node_names': lifecycle_nodes}]),
             Node(
-                condition=IfCondition(use_collision_monitor),
+                condition=IfCondition(use_collision_velocity_gate),
                 package='nav2_lifecycle_manager',
                 executable='lifecycle_manager',
                 name='lifecycle_manager_collision_monitor',
@@ -745,7 +780,7 @@ def generate_launch_description():
                 [('cmd_vel', 'cmd_vel_nav'),
                  ('cmd_vel_smoothed', smoothed_cmd_vel_topic)]),
             ComposableNode(
-                condition=IfCondition(use_collision_monitor),
+                condition=IfCondition(use_collision_velocity_gate),
                 package='nav2_collision_monitor',
                 plugin='nav2_collision_monitor::CollisionMonitor',
                 name='collision_monitor',
@@ -765,7 +800,7 @@ def generate_launch_description():
                              'autostart': autostart,
                              'node_names': lifecycle_nodes}]),
             ComposableNode(
-                condition=IfCondition(use_collision_monitor),
+                condition=IfCondition(use_collision_velocity_gate),
                 package='nav2_lifecycle_manager',
                 plugin='nav2_lifecycle_manager::LifecycleManager',
                 name='lifecycle_manager_collision_monitor',
@@ -837,6 +872,51 @@ def generate_launch_description():
             'collision_slowdown_l1',
         ]}])
 
+    # 碰撞检测状态链：use_collision_monitor 为总开关，只发 /collision_state 与
+    # /obstacle_status_int，不发布 /cmd_vel；use_obstacle_status 只控制 translator。
+    # 与 nav2_collision_monitor/launch/obstacle_status.launch.py 保持同一套语义，
+    # 实车不要同时启动两处，否则会出现同名节点和双发布者。
+    status_nodes = [
+        Node(
+            condition=IfCondition(use_collision_monitor),
+            package='nav2_collision_monitor',
+            executable='car_op_zones.py',
+            name='car_op_zones',
+            output='screen',
+            parameters=[{'use_sim_time': use_sim_time}],
+            # 实车入口固定用实车尺寸档（1.2 × 0.8 m）；仿真入口传 --profile sim。
+            arguments=['--drive-monitor', '--frame-id', zone_frame, '--period', '0.1',
+                       '--profile', 'real']),
+        Node(
+            condition=IfCondition(PythonExpression([
+                "'", use_collision_monitor, "'.lower() == 'true' and '",
+                use_car_op_status_sim, "'.lower() == 'true'"])),
+            package='nav2_collision_monitor',
+            executable='car_op_status_sim.py',
+            name='car_op_status_sim',
+            output='screen',
+            parameters=[{'use_sim_time': use_sim_time}],
+            arguments=['--mode', 'hold', '--value', car_op_status_value,
+                       '--topic', '/car_op_status', '--yield-to-other-publishers']),
+        Node(
+            condition=IfCondition(PythonExpression([
+                "'", use_collision_monitor, "'.lower() == 'true' and '",
+                use_obstacle_status, "'.lower() == 'true'"])),
+            package='nav2_collision_monitor',
+            executable='obstacle_status_translator.py',
+            name='obstacle_status_translator',
+            output='screen',
+            parameters=[{'use_sim_time': use_sim_time}],
+            arguments=['--scan-topic', scan_topic,
+                       '--stop-topic', '/car_op_zones/stop',
+                       '--slow-l2-topic', '/car_op_zones/slow_l2',
+                       '--slow-l1-topic', '/car_op_zones/slow_l1',
+                       '--zone-frame', zone_frame,
+                       # 与上面的 car_op_zones 同档；用于屏蔽雷达扫到的自身车体。
+                       '--profile', 'real',
+                       '--no-passthrough']),
+    ]
+
     # 遥控模式单独启动键盘控制节点。
     remote_control_cmd = Node(
         condition=IfCondition(is_remote),
@@ -902,6 +982,12 @@ def generate_launch_description():
     ld.add_action(declare_rviz_config_file_cmd)
     ld.add_action(declare_use_rviz_cmd)
     ld.add_action(declare_use_collision_monitor_cmd)
+    ld.add_action(declare_use_collision_velocity_gate_cmd)
+    ld.add_action(declare_use_obstacle_status_cmd)
+    ld.add_action(declare_use_car_op_status_sim_cmd)
+    ld.add_action(declare_car_op_status_value_cmd)
+    ld.add_action(declare_scan_topic_cmd)
+    ld.add_action(declare_zone_frame_cmd)
     ld.add_action(declare_use_collision_visualization_cmd)
     ld.add_action(declare_autostart_cmd)
     ld.add_action(declare_use_composition_cmd)
@@ -914,6 +1000,8 @@ def generate_launch_description():
     ld.add_action(declare_fixed_path_progress_timeout_cmd)
     ld.add_action(declare_keyboard_input_device_cmd)
     ld.add_action(OpaqueFunction(function=start_velocity_diagnostics))
+    for node in status_nodes:
+        ld.add_action(node)
     ld.add_action(remote_control_cmd)
     ld.add_action(navigation_group)
 

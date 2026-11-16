@@ -72,10 +72,11 @@ public:
    * @param curr_time Current node time for data interpolation
    * @param data Array where the data from source to be added.
    * Added data is transformed to base_frame_id_ coordinate system at curr_time.
+   * @return false if an invalid source should block the robot
    */
-  void getData(const rclcpp::Time & curr_time, std::vector<Point> & data) const;
+  bool getSourceData(const rclcpp::Time & curr_time, std::vector<Point> & data) override;
 
-  //ooii 去噪：删除周围邻居太少的孤立点
+  //ooii 去噪：删除周围邻居太少的孤立点。保持 public：sources_test 直接调用本方法做单元验证。
   void denoise(std::vector<Point> & data) const;
 
 protected:
@@ -99,6 +100,9 @@ protected:
   // Minimum and maximum height of PointCloud projected to 2D space
   double min_height_, max_height_;
 
+  // Minimum range from sensor origin to filter out close points
+  double min_range_ { 0.0 };
+
   /// @brief Latest data obtained from pointcloud
   sensor_msgs::msg::PointCloud2::ConstSharedPtr data_;
   //ooii 去噪参数
@@ -106,6 +110,11 @@ protected:
   double noise_radius_ { 0.1 };
   /// @brief 保留点所需的最小邻居数
   int noise_min_neighbors_ { 2 };
+  //ooii 车体过滤：复用节点级 robot_half_length/width
+  /// @brief 车体半长（m），落在车体矩形内的点视为自身噪声剔除
+  double robot_half_length_ { 0.265 };
+  /// @brief 车体半宽（m）
+  double robot_half_width_ { 0.18 };
 };  // class PointCloud
 
 }  // namespace nav2_collision_monitor

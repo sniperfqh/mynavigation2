@@ -169,6 +169,31 @@ public:
     return initialized_;
   }
 
+  /// ooii: Per-plugin wall-clock timing of the last updateMap() call.
+  struct LayerTiming
+  {
+    std::string name;
+    double bounds_seconds{0.0};
+    double costs_seconds{0.0};
+  };
+
+  /// ooii: Breakdown of the last updateMap() call, used for diagnostics/timing.
+  struct UpdateTiming
+  {
+    double lock_wait_seconds{0.0};
+    double origin_seconds{0.0};
+    double reset_seconds{0.0};
+    std::vector<LayerTiming> layers;
+  };
+
+  /**
+   * ooii: Get the timing breakdown of the last updateMap() call.
+   * Only the update thread reads it; call it right after updateMap().
+   */
+  const UpdateTiming & getLastTiming() const {
+    return last_timing_;
+  }
+
   /** @brief Updates the stored footprint, updates the circumscribed
    * and inscribed radii, and calls onFootprintChanged() in all
    * layers. */
@@ -217,6 +242,8 @@ private:
   bool size_locked_;
   double circumscribed_radius_, inscribed_radius_;
   std::vector<geometry_msgs::msg::Point> footprint_;
+
+  UpdateTiming last_timing_;  // ooii: timing of the last updateMap()
 };
 
 }  // namespace nav2_costmap_2d

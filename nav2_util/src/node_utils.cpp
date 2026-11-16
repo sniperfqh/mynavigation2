@@ -17,6 +17,10 @@
 #include <string>
 #include <algorithm>
 #include <cctype>
+//ooii setSoftRealTimePriority：SCHED_FIFO 调度 + errno/strerror
+#include <sched.h>
+#include <cerrno>
+#include <cstring>
 
 using std::chrono::high_resolution_clock;
 using std::to_string;
@@ -69,6 +73,20 @@ std::string generate_internal_node_name(const std::string & prefix) {
 rclcpp::Node::SharedPtr generate_internal_node(const std::string & prefix) {
   auto options = rclcpp::NodeOptions().start_parameter_services(false).start_parameter_event_publisher(false).arguments({"--ros-args", "-r", "__node:=" + generate_internal_node_name(prefix), "--"});
   return rclcpp::Node::make_shared("_", options);
+}
+
+//ooii setSoftRealTimePriority：官方 Humble 新增，把当前线程设为 SCHED_FIFO 软实时优先级
+void setSoftRealTimePriority()
+{
+  sched_param sch;
+  sch.sched_priority = 49;
+  if (sched_setscheduler(0, SCHED_FIFO, &sch) == -1) {
+    std::string errmsg(
+      "Cannot set as real-time thread. Users must set: <username> hard rtprio 99 and "
+      "<username> soft rtprio 99 in /etc/security/limits.conf to enable "
+      "realtime prioritization! Error: ");
+    throw std::runtime_error(errmsg + std::strerror(errno));
+  }
 }
 
 }  // namespace nav2_util

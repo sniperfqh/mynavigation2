@@ -62,32 +62,19 @@ void Scan::configure() {
   data_sub_ = node->create_subscription<sensor_msgs::msg::LaserScan>(source_topic, scan_qos, std::bind(&Scan::dataCallback, this, std::placeholders::_1));
 }
 
-void Scan::getData(const rclcpp::Time & curr_time, std::vector<Point> & data) const {
+bool Scan::getSourceData(const rclcpp::Time & curr_time, std::vector<Point> & data) {
   // Ignore data from the source if it is not being published yet or
   // not being published for a long time
   if (data_ == nullptr) {
-    return;
+    return false;
   }
   if (!sourceValid(data_->header.stamp, curr_time)) {
-    return;
+    return false;
   }
 
   tf2::Transform tf_transform;
-  if (base_shift_correction_) {
-    // Obtaining the transform to get data from source frame and time where it was received
-    // to the base frame and current time
-    if (!nav2_util::getTransform(data_->header.frame_id, data_->header.stamp, base_frame_id_, curr_time, global_frame_id_, transform_tolerance_, tf_buffer_, tf_transform))
-    {
-      return;
-    }
-  } else {
-    // Obtaining the transform to get data from source frame to base frame without time shift
-    // considered. Less accurate but much more faster option not dependent on state estimation
-    // frames.
-    if (!nav2_util::getTransform(data_->header.frame_id, base_frame_id_, transform_tolerance_, tf_buffer_, tf_transform))
-    {
-      return;
-    }
+  if (!getTransform(curr_time, data_->header, tf_transform)) {
+    return false;
   }
 
   // Calculate poses and refill data array
@@ -106,6 +93,7 @@ void Scan::getData(const rclcpp::Time & curr_time, std::vector<Point> & data) co
   //ooii 去噪
   // 与外部实现一致：对已经汇总的碰撞点执行半径离群点去除。
   denoise(data);
+  return true;
 }
 
 //ooii 去噪：删除周围邻居太少的孤立点

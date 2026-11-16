@@ -38,9 +38,12 @@
 #include "nav2_costmap_2d/layered_costmap.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cstdio>
+#include <iterator>
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 #include <limits>
 
@@ -52,6 +55,17 @@ using std::vector;
 
 namespace nav2_costmap_2d
 {
+
+// ooii: costmap timing helpers (diagnostics only).
+namespace
+{
+using SteadyClock = std::chrono::steady_clock;
+
+inline double elapsedSeconds(const SteadyClock::time_point & start)
+{
+  return std::chrono::duration<double>(SteadyClock::now() - start).count();
+}
+}  // namespace
 
 LayeredCostmap::LayeredCostmap(std::string global_frame, bool rolling_window, bool track_unknown) : primary_costmap_(), combined_costmap_(), global_frame_(global_frame), rolling_window_(rolling_window), current_(false), minx_(0.0), miny_(0.0), maxx_(0.0), maxy_(0.0), bx0_(0), bxn_(0), by0_(0), byn_(0), initialized_(false), size_locked_(false), circumscribed_radius_(1.0), inscribed_radius_(0.1) {
   if (track_unknown) {
@@ -109,12 +123,18 @@ bool LayeredCostmap::isOutofBounds(double robot_x, double robot_y) {
 void LayeredCostmap::updateMap(double robot_x, double robot_y, double robot_yaw) {
   // Data flow: robot pose drives rolling-window origin and layer bounds; each plugin then writes
   // costs into the active update window, and filters optionally post-process the result.
+  // ooii: reset the timing report; it is published through getLastTiming() after this call.
+  last_timing_ = UpdateTiming();
+
   // Lock for the remainder of this function, some plugins (e.g. VoxelLayer)
   // implement thread unsafe updateBounds() functions.
+  const auto lock_start = SteadyClock::now();  // ooii: time mutex acquisition
   std::unique_lock<Costmap2D::mutex_t> lock(*(combined_costmap_.getMutex()));
+  last_timing_.lock_wait_seconds = elapsedSeconds(lock_start);
 
   // if we're using a rolling buffer costmap...
   // we need to update the origin using the robot's position
+  const auto origin_start = SteadyClock::now();  // ooii: time rolling origin shift
   if (rolling_window_) {
     double new_origin_x = robot_x - combined_costmap_.getSizeInMetersX() / 2;
     double new_origin_y = robot_y - combined_costmap_.getSizeInMetersY() / 2;
@@ -122,6 +142,7 @@ void LayeredCostmap::updateMap(double robot_x, double robot_y, double robot_yaw)
     combined_costmap_.updateOrigin(new_origin_x, new_origin_y);
     LOG_DEBUG("LayeredCostmap rolling window origin updated to ({}, {}) from robot_pose=({}, {})", new_origin_x, new_origin_y, robot_x, robot_y);
   }
+  last_timing_.origin_seconds = elapsedSeconds(origin_start);
 
   if (isOutofBounds(robot_x, robot_y)) {
     RCLCPP_WARN(rclcpp::get_logger("nav2_costmap_2d"), "Robot is out of bounds of the costmap!");
@@ -135,13 +156,24 @@ void LayeredCostmap::updateMap(double robot_x, double robot_y, double robot_yaw)
   minx_ = miny_ = std::numeric_limits<double>::max();
   maxx_ = maxy_ = std::numeric_limits<double>::lowest();
 
+  // ooii: one timing entry per plugin/filter, in update-order.
+  last_timing_.layers.clear();
+  last_timing_.layers.reserve(plugins_.size() + filters_.size());
+
   for (vector<std::shared_ptr<Layer>>::iterator plugin = plugins_.begin(); plugin != plugins_.end(); ++plugin)
   {
     double prev_minx = minx_;
     double prev_miny = miny_;
     double prev_maxx = maxx_;
     double prev_maxy = maxy_;
+    const auto bounds_start = SteadyClock::now();  // ooii: per-plugin bounds timing
     (*plugin)->updateBounds(robot_x, robot_y, robot_yaw, &minx_, &miny_, &maxx_, &maxy_);
+    LayerTiming timing;  // ooii
+    timing.name = (*plugin)->getName().empty() ?
+      ("plugin_" + std::to_string(std::distance(plugins_.begin(), plugin))) :
+      (*plugin)->getName();
+    timing.bounds_seconds = elapsedSeconds(bounds_start);
+    last_timing_.layers.push_back(std::move(timing));  // ooii
     if (minx_ > prev_minx || miny_ > prev_miny || maxx_ < prev_maxx || maxy_ < prev_maxy) {
       RCLCPP_WARN(rclcpp::get_logger("nav2_costmap_2d"), "Illegal bounds change, was [tl: (%f, %f), br: (%f, %f)], but " "is now [tl: (%f, %f), br: (%f, %f)]. The offending layer is %s", prev_minx, prev_miny, prev_maxx, prev_maxy, minx_, miny_, maxx_, maxy_, (*plugin)->getName().c_str());
     }
@@ -152,7 +184,14 @@ void LayeredCostmap::updateMap(double robot_x, double robot_y, double robot_yaw)
     double prev_miny = miny_;
     double prev_maxx = maxx_;
     double prev_maxy = maxy_;
+    const auto bounds_start = SteadyClock::now();  // ooii: per-filter bounds timing
     (*filter)->updateBounds(robot_x, robot_y, robot_yaw, &minx_, &miny_, &maxx_, &maxy_);
+    LayerTiming timing;  // ooii
+    timing.name = "filter." + ((*filter)->getName().empty() ?
+      ("plugin_" + std::to_string(std::distance(filters_.begin(), filter))) :
+      (*filter)->getName());
+    timing.bounds_seconds = elapsedSeconds(bounds_start);
+    last_timing_.layers.push_back(std::move(timing));  // ooii
     if (minx_ > prev_minx || miny_ > prev_miny || maxx_ < prev_maxx || maxy_ < prev_maxy) {
       RCLCPP_WARN(rclcpp::get_logger("nav2_costmap_2d"), "Illegal bounds change, was [tl: (%f, %f), br: (%f, %f)], but " "is now [tl: (%f, %f), br: (%f, %f)]. The offending filter is %s", prev_minx, prev_miny, prev_maxx, prev_maxy, minx_, miny_, maxx_, maxy_, (*filter)->getName().c_str());
     }
@@ -176,32 +215,41 @@ void LayeredCostmap::updateMap(double robot_x, double robot_y, double robot_yaw)
 
   if (filters_.size() == 0) {
     // If there are no filters enabled just update costmap sequentially by each plugin
+    const auto reset_start = SteadyClock::now();  // ooii: time region reset
     combined_costmap_.resetMap(x0, y0, xn, yn);
-    for (vector<std::shared_ptr<Layer>>::iterator plugin = plugins_.begin(); plugin != plugins_.end(); ++plugin)
-    {
-      (*plugin)->updateCosts(combined_costmap_, x0, y0, xn, yn);
+    last_timing_.reset_seconds = elapsedSeconds(reset_start);
+    for (size_t i = 0; i < plugins_.size(); ++i) {
+      const auto costs_start = SteadyClock::now();  // ooii: per-plugin costs timing
+      plugins_[i]->updateCosts(combined_costmap_, x0, y0, xn, yn);
+      last_timing_.layers[i].costs_seconds = elapsedSeconds(costs_start);  // ooii
     }
   } else {
     // Costmap Filters enabled
     // 1. Update costmap by plugins
+    const auto reset_start = SteadyClock::now();  // ooii: time region reset
     primary_costmap_.resetMap(x0, y0, xn, yn);
-    for (vector<std::shared_ptr<Layer>>::iterator plugin = plugins_.begin(); plugin != plugins_.end(); ++plugin)
-    {
-      (*plugin)->updateCosts(primary_costmap_, x0, y0, xn, yn);
+    last_timing_.reset_seconds = elapsedSeconds(reset_start);
+    for (size_t i = 0; i < plugins_.size(); ++i) {
+      const auto costs_start = SteadyClock::now();  // ooii: per-plugin costs timing
+      plugins_[i]->updateCosts(primary_costmap_, x0, y0, xn, yn);
+      last_timing_.layers[i].costs_seconds = elapsedSeconds(costs_start);  // ooii
     }
 
     // 2. Copy processed costmap window to a final costmap.
     // primary_costmap_ remain to be untouched for further usage by plugins.
+    const auto copy_start = SteadyClock::now();  // ooii: time primary -> combined copy
     if (!combined_costmap_.copyWindow(primary_costmap_, x0, y0, xn, yn, x0, y0)) {
       RCLCPP_ERROR(rclcpp::get_logger("nav2_costmap_2d"), "Can not copy costmap (%i,%i)..(%i,%i) window", x0, y0, xn, yn);
       throw std::runtime_error{"Can not copy costmap"};
     }
+    last_timing_.reset_seconds += elapsedSeconds(copy_start);  // ooii
 
     // 3. Apply filters over the plugins in order to make filters' work
     // not being considered by plugins on next updateMap() calls
-    for (vector<std::shared_ptr<Layer>>::iterator filter = filters_.begin(); filter != filters_.end(); ++filter)
-    {
-      (*filter)->updateCosts(combined_costmap_, x0, y0, xn, yn);
+    for (size_t i = 0; i < filters_.size(); ++i) {
+      const auto costs_start = SteadyClock::now();  // ooii: per-filter costs timing
+      filters_[i]->updateCosts(combined_costmap_, x0, y0, xn, yn);
+      last_timing_.layers[plugins_.size() + i].costs_seconds = elapsedSeconds(costs_start);  // ooii
     }
   }
 

@@ -20,7 +20,6 @@
 #include <string>
 
 #include "sensor_msgs/msg/range.hpp"
-#include "nav2_util/robot_utils.hpp"
 
 #include "nav2_collision_monitor/source.hpp"
 
@@ -45,7 +44,15 @@ public:
    * @param base_shift_correction Whether to correct source data towards to base frame movement,
    * considering the difference between current time and latest source time
    */
-  Range(const nav2_util::LifecycleNode::WeakPtr & node, const std::string & source_name, const std::shared_ptr<tf2_ros::Buffer> tf_buffer, const std::string & base_frame_id, const std::string & global_frame_id, const tf2::Duration & transform_tolerance, const rclcpp::Duration & source_timeout, const bool base_shift_correction);
+  Range(
+    const nav2_util::LifecycleNode::WeakPtr & node,
+    const std::string & source_name,
+    const std::shared_ptr<tf2_ros::Buffer> tf_buffer,
+    const std::string & base_frame_id,
+    const std::string & global_frame_id,
+    const tf2::Duration & transform_tolerance,
+    const rclcpp::Duration & source_timeout,
+    const bool base_shift_correction);
   /**
    * @brief Range destructor
    */
@@ -62,8 +69,11 @@ public:
    * @param curr_time Current node time for data interpolation
    * @param data Array where the data from source to be added.
    * Added data is transformed to base_frame_id_ coordinate system at curr_time.
+   * @return false if an invalid source should block the robot
    */
-  void getData(const rclcpp::Time & curr_time, std::vector<Point> & data) const;
+  bool getSourceData(
+    const rclcpp::Time & curr_time,
+    std::vector<Point> & data);
 
 protected:
   /**

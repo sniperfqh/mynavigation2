@@ -14,48 +14,83 @@
 
 #include "nav2_collision_monitor/polygon.hpp"
 
-#include <cmath>
 #include <exception>
 #include <utility>
+//ooii box 速度自适应需要 std::hypot/std::fabs/std::isfinite
+#include <cmath>
 
 #include "geometry_msgs/msg/point.hpp"
 #include "geometry_msgs/msg/point32.hpp"
+#include "tf2/transform_datatypes.hpp"
 
 #include "nav2_util/node_utils.hpp"
+#include "nav2_util/robot_utils.hpp"
+#include "nav2_util/array_parser.hpp"
 
 #include "nav2_collision_monitor/kinematics.hpp"
 
 namespace nav2_collision_monitor
 {
 
-Polygon::Polygon(const nav2_util::LifecycleNode::WeakPtr & node, const std::string & polygon_name, const std::shared_ptr<tf2_ros::Buffer> tf_buffer, const std::string & base_frame_id, const tf2::Duration & transform_tolerance) : node_(node), polygon_name_(polygon_name), action_type_(DO_NOTHING), slowdown_ratio_(0.0), footprint_sub_(nullptr), tf_buffer_(tf_buffer), base_frame_id_(base_frame_id), transform_tolerance_(transform_tolerance) {
+Polygon::Polygon(
+  const nav2_util::LifecycleNode::WeakPtr & node,
+  const std::string & polygon_name,
+  const std::shared_ptr<tf2_ros::Buffer> tf_buffer,
+  const std::string & base_frame_id,
+  const tf2::Duration & transform_tolerance)
+: node_(node), polygon_name_(polygon_name), action_type_(DO_NOTHING),
+  slowdown_ratio_(0.0), linear_limit_(0.0), angular_limit_(0.0),
+  footprint_sub_(nullptr), tf_buffer_(tf_buffer),
+  base_frame_id_(base_frame_id), transform_tolerance_(transform_tolerance),
+  node_clock_(nullptr),
+  //ooii box 模式 + 速度自适应成员初始化
+  is_box_(false), robot_half_length_(0.0), robot_half_width_(0.0),
+  front_base_(0.0), back_base_(0.0), side_base_(0.0),
+  k_front_v_(0.0), k_back_v_(0.0), k_side_v_(0.0), k_front_w_(0.0),
+  vel_alpha_(0.3), v_smooth_(0.0), w_smooth_(0.0), adaptive_enabled_(false)
+{
   RCLCPP_INFO(logger_, "[%s]: Creating Polygon", polygon_name_.c_str());
 }
 
-Polygon::~Polygon() {
+Polygon::~Polygon()
+{
   RCLCPP_INFO(logger_, "[%s]: Destroying Polygon", polygon_name_.c_str());
+  polygon_sub_.reset();
+  polygon_pub_.reset();
   poly_.clear();
   dyn_params_handler_.reset();
+  node_clock_.reset();
 }
 
-bool Polygon::configure() {
+bool Polygon::configure()
+{
   auto node = node_.lock();
   if (!node) {
     throw std::runtime_error{"Failed to lock node"};
   }
 
-  std::string polygon_pub_topic, footprint_topic;
+  node_clock_ = node->get_clock();
+  std::string polygon_sub_topic, polygon_pub_topic, footprint_topic;
 
-  if (!getParameters(polygon_pub_topic, footprint_topic)) {
+  if (!getParameters(polygon_sub_topic, polygon_pub_topic, footprint_topic)) {
     return false;
   }
 
+  createSubscription(polygon_sub_topic);
+
   if (!footprint_topic.empty()) {
-    footprint_sub_ = std::make_unique<nav2_costmap_2d::FootprintSubscriber>(node, footprint_topic, *tf_buffer_, base_frame_id_, tf2::durationToSec(transform_tolerance_));
+    RCLCPP_INFO(
+      logger_,
+      "[%s]: Making footprint subscriber on %s topic",
+      polygon_name_.c_str(), footprint_topic.c_str());
+    footprint_sub_ = std::make_unique<nav2_costmap_2d::FootprintSubscriber>(
+      node, footprint_topic, *tf_buffer_,
+      base_frame_id_, tf2::durationToSec(transform_tolerance_));
   }
 
   if (visualize_) {
-    // Fill polygon_ points for future usage
+    // Fill polygon_ for future usage
+    polygon_.header.frame_id = base_frame_id_;
     std::vector<Point> poly;
     getPolygon(poly);
     for (const Point & p : poly) {
@@ -63,60 +98,100 @@ bool Polygon::configure() {
       p_s.x = p.x;
       p_s.y = p.y;
       // p_s.z will remain 0.0
-      polygon_.points.push_back(p_s);
+      polygon_.polygon.points.push_back(p_s);
     }
 
-    rclcpp::QoS polygon_qos = rclcpp::SystemDefaultsQoS();  // set to default
-    polygon_pub_ = node->create_publisher<geometry_msgs::msg::PolygonStamped>(polygon_pub_topic, polygon_qos);
+    //ooii 改用 transient_local：碰撞框只在 cmd_vel 流入时重发，启动/重连时需要保留最后一帧给可视化节点
+    rclcpp::QoS polygon_qos = rclcpp::QoS(rclcpp::KeepLast(1)).transient_local();
+    polygon_pub_ = node->create_publisher<geometry_msgs::msg::PolygonStamped>(
+      polygon_pub_topic, polygon_qos);
   }
 
   // Add callback for dynamic parameters
-  dyn_params_handler_ = node->add_on_set_parameters_callback(std::bind(&Polygon::dynamicParametersCallback, this, std::placeholders::_1));
+  dyn_params_handler_ = node->add_on_set_parameters_callback(
+    std::bind(&Polygon::dynamicParametersCallback, this, std::placeholders::_1));
 
   return true;
 }
 
-void Polygon::activate() {
+void Polygon::activate()
+{
   if (visualize_) {
     polygon_pub_->on_activate();
   }
 }
 
-void Polygon::deactivate() {
+void Polygon::deactivate()
+{
   if (visualize_) {
     polygon_pub_->on_deactivate();
   }
 }
 
-std::string Polygon::getName() const {
+std::string Polygon::getName() const
+{
   return polygon_name_;
 }
 
-ActionType Polygon::getActionType() const {
+ActionType Polygon::getActionType() const
+{
   return action_type_;
 }
 
-bool Polygon::getEnabled() const {
+bool Polygon::getEnabled() const
+{
   return enabled_;
 }
 
-int Polygon::getMaxPoints() const {
-  return max_points_;
+int Polygon::getMinPoints() const
+{
+  return min_points_;
 }
 
-double Polygon::getSlowdownRatio() const {
+double Polygon::getSlowdownRatio() const
+{
   return slowdown_ratio_;
 }
 
-double Polygon::getTimeBeforeCollision() const {
+double Polygon::getLinearLimit() const
+{
+  return linear_limit_;
+}
+
+double Polygon::getAngularLimit() const
+{
+  return angular_limit_;
+}
+
+double Polygon::getTimeBeforeCollision() const
+{
   return time_before_collision_;
 }
 
-void Polygon::getPolygon(std::vector<Point> & poly) const {
+std::vector<std::string> Polygon::getSourcesNames() const
+{
+  return sources_names_;
+}
+
+void Polygon::getPolygon(std::vector<Point> & poly) const
+{
   poly = poly_;
 }
 
-void Polygon::updatePolygon() {
+bool Polygon::isShapeSet()
+{
+  if (poly_.empty()) {
+    RCLCPP_WARN(logger_, "[%s]: Polygon shape is not set yet", polygon_name_.c_str());
+    return false;
+  }
+  return true;
+}
+
+void Polygon::updatePolygon(const Velocity & cmd_vel_in)
+{
+  //ooii box 速度自适应：在 footprint/dynamic-sub 逻辑之外，box 模式按速度重算四角
+  updateDynamicShape(cmd_vel_in);
+
   if (footprint_sub_ != nullptr) {
     // Get latest robot footprint from footprint subscriber
     std::vector<geometry_msgs::msg::Point> footprint_vec;
@@ -125,19 +200,80 @@ void Polygon::updatePolygon() {
 
     std::size_t new_size = footprint_vec.size();
     poly_.resize(new_size);
-    polygon_.points.resize(new_size);
+    polygon_.header.frame_id = base_frame_id_;
+    polygon_.polygon.points.resize(new_size);
 
     geometry_msgs::msg::Point32 p_s;
     for (std::size_t i = 0; i < new_size; i++) {
       poly_[i] = {footprint_vec[i].x, footprint_vec[i].y};
       p_s.x = footprint_vec[i].x;
       p_s.y = footprint_vec[i].y;
-      polygon_.points[i] = p_s;
+      polygon_.polygon.points[i] = p_s;
+    }
+  } else if (!polygon_.header.frame_id.empty() && polygon_.header.frame_id != base_frame_id_) {
+    // Polygon is published in another frame: correct poly_ vertices to the latest frame state
+    std::size_t new_size = polygon_.polygon.points.size();
+
+    // Get the transform from PolygonStamped frame to base_frame_id_
+    tf2::Stamped<tf2::Transform> tf_transform;
+    if (
+      !nav2_util::getTransform(
+        polygon_.header.frame_id, base_frame_id_,
+        transform_tolerance_, tf_buffer_, tf_transform))
+    {
+      return;
+    }
+
+    // Correct main poly_ vertices
+    poly_.resize(new_size);
+    for (std::size_t i = 0; i < new_size; i++) {
+      // Transform point coordinates from PolygonStamped frame -> to base frame
+      tf2::Vector3 p_v3_s(polygon_.polygon.points[i].x, polygon_.polygon.points[i].y, 0.0);
+      tf2::Vector3 p_v3_b = tf_transform * p_v3_s;
+
+      // Fill poly_ array
+      poly_[i] = {p_v3_b.x(), p_v3_b.y()};
     }
   }
 }
 
-int Polygon::getPointsInside(const std::vector<Point> & points) const {
+//ooii 速度自适应：按当前速度重算 box 框四角（仅 box 模式且 adaptive_enabled 时生效）
+void Polygon::updateDynamicShape(const Velocity & velocity) {
+  if (!is_box_ || !adaptive_enabled_) {
+    return;
+  }
+
+  // 线速度大小、角速度大小
+  const double v_raw = std::hypot(velocity.x, velocity.y);
+  const double w_raw = std::fabs(velocity.tw);
+
+  // 一阶低通平滑，避免框忽大忽小
+  v_smooth_ = vel_alpha_ * v_raw + (1.0 - vel_alpha_) * v_smooth_;
+  w_smooth_ = vel_alpha_ * w_raw + (1.0 - vel_alpha_) * w_smooth_;
+
+  // 留白 = 基准 + 线速度项(前/后/侧) + 角速度项(仅前方)，只增不减
+  const double front_margin = front_base_ + k_front_v_ * v_smooth_ + k_front_w_ * w_smooth_ * w_smooth_;
+  const double back_margin = back_base_ + k_back_v_ * v_smooth_;
+  const double side_margin = side_base_ + k_side_v_ * v_smooth_;
+
+  const double front = robot_half_length_ + front_margin;
+  const double back = -(robot_half_length_ + back_margin);
+  const double side = robot_half_width_ + side_margin;
+  poly_ = {{front, side}, {front, -side}, {back, -side}, {back, side}};
+
+  // 同步可视化用 polygon_，让 RViz 显示的框跟随速度变化
+  polygon_.header.frame_id = base_frame_id_;
+  polygon_.polygon.points.resize(4);
+  for (std::size_t i = 0; i < 4; i++) {
+    geometry_msgs::msg::Point32 p_s;
+    p_s.x = poly_[i].x;
+    p_s.y = poly_[i].y;
+    polygon_.polygon.points[i] = p_s;
+  }
+}
+
+int Polygon::getPointsInside(const std::vector<Point> & points) const
+{
   int num = 0;
   for (const Point & point : points) {
     if (isPointInside(point)) {
@@ -147,16 +283,48 @@ int Polygon::getPointsInside(const std::vector<Point> & points) const {
   return num;
 }
 
-double Polygon::getCollisionTime(const std::vector<Point> & collision_points, const Velocity & velocity) const {
+int Polygon::getPointsInside(
+  const std::unordered_map<std::string,
+  std::vector<Point>> & sources_collision_points_map) const
+{
+  int num = 0;
+  std::vector<std::string> polygon_sources_names = getSourcesNames();
+
+  // Sum the number of points from all sources associated with current polygon
+  for (const auto & source_name : polygon_sources_names) {
+    const auto & iter = sources_collision_points_map.find(source_name);
+    if (iter != sources_collision_points_map.end()) {
+      num += getPointsInside(iter->second);
+    }
+  }
+
+  return num;
+}
+
+double Polygon::getCollisionTime(
+  const std::unordered_map<std::string, std::vector<Point>> & sources_collision_points_map,
+  const Velocity & velocity) const
+{
   // Initial robot pose is {0,0} in base_footprint coordinates
   Pose pose = {0.0, 0.0, 0.0};
   Velocity vel = velocity;
+
+  std::vector<std::string> polygon_sources_names = getSourcesNames();
+  std::vector<Point> collision_points;
+
+  // Save all points coming from the sources associated with current polygon
+  for (const auto & source_name : polygon_sources_names) {
+    const auto & iter = sources_collision_points_map.find(source_name);
+    if (iter != sources_collision_points_map.end()) {
+      collision_points.insert(collision_points.end(), iter->second.begin(), iter->second.end());
+    }
+  }
 
   // Array of points transformed to the frame concerned with pose on each simulation step
   std::vector<Point> points_transformed = collision_points;
 
   // Check static polygon
-  if (getPointsInside(points_transformed) >= max_points_) {
+  if (getPointsInside(collision_points) >= min_points_) {
     return 0.0;
   }
 
@@ -170,7 +338,7 @@ double Polygon::getCollisionTime(const std::vector<Point> & collision_points, co
     transformPoints(pose, points_transformed);
     // If the collision occurred on this stage, return the actual time before a collision
     // as if robot was moved with given velocity
-    if (getPointsInside(points_transformed) > max_points_) {
+    if (getPointsInside(points_transformed) >= min_points_) {
       return time;
     }
   }
@@ -179,7 +347,8 @@ double Polygon::getCollisionTime(const std::vector<Point> & collision_points, co
   return -1.0;
 }
 
-void Polygon::publish() const {
+void Polygon::publish()
+{
   if (!visualize_) {
     return;
   }
@@ -189,17 +358,18 @@ void Polygon::publish() const {
     throw std::runtime_error{"Failed to lock node"};
   }
 
-  // Fill PolygonStamped struct
-  std::unique_ptr<geometry_msgs::msg::PolygonStamped> poly_s = std::make_unique<geometry_msgs::msg::PolygonStamped>();
-  poly_s->header.stamp = node->now();
-  poly_s->header.frame_id = base_frame_id_;
-  poly_s->polygon = polygon_;
-
-  // Publish polygon
-  polygon_pub_->publish(std::move(poly_s));
+  // Actualize the time to current and publish the polygon
+  polygon_.header.stamp = node->now();
+  auto msg = std::make_unique<geometry_msgs::msg::PolygonStamped>(polygon_);
+  polygon_pub_->publish(std::move(msg));
 }
 
-bool Polygon::getCommonParameters(std::string & polygon_pub_topic) {
+bool Polygon::getCommonParameters(
+  std::string & polygon_sub_topic,
+  std::string & polygon_pub_topic,
+  std::string & footprint_topic,
+  bool use_dynamic_sub_topic)
+{
   auto node = node_.lock();
   if (!node) {
     throw std::runtime_error{"Failed to lock node"};
@@ -208,144 +378,319 @@ bool Polygon::getCommonParameters(std::string & polygon_pub_topic) {
   try {
     // Get action type.
     // Leave it not initialized: the will cause an error if it will not set.
-    nav2_util::declare_parameter_if_not_declared(node, polygon_name_ + ".action_type", rclcpp::PARAMETER_STRING);
-    const std::string at_str = node->get_parameter(polygon_name_ + ".action_type").as_string();
+    nav2_util::declare_parameter_if_not_declared(
+      node, polygon_name_ + ".action_type", rclcpp::PARAMETER_STRING);
+    const std::string at_str =
+      node->get_parameter(polygon_name_ + ".action_type").as_string();
     if (at_str == "stop") {
       action_type_ = STOP;
     } else if (at_str == "slowdown") {
       action_type_ = SLOWDOWN;
+    } else if (at_str == "limit") {
+      action_type_ = LIMIT;
     } else if (at_str == "approach") {
       action_type_ = APPROACH;
+    } else if (at_str == "none") {
+      action_type_ = DO_NOTHING;
     } else {  // Error if something else
       RCLCPP_ERROR(logger_, "[%s]: Unknown action type: %s", polygon_name_.c_str(), at_str.c_str());
       return false;
     }
 
-    nav2_util::declare_parameter_if_not_declared(node, polygon_name_ + ".enabled", rclcpp::ParameterValue(true));
+    nav2_util::declare_parameter_if_not_declared(
+      node, polygon_name_ + ".enabled", rclcpp::ParameterValue(true));
     enabled_ = node->get_parameter(polygon_name_ + ".enabled").as_bool();
 
-    nav2_util::declare_parameter_if_not_declared(node, polygon_name_ + ".max_points", rclcpp::ParameterValue(3));
-    max_points_ = node->get_parameter(polygon_name_ + ".max_points").as_int();
+    nav2_util::declare_parameter_if_not_declared(
+      node, polygon_name_ + ".min_points", rclcpp::ParameterValue(4));
+    min_points_ = node->get_parameter(polygon_name_ + ".min_points").as_int();
+
+    try {
+      nav2_util::declare_parameter_if_not_declared(
+        node, polygon_name_ + ".max_points", rclcpp::PARAMETER_INTEGER);
+      min_points_ = node->get_parameter(polygon_name_ + ".max_points").as_int() + 1;
+      RCLCPP_WARN(
+        logger_,
+        "[%s]: \"max_points\" parameter was deprecated. Use \"min_points\" instead to specify "
+        "the minimum number of data readings within a zone to trigger the action",
+        polygon_name_.c_str());
+    } catch (const std::exception &) {
+      // This is normal situation: max_points parameter should not being declared
+    }
 
     if (action_type_ == SLOWDOWN) {
-      nav2_util::declare_parameter_if_not_declared(node, polygon_name_ + ".slowdown_ratio", rclcpp::ParameterValue(0.5));
+      nav2_util::declare_parameter_if_not_declared(
+        node, polygon_name_ + ".slowdown_ratio", rclcpp::ParameterValue(0.5));
       slowdown_ratio_ = node->get_parameter(polygon_name_ + ".slowdown_ratio").as_double();
     }
 
-    if (action_type_ == APPROACH) {
-      nav2_util::declare_parameter_if_not_declared(node, polygon_name_ + ".time_before_collision", rclcpp::ParameterValue(2.0));
-      time_before_collision_ = node->get_parameter(polygon_name_ + ".time_before_collision").as_double();
-      nav2_util::declare_parameter_if_not_declared(node, polygon_name_ + ".simulation_time_step", rclcpp::ParameterValue(0.1));
-      simulation_time_step_ = node->get_parameter(polygon_name_ + ".simulation_time_step").as_double();
+    if (action_type_ == LIMIT) {
+      nav2_util::declare_parameter_if_not_declared(
+        node, polygon_name_ + ".linear_limit", rclcpp::ParameterValue(0.5));
+      linear_limit_ = node->get_parameter(polygon_name_ + ".linear_limit").as_double();
+      nav2_util::declare_parameter_if_not_declared(
+        node, polygon_name_ + ".angular_limit", rclcpp::ParameterValue(0.5));
+      angular_limit_ = node->get_parameter(polygon_name_ + ".angular_limit").as_double();
     }
 
-    nav2_util::declare_parameter_if_not_declared(node, polygon_name_ + ".visualize", rclcpp::ParameterValue(false));
+    if (action_type_ == APPROACH) {
+      nav2_util::declare_parameter_if_not_declared(
+        node, polygon_name_ + ".time_before_collision", rclcpp::ParameterValue(2.0));
+      time_before_collision_ =
+        node->get_parameter(polygon_name_ + ".time_before_collision").as_double();
+      nav2_util::declare_parameter_if_not_declared(
+        node, polygon_name_ + ".simulation_time_step", rclcpp::ParameterValue(0.1));
+      simulation_time_step_ =
+        node->get_parameter(polygon_name_ + ".simulation_time_step").as_double();
+    }
+
+    nav2_util::declare_parameter_if_not_declared(
+      node, polygon_name_ + ".visualize", rclcpp::ParameterValue(false));
     visualize_ = node->get_parameter(polygon_name_ + ".visualize").as_bool();
     if (visualize_) {
       // Get polygon topic parameter in case if it is going to be published
-      nav2_util::declare_parameter_if_not_declared(node, polygon_name_ + ".polygon_pub_topic", rclcpp::ParameterValue(polygon_name_));
+      nav2_util::declare_parameter_if_not_declared(
+        node, polygon_name_ + ".polygon_pub_topic", rclcpp::ParameterValue(polygon_name_));
       polygon_pub_topic = node->get_parameter(polygon_name_ + ".polygon_pub_topic").as_string();
     }
+
+    nav2_util::declare_parameter_if_not_declared(
+      node, polygon_name_ + ".polygon_subscribe_transient_local", rclcpp::ParameterValue(false));
+    polygon_subscribe_transient_local_ =
+      node->get_parameter(polygon_name_ + ".polygon_subscribe_transient_local").as_bool();
+
+    if (use_dynamic_sub_topic) {
+      if (action_type_ != APPROACH) {
+        // Get polygon sub topic
+        nav2_util::declare_parameter_if_not_declared(
+          node, polygon_name_ + ".polygon_sub_topic", rclcpp::PARAMETER_STRING);
+        polygon_sub_topic =
+          node->get_parameter(polygon_name_ + ".polygon_sub_topic").as_string();
+      } else {
+        // Obtain the footprint topic to make a footprint subscription for approach polygon
+        nav2_util::declare_parameter_if_not_declared(
+          node, polygon_name_ + ".footprint_topic",
+          rclcpp::ParameterValue("local_costmap/published_footprint"));
+        footprint_topic =
+          node->get_parameter(polygon_name_ + ".footprint_topic").as_string();
+      }
+    }
+
+    // By default, use all observation sources for polygon
+    nav2_util::declare_parameter_if_not_declared(
+      node, "observation_sources", rclcpp::PARAMETER_STRING_ARRAY);
+    const std::vector<std::string> observation_sources =
+      node->get_parameter("observation_sources").as_string_array();
+    nav2_util::declare_parameter_if_not_declared(
+      node, polygon_name_ + ".sources_names", rclcpp::ParameterValue(observation_sources));
+    sources_names_ = node->get_parameter(polygon_name_ + ".sources_names").as_string_array();
+
+    // Check the observation sources configured for polygon are defined
+    for (auto source_name : sources_names_) {
+      if (std::find(observation_sources.begin(), observation_sources.end(), source_name) ==
+        observation_sources.end())
+      {
+        RCLCPP_ERROR_STREAM(
+          logger_,
+          "Observation source [" << source_name <<
+            "] configured for polygon [" << getName() <<
+            "] is not defined as one of the node's observation_source!");
+        return false;
+      }
+    }
   } catch (const std::exception & ex) {
-    RCLCPP_ERROR(logger_, "[%s]: Error while getting common polygon parameters: %s", polygon_name_.c_str(), ex.what());
+    RCLCPP_ERROR(
+      logger_,
+      "[%s]: Error while getting common polygon parameters: %s",
+      polygon_name_.c_str(), ex.what());
     return false;
   }
 
   return true;
 }
 
-bool Polygon::getParameters(std::string & polygon_pub_topic, std::string & footprint_topic) {
+bool Polygon::getParameters(
+  std::string & polygon_sub_topic,
+  std::string & polygon_pub_topic,
+  std::string & footprint_topic)
+{
   auto node = node_.lock();
   if (!node) {
     throw std::runtime_error{"Failed to lock node"};
   }
 
-  if (!getCommonParameters(polygon_pub_topic)) {
-    return false;
+  // Clear the subscription topics. They will be set later, if necessary.
+  polygon_sub_topic.clear();
+  footprint_topic.clear();
+
+  //ooii box 模式：用 shape=box + margin 描述框，不走 points/动态订阅
+  nav2_util::declare_parameter_if_not_declared(
+    node, polygon_name_ + ".shape", rclcpp::ParameterValue("polygon"));
+  const std::string shape = node->get_parameter(polygon_name_ + ".shape").as_string();
+  if (shape == "box") {
+    is_box_ = true;
+    nav2_util::declare_parameter_if_not_declared(
+      node, polygon_name_ + ".front_margin", rclcpp::ParameterValue(0.5));
+    nav2_util::declare_parameter_if_not_declared(
+      node, polygon_name_ + ".back_margin", rclcpp::ParameterValue(0.5));
+    nav2_util::declare_parameter_if_not_declared(
+      node, polygon_name_ + ".side_margin", rclcpp::ParameterValue(0.3));
+    nav2_util::declare_parameter_if_not_declared(
+      node, "robot_half_length", rclcpp::ParameterValue(0.265));
+    nav2_util::declare_parameter_if_not_declared(
+      node, "robot_half_width", rclcpp::ParameterValue(0.18));
+    //ooii 速度自适应参数（默认关闭，开启后留白随速度动态算）
+    nav2_util::declare_parameter_if_not_declared(
+      node, polygon_name_ + ".adaptive_enabled", rclcpp::ParameterValue(false));
+    nav2_util::declare_parameter_if_not_declared(
+      node, polygon_name_ + ".k_front_v", rclcpp::ParameterValue(0.0));
+    nav2_util::declare_parameter_if_not_declared(
+      node, polygon_name_ + ".k_back_v", rclcpp::ParameterValue(0.0));
+    nav2_util::declare_parameter_if_not_declared(
+      node, polygon_name_ + ".k_side_v", rclcpp::ParameterValue(0.0));
+    nav2_util::declare_parameter_if_not_declared(
+      node, polygon_name_ + ".k_front_w", rclcpp::ParameterValue(0.0));
+    nav2_util::declare_parameter_if_not_declared(
+      node, polygon_name_ + ".vel_alpha", rclcpp::ParameterValue(0.3));
+
+    robot_half_length_ = node->get_parameter("robot_half_length").as_double();
+    robot_half_width_ = node->get_parameter("robot_half_width").as_double();
+    front_base_ = node->get_parameter(polygon_name_ + ".front_margin").as_double();
+    back_base_ = node->get_parameter(polygon_name_ + ".back_margin").as_double();
+    side_base_ = node->get_parameter(polygon_name_ + ".side_margin").as_double();
+    adaptive_enabled_ = node->get_parameter(polygon_name_ + ".adaptive_enabled").as_bool();
+    k_front_v_ = node->get_parameter(polygon_name_ + ".k_front_v").as_double();
+    k_back_v_ = node->get_parameter(polygon_name_ + ".k_back_v").as_double();
+    k_side_v_ = node->get_parameter(polygon_name_ + ".k_side_v").as_double();
+    k_front_w_ = node->get_parameter(polygon_name_ + ".k_front_w").as_double();
+    vel_alpha_ = node->get_parameter(polygon_name_ + ".vel_alpha").as_double();
+
+    if (!std::isfinite(robot_half_length_) || !std::isfinite(robot_half_width_) ||
+      !std::isfinite(front_base_) || !std::isfinite(back_base_) || !std::isfinite(side_base_) ||
+      robot_half_length_ <= 0.0 || robot_half_width_ <= 0.0 ||
+      front_base_ < 0.0 || back_base_ < 0.0 || side_base_ < 0.0)
+    {
+      RCLCPP_ERROR(logger_, "[%s]: Box dimensions and margins must be finite and nonnegative",
+        polygon_name_.c_str());
+      return false;
+    }
+    // 配置时用基准(v=0)算一次初始 poly_
+    const double front = robot_half_length_ + front_base_;
+    const double back = -(robot_half_length_ + back_base_);
+    const double side = robot_half_width_ + side_base_;
+    poly_ = {{front, side}, {front, -side}, {back, -side}, {back, side}};
+
+    // box 模式不用动态订阅
+    if (!getCommonParameters(polygon_sub_topic, polygon_pub_topic, footprint_topic, false)) {
+      return false;
+    }
+    return true;
   }
 
+  bool use_dynamic_sub = true;  // if getting parameter points fails, use dynamic subscription
   try {
-    if (action_type_ == APPROACH) {
-      // Obtain the footprint topic to make a footprint subscription for approach polygon
-      nav2_util::declare_parameter_if_not_declared(node, polygon_name_ + ".footprint_topic", rclcpp::ParameterValue("local_costmap/published_footprint"));
-      footprint_topic = node->get_parameter(polygon_name_ + ".footprint_topic").as_string();
+    // Leave it uninitialized: it will throw an inner exception if the parameter is not set
+    nav2_util::declare_parameter_if_not_declared(
+      node, polygon_name_ + ".points", rclcpp::PARAMETER_STRING);
+    std::string poly_string =
+      node->get_parameter(polygon_name_ + ".points").as_string();
 
-      // This is robot footprint: do not need to get polygon points from ROS parameters.
-      // It will be set dynamically later.
-      return true;
-    } else {
-      // Make it empty otherwise
-      footprint_topic.clear();
-    }
+    use_dynamic_sub = !getPolygonFromString(poly_string, poly_);
+  } catch (const rclcpp::exceptions::ParameterUninitializedException &) {
+    RCLCPP_INFO(
+      logger_,
+      "[%s]: Polygon points are not defined. Using dynamic subscription instead.",
+      polygon_name_.c_str());
+  }
 
-    nav2_util::declare_parameter_if_not_declared(node, polygon_name_ + ".shape", rclcpp::ParameterValue("polygon"));
-    const std::string shape = node->get_parameter(polygon_name_ + ".shape").as_string();
-    if (shape == "box")
-    {
-      nav2_util::declare_parameter_if_not_declared(node, polygon_name_ + ".front_margin", rclcpp::ParameterValue(0.5));
-      nav2_util::declare_parameter_if_not_declared(node, polygon_name_ + ".back_margin", rclcpp::ParameterValue(0.5));
-      nav2_util::declare_parameter_if_not_declared(node, polygon_name_ + ".side_margin", rclcpp::ParameterValue(0.3));
-      nav2_util::declare_parameter_if_not_declared(node, "robot_half_length", rclcpp::ParameterValue(0.265));
-      nav2_util::declare_parameter_if_not_declared(node, "robot_half_width", rclcpp::ParameterValue(0.18));
-      const double half_length = node->get_parameter("robot_half_length").as_double();
-      const double half_width = node->get_parameter("robot_half_width").as_double();
-      const double front_margin = node->get_parameter(polygon_name_ + ".front_margin").as_double();
-      const double back_margin = node->get_parameter(polygon_name_ + ".back_margin").as_double();
-      const double side_margin = node->get_parameter(polygon_name_ + ".side_margin").as_double();
-      if (!std::isfinite(half_length) || !std::isfinite(half_width) || !std::isfinite(front_margin) || !std::isfinite(back_margin) || !std::isfinite(side_margin) || half_length <= 0.0 || half_width <= 0.0 || front_margin < 0.0 || back_margin < 0.0 || side_margin < 0.0)
-      {
-        RCLCPP_ERROR(logger_, "[%s]: Box dimensions and margins must be finite and nonnegative", polygon_name_.c_str());
-        return false;
-      }
-      const double front = half_length + front_margin;
-      const double back = -(half_length + back_margin);
-      const double side = half_width + side_margin;
-      poly_ = {{front, side}, {front, -side}, {back, -side}, {back, side}};
+  if (!getCommonParameters(
+      polygon_sub_topic, polygon_pub_topic, footprint_topic, use_dynamic_sub))
+  {
+    if (use_dynamic_sub && polygon_sub_topic.empty() && footprint_topic.empty()) {
+      RCLCPP_ERROR(
+        logger_,
+        "[%s]: Error while getting polygon parameters:"
+        " static points and sub topic both not defined",
+        polygon_name_.c_str());
     }
-    else
-    {
-      // Leave it not initialized: the will cause an error if it will not set
-      nav2_util::declare_parameter_if_not_declared(node, polygon_name_ + ".points", rclcpp::PARAMETER_DOUBLE_ARRAY);
-      std::vector<double> poly_row = node->get_parameter(polygon_name_ + ".points").as_double_array();
-      // Check for points format correctness
-      if (poly_row.size() <= 6 || poly_row.size() % 2 != 0)
-      {
-        RCLCPP_ERROR(logger_, "[%s]: Polygon has incorrect points description", polygon_name_.c_str());
-        return false;
-      }
-
-      // Obtain polygon vertices
-      Point point;
-      bool first = true;
-      for (double val : poly_row)
-      {
-        if (first)
-        {
-          point.x = val;
-        }
-        else
-        {
-          point.y = val;
-          poly_.push_back(point);
-        }
-        first = !first;
-      }
-    }
-  } catch (const std::exception & ex) {
-    RCLCPP_ERROR(logger_, "[%s]: Error while getting polygon parameters: %s", polygon_name_.c_str(), ex.what());
     return false;
   }
 
   return true;
 }
 
-rcl_interfaces::msg::SetParametersResult Polygon::dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters) {
+void Polygon::createSubscription(std::string & polygon_sub_topic)
+{
+  auto node = node_.lock();
+  if (!node) {
+    throw std::runtime_error{"Failed to lock node"};
+  }
+
+  if (!polygon_sub_topic.empty()) {
+    RCLCPP_INFO(
+      logger_,
+      "[%s]: Subscribing on %s topic for polygon",
+      polygon_name_.c_str(), polygon_sub_topic.c_str());
+    rclcpp::QoS polygon_qos = rclcpp::SystemDefaultsQoS();  // set to default
+    if (polygon_subscribe_transient_local_) {
+      polygon_qos.transient_local();
+    }
+    polygon_sub_ = node->create_subscription<geometry_msgs::msg::PolygonStamped>(
+      polygon_sub_topic, polygon_qos,
+      std::bind(&Polygon::polygonCallback, this, std::placeholders::_1));
+  }
+}
+
+void Polygon::updatePolygon(geometry_msgs::msg::PolygonStamped::ConstSharedPtr msg)
+{
+  std::size_t new_size = msg->polygon.points.size();
+
+  if (new_size < 3) {
+    RCLCPP_ERROR(
+      logger_,
+      "[%s]: Polygon should have at least 3 points",
+      polygon_name_.c_str());
+    return;
+  }
+
+  // Get the transform from PolygonStamped frame to base_frame_id_
+  tf2::Stamped<tf2::Transform> tf_transform;
+  if (
+    !nav2_util::getTransform(
+      msg->header.frame_id, base_frame_id_,
+      transform_tolerance_, tf_buffer_, tf_transform))
+  {
+    return;
+  }
+
+  // Set main poly_ vertices first time
+  poly_.resize(new_size);
+  for (std::size_t i = 0; i < new_size; i++) {
+    // Transform point coordinates from PolygonStamped frame -> to base frame
+    tf2::Vector3 p_v3_s(msg->polygon.points[i].x, msg->polygon.points[i].y, 0.0);
+    tf2::Vector3 p_v3_b = tf_transform * p_v3_s;
+
+    // Fill poly_ array
+    poly_[i] = {p_v3_b.x(), p_v3_b.y()};
+  }
+
+  // Store incoming polygon for further (possible) poly_ vertices corrections
+  // from PolygonStamped frame -> to base frame
+  polygon_ = *msg;
+}
+
+rcl_interfaces::msg::SetParametersResult
+Polygon::dynamicParametersCallback(
+  std::vector<rclcpp::Parameter> parameters)
+{
   rcl_interfaces::msg::SetParametersResult result;
 
   for (auto parameter : parameters) {
     const auto & param_type = parameter.get_type();
     const auto & param_name = parameter.get_name();
-
+    if(param_name.find(polygon_name_ + ".") != 0) {
+      continue;
+    }
     if (param_type == rcl_interfaces::msg::ParameterType::PARAMETER_BOOL) {
       if (param_name == polygon_name_ + "." + "enabled") {
         enabled_ = parameter.as_bool();
@@ -356,7 +701,19 @@ rcl_interfaces::msg::SetParametersResult Polygon::dynamicParametersCallback(std:
   return result;
 }
 
-inline bool Polygon::isPointInside(const Point & point) const {
+void Polygon::polygonCallback(geometry_msgs::msg::PolygonStamped::ConstSharedPtr msg)
+{
+  RCLCPP_INFO_THROTTLE(
+    logger_,
+    *node_clock_,
+    2000,
+    "[%s]: Polygon shape update has arrived",
+    polygon_name_.c_str());
+  updatePolygon(msg);
+}
+
+inline bool Polygon::isPointInside(const Point & point) const
+{
   // Adaptation of Shimrat, Moshe. "Algorithm 112: position of point relative to polygon."
   // Communications of the ACM 5.8 (1962): 434.
   // Implementation of ray crossings algorithm for point in polygon task solving.
@@ -374,7 +731,9 @@ inline bool Polygon::isPointInside(const Point & point) const {
     // parallel to X+ ray.
     if ((point.y <= poly_[i].y) == (point.y > poly_[j].y)) {
       // Calculating the intersection coordinate of X+ ray
-      const double x_inter = poly_[i].x + (point.y - poly_[i].y) * (poly_[j].x - poly_[i].x) / (poly_[j].y - poly_[i].y);
+      const double x_inter = poly_[i].x +
+        (point.y - poly_[i].y) * (poly_[j].x - poly_[i].x) /
+        (poly_[j].y - poly_[i].y);
       // If intersection with checked edge is greater than point.x coordinate, inverting the result
       if (x_inter > point.x) {
         res = !res;
@@ -383,6 +742,47 @@ inline bool Polygon::isPointInside(const Point & point) const {
     i = j;
   }
   return res;
+}
+
+bool Polygon::getPolygonFromString(
+  std::string & poly_string,
+  std::vector<Point> & polygon)
+{
+  std::string error;
+  std::vector<std::vector<float>> vvf = nav2_util::parseVVF(poly_string, error);
+
+  if (error != "") {
+    RCLCPP_ERROR(
+      logger_, "Error parsing polygon parameter %s: '%s'",
+      poly_string.c_str(), error.c_str());
+    return false;
+  }
+
+  // Check for minimum 4 points
+  if (vvf.size() <= 3) {
+    RCLCPP_ERROR(
+      logger_,
+      "Polygon must have at least three points.");
+    return false;
+  }
+  for (unsigned int i = 0; i < vvf.size(); i++) {
+    if (vvf[i].size() == 2) {
+      Point point;
+      point.x = vvf[i][0];
+      point.y = vvf[i][1];
+      polygon.push_back(point);
+    } else {
+      RCLCPP_ERROR(
+        logger_,
+        "Points in the polygon specification must be pairs of numbers"
+        "Found a point with %d numbers.",
+        static_cast<int>(vvf[i].size()));
+      polygon.clear();
+      return false;
+    }
+  }
+
+  return true;
 }
 
 }  // namespace nav2_collision_monitor

@@ -40,6 +40,9 @@
 
 #include <memory>
 #include <chrono>
+#include <ctime>  // ooii: thread CPU time
+#include <iomanip>  // ooii: timing log formatting
+#include <sstream>  // ooii: timing log formatting
 #include <string>
 #include <vector>
 #include <utility>
@@ -56,6 +59,18 @@
 using namespace std::chrono_literals;
 using std::placeholders::_1;
 using rcl_interfaces::msg::ParameterType;
+
+// ooii: costmap timing helpers (diagnostics only).
+namespace
+{
+/// @brief CPU time consumed by the calling thread, immune to CPU contention and preemption.
+double threadCpuSeconds()
+{
+  timespec ts{};
+  clock_gettime(CLOCK_THREAD_CPUTIME_ID, &ts);
+  return static_cast<double>(ts.tv_sec) + static_cast<double>(ts.tv_nsec) * 1e-9;
+}
+}  // namespace
 
 namespace nav2_costmap_2d
 {
@@ -407,8 +422,17 @@ void Costmap2DROS::mapUpdateLoop(double frequency) {
 
   rclcpp::WallRate r(frequency);    // 200ms by default
 
+  auto last_cycle_start = std::chrono::steady_clock::now();  // ooii: cycle period measurement
+
   while (rclcpp::ok() && !map_update_thread_shutdown_) {
     nav2_util::ExecutionTimer timer;
+
+    // ooii: cycle period + thread CPU time, measured around the whole cycle.
+    const auto cycle_start = std::chrono::steady_clock::now();
+    const double cycle_seconds =
+      std::chrono::duration<double>(cycle_start - last_cycle_start).count();
+    last_cycle_start = cycle_start;
+    const double cpu_start_seconds = threadCpuSeconds();
 
     // Execute after start() will complete plugins activation
     if (!stopped_) {
@@ -422,6 +446,8 @@ void Costmap2DROS::mapUpdateLoop(double frequency) {
 
       RCLCPP_DEBUG(get_logger(), "Map update time: %.9f", timer.elapsed_time_in_seconds());
       LOG_DEBUG("Costmap2DROS '{}' update cycle elapsed={}s initialized={}", name_.c_str(), timer.elapsed_time_in_seconds(), layered_costmap_->isInitialized());
+
+      double publish_seconds = 0.0;  // ooii: time costmap publishing (excluded from `update`)
       if (publish_cycle_ > rclcpp::Duration(0s) && layered_costmap_->isInitialized()) {
         unsigned int x0, y0, xn, yn;
         layered_costmap_->getBounds(&x0, &xn, &y0, &yn);
@@ -433,11 +459,33 @@ void Costmap2DROS::mapUpdateLoop(double frequency) {
         if ((last_publish_ + publish_cycle_ < current_time) || (current_time < last_publish_))  // NOLINT
         {
           RCLCPP_DEBUG(get_logger(), "Publish costmap at %s", name_.c_str());
+          const auto publish_start = std::chrono::steady_clock::now();  // ooii
           costmap_publisher_->publishCostmap();
+          publish_seconds =
+            std::chrono::duration<double>(std::chrono::steady_clock::now() - publish_start).count();  // ooii
           last_publish_ = current_time;
           LOG_DEBUG("Costmap2DROS '{}' published costmap cycle", name_.c_str());
         }
       }
+
+      // ooii: structured timing line, one key=value token per metric, parsed by
+      // nav2_costmap_2d/tools/costmap_timing_stats.py for before/after comparisons.
+      const auto & layered_timing = layered_costmap_->getLastTiming();
+      std::ostringstream timing_line;
+      timing_line << std::fixed << std::setprecision(6) <<
+        "costmap_timing name=" << name_ <<
+        " update=" << timer.elapsed_time_in_seconds() <<
+        " publish=" << publish_seconds <<
+        " cpu=" << (threadCpuSeconds() - cpu_start_seconds) <<
+        " cycle=" << cycle_seconds <<
+        " lock=" << layered_timing.lock_wait_seconds <<
+        " origin=" << layered_timing.origin_seconds <<
+        " reset=" << layered_timing.reset_seconds;
+      for (const auto & layer_timing : layered_timing.layers) {
+        timing_line << " layer." << layer_timing.name << ".bounds=" << layer_timing.bounds_seconds <<
+          " layer." << layer_timing.name << ".costs=" << layer_timing.costs_seconds;
+      }
+      LOG_DEBUG("{}", timing_line.str());  // ooii: "costmap_timing ..."
     }
 
     // Make sure to sleep for the remainder of our cycle time

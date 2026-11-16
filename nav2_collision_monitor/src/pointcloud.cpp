@@ -14,6 +14,7 @@
 
 #include "nav2_collision_monitor/pointcloud.hpp"
 
+#include <cmath>
 #include <functional>
 
 // ooii 去噪：放在 sensor_msgs 头文件之前，并禁用 PCL 的 min/max 预定义宏，
@@ -56,32 +57,19 @@ void PointCloud::configure() {
   data_sub_ = node->create_subscription<sensor_msgs::msg::PointCloud2>(source_topic, pointcloud_qos, std::bind(&PointCloud::dataCallback, this, std::placeholders::_1));
 }
 
-void PointCloud::getData(const rclcpp::Time & curr_time, std::vector<Point> & data) const {
+bool PointCloud::getSourceData(const rclcpp::Time & curr_time, std::vector<Point> & data) {
   // Ignore data from the source if it is not being published yet or
   // not published for a long time
   if (data_ == nullptr) {
-    return;
+    return false;
   }
   if (!sourceValid(data_->header.stamp, curr_time)) {
-    return;
+    return false;
   }
 
   tf2::Transform tf_transform;
-  if (base_shift_correction_) {
-    // Obtaining the transform to get data from source frame and time where it was received
-    // to the base frame and current time
-    if (!nav2_util::getTransform(data_->header.frame_id, data_->header.stamp, base_frame_id_, curr_time, global_frame_id_, transform_tolerance_, tf_buffer_, tf_transform))
-    {
-      return;
-    }
-  } else {
-    // Obtaining the transform to get data from source frame to base frame without time shift
-    // considered. Less accurate but much more faster option not dependent on state estimation
-    // frames.
-    if (!nav2_util::getTransform(data_->header.frame_id, base_frame_id_, transform_tolerance_, tf_buffer_, tf_transform))
-    {
-      return;
-    }
+  if (!getTransform(curr_time, data_->header, tf_transform)) {
+    return false;
   }
 
   sensor_msgs::PointCloud2ConstIterator<float> iter_x(*data_, "x");
@@ -92,16 +80,27 @@ void PointCloud::getData(const rclcpp::Time & curr_time, std::vector<Point> & da
   for (; iter_x != iter_x.end(); ++iter_x, ++iter_y, ++iter_z) {
     // Transform point coordinates from source frame -> to base frame
     tf2::Vector3 p_v3_s(*iter_x, *iter_y, *iter_z);
+
+    // Check range from sensor origin before transformation
+    double range = p_v3_s.length();
+    if (range < min_range_) {
+      continue;
+    }
+
     tf2::Vector3 p_v3_b = tf_transform * p_v3_s;
 
     // Refill data array
-    if (p_v3_b.z() >= min_height_ && p_v3_b.z() <= max_height_) {
+    //ooii 车体过滤：同时要求点在高度区间内且不在车体矩形内
+    if (p_v3_b.z() >= min_height_ && p_v3_b.z() <= max_height_ &&
+      (std::abs(p_v3_b.x()) > robot_half_length_ || std::abs(p_v3_b.y()) > robot_half_width_))
+    {
       data.push_back({p_v3_b.x(), p_v3_b.y()});
     }
   }
   //ooii
   // 与外部实现一致：点云与此前来源的碰撞点一并进行半径过滤。
   denoise(data);
+  return true;
 }
 
 // ooii
@@ -150,11 +149,19 @@ void PointCloud::getParameters(std::string & source_topic) {
   min_height_ = node->get_parameter(source_name_ + ".min_height").as_double();
   nav2_util::declare_parameter_if_not_declared(node, source_name_ + ".max_height", rclcpp::ParameterValue(0.5));
   max_height_ = node->get_parameter(source_name_ + ".max_height").as_double();
+  nav2_util::declare_parameter_if_not_declared(node, source_name_ + ".min_range", rclcpp::ParameterValue(0.0));
+  min_range_ = node->get_parameter(source_name_ + ".min_range").as_double();
   //ooii 去噪
   nav2_util::declare_parameter_if_not_declared(node, source_name_ + ".noise_radius", rclcpp::ParameterValue(0.1));
   noise_radius_ = node->get_parameter(source_name_ + ".noise_radius").as_double();
   nav2_util::declare_parameter_if_not_declared(node, source_name_ + ".noise_min_neighbors", rclcpp::ParameterValue(2));
   noise_min_neighbors_ = node->get_parameter(source_name_ + ".noise_min_neighbors").as_int();
+
+  //ooii 车体过滤：复用 collision_monitor 节点级的 robot_half_length/width
+  nav2_util::declare_parameter_if_not_declared(node, "robot_half_length", rclcpp::ParameterValue(0.265));
+  robot_half_length_ = node->get_parameter("robot_half_length").as_double();
+  nav2_util::declare_parameter_if_not_declared(node, "robot_half_width", rclcpp::ParameterValue(0.18));
+  robot_half_width_ = node->get_parameter("robot_half_width").as_double();
 }
 
 void PointCloud::dataCallback(sensor_msgs::msg::PointCloud2::ConstSharedPtr msg) {
