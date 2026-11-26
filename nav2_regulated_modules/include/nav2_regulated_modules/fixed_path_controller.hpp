@@ -72,15 +72,19 @@ class FixedPathController : public nav2_core::Controller, public nav2_core::Term
     return terminal_convergence_enabled_ ? 1.0 : 0.0;
   }
 
+protected:
+  // 同坐标系直接复制，否则通过 TF 在 transform_tolerance（s）内转换。
+  // 变换失败返回 false，调用方不得用未变换坐标继续计算。
+  // protected virtual 供充电派生控制器覆写：computeVelocityCommands 内对它的调用走虚
+  // 分派，派生类可在基类变换完成后附加充电专用修正，基类控制循环无需改动。
+  virtual bool transformPose(const std::string & frame, const geometry_msgs::msg::PoseStamped & input, geometry_msgs::msg::PoseStamped & output) const;
+
 private:
   enum class Phase
   {
     ALIGN_START, TRACK_PATH, STOPPED
   };
 
-  // 同坐标系直接复制，否则通过 TF 在 transform_tolerance（s）内转换。
-  // 变换失败返回 false，调用方不得用未变换坐标继续计算。
-  bool transformPose(const std::string & frame, const geometry_msgs::msg::PoseStamped & input, geometry_msgs::msg::PoseStamped & output) const;
   // 只在当前 nearest_index 及其之后搜索最近离散点，避免进度倒退。
   // 输出是路径索引而非弧长；同距离候选保留先遇点。
   std::size_t findNearestIndex(const geometry_msgs::msg::PoseStamped & robot_pose);

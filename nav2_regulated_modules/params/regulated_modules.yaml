@@ -205,8 +205,24 @@ regulated_navigator:
     # 规控运行模式；启动入口可按任务覆盖。
     # 普通位姿目标订阅话题。
     goal_topic: "goal_pose"
+    # 二维码观测订阅话题；高频传感器流使用 SensorDataQoS 匹配发布端。
+    qrcode_topic: "/qrcode"
     # 多段导航服务 Action 名称。
     navigation_service_action: "navigation_service"
+    # 充电动作 Action 名称。
+    charging_action: "charging"
+    # 充电对接路径生成插值步幅，单位米；路径从起点到终点按此间距均匀采样。
+    charging_path_step: 0.04
+    # 充电对接路径超过终点的延长距离，单位米；停车点落在目标点之后的容差。
+    charging_path_extension: 0.3
+    # 充电等待二维码的截止时长，单位秒；超时仍未等到二维码则任务失败。
+    charging_qr_wait_timeout: 2.0
+    # 二维码消息允许的最大年龄，单位秒；续态只消费比这更近的观测。
+    charging_qr_max_age: 0.5
+    # 充电对接 FollowPath 使用的控制器插件标识；需在 controller_server 侧注册同名插件。
+    charging_controller_id: "ChargingController"
+    # 充电对接使用的目标检查器标识；需在 controller_server 侧注册同名插件。
+    charging_checker_id: "charging_goal_checker"
     # 固定路径可视化话题。
     fixed_path_visualization_topic: "fixed_path_plan"
     # 固定路径边界 Marker 话题。
@@ -349,9 +365,9 @@ controller_server:
     # 选用的进度检查器标识。
     progress_checker_plugin: "progress_checker"
     # 注册到控制服务器的目标检查器列表。
-    goal_checker_plugins: ["general_goal_checker", "stopped_goal_checker", "fixed_path_goal_checker"]
+    goal_checker_plugins: ["general_goal_checker", "stopped_goal_checker", "fixed_path_goal_checker", "charging_goal_checker"]
     # 注册到控制服务器的控制器列表。
-    controller_plugins: ["DWB", "RPP", "FixedPathController", "MPPI", "GracefulController", "RotationShimController"]
+    controller_plugins: ["DWB", "RPP", "FixedPathController", "ChargingController", "MPPI", "GracefulController", "RotationShimController"]
 
     # 无进展检查器，固定路径与半自主生成配置可采用各自的等待上限。
     progress_checker:
@@ -400,6 +416,26 @@ controller_server:
       rot_stopped_velocity: 0.05
       # 位置达标需连续保持的控制周期数。
       position_stable_cycles: 10
+
+    # 充电电流感知检查器：继承 fixed_path_goal_checker，检测到新鲜充电电流即短路完成；
+    # 未检测到电流时几何／停稳完成条件与 fixed_path_goal_checker 一致。
+    charging_goal_checker:
+      # 该实例加载的插件类名。
+      plugin: "nav2_regulated_modules::ChargingGoalChecker"
+      # 电池状态话题：订阅充电电流用于到点短路判定。
+      battery_state_topic: "/agv_battery_state"
+      # 充电电流检测窗口，单位秒；最近窗口内经阈值的电流即认定已接触上电。
+      charging_current_detect_window: 0.5
+      # 充电电流阈值，单位安培；达到该值认定进入充电。
+      charging_current_threshold: 0.05
+      # 终点平面位置容差，单位米。
+      xy_goal_tolerance: 0.01
+      # 认定平移停止的速度阈值，单位米每秒。
+      trans_stopped_velocity: 0.01
+      # 认定旋转停止的速度阈值，单位弧度每秒。
+      rot_stopped_velocity: 0.05
+      # 位置达标需连续保持的控制周期数。
+      position_stable_cycles: 5
 
     # 动态窗口轨迹控制器。
     DWB:
@@ -529,7 +565,97 @@ controller_server:
       # RPP 通用导航跟踪允许的横向误差，单位米。
       max_horizontal_error: 0.5
 
-    # 固定路径跟踪与终点控制基线，半自主包装器还会复制此块到 tracker。
+    # 充电对接专用控制器：继承 FixedPathController，参数表为同文件 FixedPathController 块的等价副本。
+    # 后续充电调优只改本块参数，不影响 FixedPathController 的控制效果。
+    ChargingController:
+      # 该实例加载的插件类名。
+      plugin: "nav2_regulated_modules::ChargingController"
+      # 充电里程位移话题：方案一按该话题位移增量折算 map 位姿，对接期间只认里程。
+      charge_odometry_topic: "/odometry"
+      # 里程采样新鲜度上限，单位秒；超过则控制环停走，不拿陈旧位姿算速度。
+      charge_odom_max_age: 0.1
+      # 期望前进线速度，单位米每秒。
+      desired_linear_vel: 0.1
+      # 基础路径前视距离，单位米。
+      lookahead_dist: 0.45
+      # 速度缩放前视的最小距离，单位米。
+      min_lookahead_dist: 0.25
+      # 速度缩放前视的最大距离，单位米。
+      max_lookahead_dist: 0.75
+      # 速度缩放前视的时间系数，单位秒。
+      lookahead_time: 1.5
+      # 固定路径起点位置容差，单位米。
+      start_position_tolerance: 0.05
+      # 允许直接跟踪的起点横向误差，单位米。
+      direct_tracking_lateral_tolerance: 0.20
+      # 所有新固定路径的起步纵向速度指令上限，单位米每秒；仍受更低任务限速约束。
+      start_offset_speed_limit: 0.30
+      # 每个任务从开始平移跟踪的位置沿路径至少低速行驶0.5米。
+      start_speed_limit_distance: 0.50
+      # 当前最近路径段的运动方向航向误差需不超过 20 度，才能解除起步限速。
+      start_speed_release_yaw_tolerance: 0.3490658503988659
+      # 横向及航向误差连续达标的控制周期数；解除后本条路径不再重新限速。
+      start_speed_release_stable_cycles: 10
+      # 允许直接跟踪的起点航向误差，单位弧度。
+      direct_tracking_max_yaw_error: 0.2617993877991494
+      # 大横向偏差时结束原地对齐的航向容差，3 度，单位弧度。
+      initial_yaw_tolerance: 0.05235987755982989
+      # 原地对齐角速度，单位弧度每秒。
+      rotate_to_heading_angular_vel: 0.4
+      # 角加速度上限，单位弧度每二次方秒。
+      max_angular_accel: 0.8
+      # 起点原地对齐角速度比例增益。
+      rotate_to_heading_kp: 1.5
+      # 接近目标时允许的最小线速度，单位米每秒。
+      min_approach_linear_velocity: 0.02
+      # 进入目标减速区的距离，单位米。
+      approach_velocity_scaling_dist: 0.7
+      # 终点减速计算使用的线性减速度，单位米每二次方秒。
+      goal_linear_deceleration: 0.2
+      # 终点微量接近速度，单位米每秒。
+      goal_final_approach_velocity: 0.015
+      # 终点制动反应预留时间，单位秒。
+      goal_braking_reaction_time: 0.1
+      # 终点制动安全裕量，单位米。
+      goal_braking_distance_margin: 0.05
+      # 启用动态裕量：低速 0.010 m、高速 0.05 m，速度达到 0.5 m/s 时采用高速裕量。
+      dynamic_goal_braking_margin_enabled: true
+      goal_braking_min_distance_margin: 0.01
+      goal_braking_margin_transition_speed: 0.5
+      # 自适应到点制动默认关闭；仅在单独确认后显式启用。
+      adaptive_goal_braking_enabled: false
+      # 实车启用末端收敛：优先连续 1 秒精度复核，停稳满 2 秒可超限成功并记录日志。
+      terminal_convergence_enabled: true
+      # 与仿真同步：8 mm 停车入口，独立精度验收仍为 10 mm；实车效果待验收。
+      goal_stop_entry_tolerance: 0.008
+      # 自适应正常到点减速度上限，不能超过 1 m/s²。
+      adaptive_goal_max_deceleration: 1.0
+      # 自适应制动的减速度变化率上限，单位 m/s³。
+      adaptive_goal_jerk_limit: 2.0
+      # 自适应模式的末段低速目标，单位 m/s。
+      adaptive_goal_approach_speed: 0.03
+      # 自适应停车距离预留的驱动响应时间，单位秒。
+      adaptive_goal_response_time: 0.5
+      # 自适应停车距离的固定裕量，单位米。
+      adaptive_goal_distance_margin: 0.01
+      # 终点前视的基准距离，单位米。
+      goal_terminal_lookahead_dist: 0.30
+      # 终点前视基准速度，单位米每秒。
+      goal_terminal_lookahead_reference_speed: 0.3
+      # 终点前视随速度变化的增益。
+      goal_terminal_lookahead_speed_gain: 0.2
+      # 终点前视距离下界，单位米。
+      goal_terminal_lookahead_min_dist: 0.2
+      # 终点前视距离上界，单位米。
+      goal_terminal_lookahead_max_dist: 0.4
+      # 终点误差诊断输出频率，单位 Hz。
+      goal_error_log_frequency: 1.0
+      # 起点航向连续达标的周期数；1 表示进入 3 度容差的同一控制周期开始跟踪。
+      alignment_stable_cycles: 1
+      # 允许的 TF 时间误差，单位秒。
+      transform_tolerance: 0.2
+
+    # 固定路径专用控制器。
     FixedPathController:
       # 该实例加载的插件类名。
       plugin: "nav2_regulated_modules::FixedPathController"

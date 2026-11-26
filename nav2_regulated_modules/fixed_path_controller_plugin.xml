@@ -7,5 +7,11 @@
     <class type="nav2_regulated_modules::FixedPathGoalChecker" base_class_type="nav2_core::GoalChecker">
       <description>Path-aware fixed-path goal checker using position, terminal-plane crossing, and stopped velocity.</description>
     </class>
+    <class type="nav2_regulated_modules::ChargingController" base_class_type="nav2_core::Controller">
+      <description>Charging docking controller reusing the fixed-path control loop with charging-specific pose correction hooks.</description>
+    </class>
+    <class type="nav2_regulated_modules::ChargingGoalChecker" base_class_type="nav2_core::GoalChecker">
+      <description>Charging-current-aware goal checker reusing fixed-path geometry, completing immediately once charging current is detected.</description>
+    </class>
   </library>
 </class_libraries>

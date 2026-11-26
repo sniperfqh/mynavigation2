@@ -21,6 +21,7 @@
 #include <limits>
 
 #include "lifecycle_msgs/msg/state.hpp"
+#include "nav2_core/charging_detection_goal_checker.hpp"
 #include "nav2_core/exceptions.hpp"
 #include "nav2_core/path_aware_goal_checker.hpp"
 #include "nav2_core/terminal_aware_controller.hpp"
@@ -567,6 +568,14 @@ void ControllerServer::publishZeroVelocity() {
 }
 
 bool ControllerServer::isGoalReached() {
+  // 充电电流检测短路：对接接触上电时立即判完成，不再等几何容差与停稳复核。
+  // 循环跳出后按 publish_zero_velocity 收口零速，底盘停止。
+  auto * charging_detection_checker = dynamic_cast<nav2_core::ChargingDetectionGoalChecker *>(goal_checkers_[current_goal_checker_].get());
+  if (charging_detection_checker && charging_detection_checker->chargingCurrentDetected())
+  {
+    LOG_INFO("检测到充电电流，立即完成 FollowPath 并停车");
+    return true;
+  }
   geometry_msgs::msg::PoseStamped pose;
 
   if (!getRobotPose(pose)) {

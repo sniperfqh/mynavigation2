@@ -28,7 +28,13 @@ RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : na
   declare_parameter("collision_state_enabled", false);
   declare_parameter("collision_state_topic", "/collision_state");
   declare_parameter("collision_state_timeout", 0.5);
+  declare_parameter("qrcode_topic", "/qrcode");
   declare_parameter("navigation_service_action", "navigation_service");
+  declare_parameter("charging_action", "charging");
+  declare_parameter("charging_path_step", 0.04);
+  declare_parameter("charging_path_extension", 0.3);
+  declare_parameter("charging_qr_wait_timeout", 2.0);
+  declare_parameter("charging_qr_max_age", 0.5);
   declare_parameter("fixed_path_visualization_topic", "fixed_path_plan");
   declare_parameter("fixed_path_boundaries_topic", "fixed_path_boundaries");
   declare_parameter("fixed_path_boundary_half_width", 0.4);
@@ -39,6 +45,8 @@ RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : na
   declare_parameter("controller_id", "RPP");
   declare_parameter("fixed_path_controller_id", "FixedPathController");
   declare_parameter("fixed_path_goal_checker_id", "fixed_path_goal_checker");
+  declare_parameter("charging_controller_id", "ChargingController");
+  declare_parameter("charging_checker_id", "charging_goal_checker");
   declare_parameter("goal_checker_id", "stopped_goal_checker");
   declare_parameter("smoother_id", "simple_smoother");
   declare_parameter("use_smoother", true);
@@ -115,10 +123,17 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   global_frame_ = get_parameter("global_frame").as_string();
   robot_base_frame_ = get_parameter("robot_base_frame").as_string();
   navigation_service_action_ = get_parameter("navigation_service_action").as_string();
+  charging_action_ = get_parameter("charging_action").as_string();
+  charging_path_step_ = get_parameter("charging_path_step").as_double();
+  charging_path_extension_ = get_parameter("charging_path_extension").as_double();
+  charging_qr_wait_timeout_ = get_parameter("charging_qr_wait_timeout").as_double();
+  charging_qr_max_age_ = get_parameter("charging_qr_max_age").as_double();
   fixed_path_visualization_topic_ = get_parameter("fixed_path_visualization_topic").as_string();
   fixed_path_boundaries_topic_ = get_parameter("fixed_path_boundaries_topic").as_string();
   fixed_path_controller_id_ = get_parameter("fixed_path_controller_id").as_string();
   fixed_path_goal_checker_id_ = get_parameter("fixed_path_goal_checker_id").as_string();
+  charging_controller_id_ = get_parameter("charging_controller_id").as_string();
+  charging_checker_id_ = get_parameter("charging_checker_id").as_string();
   // 按 collision_state_enabled 参数配置状态消费，与两条执行通道的速度门是否创建分别控制。
   collision_state_enabled_ = get_parameter("collision_state_enabled").as_bool();
   const auto collision_topic = get_parameter("collision_state_topic").as_string();
@@ -202,6 +217,16 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
     LOG_ERROR("fixed_path_goal_checker_id 不能为空");
     return nav2_util::CallbackReturn::FAILURE;
   }
+  if (charging_controller_id_.empty())
+  {
+    LOG_ERROR("charging_controller_id 不能为空");
+    return nav2_util::CallbackReturn::FAILURE;
+  }
+  if (charging_checker_id_.empty())
+  {
+    LOG_ERROR("charging_checker_id 不能为空");
+    return nav2_util::CallbackReturn::FAILURE;
+  }
 
   planning_module_.configure(get_parameter("planner_id").as_string(), get_parameter("smoother_id").as_string(), get_parameter("use_smoother").as_bool(), get_parameter("replan_frequency").as_double(), get_parameter("max_consecutive_planning_failures").as_int());
   control_module_.configure(get_parameter("controller_id").as_string(), get_parameter("goal_checker_id").as_string(), get_parameter("progress_timeout").as_double());
@@ -271,6 +296,9 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   clear_global_client_ = create_client<ClearCostmap>("global_costmap/clear_entirely_global_costmap");
 
   navigate_pose_server_ = rclcpp_action::create_server<NavigateToPose>(this, get_parameter("navigate_to_pose_action").as_string(), std::bind(&RegulatedNavigator::handlePoseGoal, this, std::placeholders::_1, std::placeholders::_2), std::bind(&RegulatedNavigator::handlePoseCancel, this, std::placeholders::_1), std::bind(&RegulatedNavigator::handlePoseAccepted, this, std::placeholders::_1));
+  // 充电动作在各非遥控模式均可用；路径生成与控制尚未实现，当前仅在接受回调处记录占位结果。
+  charging_server_ = rclcpp_action::create_server<Charging>(this, charging_action_, std::bind(&RegulatedNavigator::handleChargingGoal, this, std::placeholders::_1, std::placeholders::_2), std::bind(&RegulatedNavigator::handleChargingCancel, this, std::placeholders::_1), std::bind(&RegulatedNavigator::handleChargingAccepted, this, std::placeholders::_1));
+  qr_code_sub_ = this->create_subscription<byd_custom_msgs::msg::QrCode>(get_parameter("qrcode_topic").as_string(), rclcpp::SensorDataQoS(), std::bind(&RegulatedNavigator::qrCodeMsgCallback, this, std::placeholders::_1));
   {
     navigation_service_server_ = rclcpp_action::create_server<NavigationService>(this, navigation_service_action_, std::bind(&RegulatedNavigator::handleNavigationServiceGoal, this, std::placeholders::_1, std::placeholders::_2), std::bind(&RegulatedNavigator::handleNavigationServiceCancel, this, std::placeholders::_1), std::bind(&RegulatedNavigator::handleNavigationServiceAccepted, this, std::placeholders::_1));
     fixed_path_pub_ = create_publisher<nav_msgs::msg::Path>(fixed_path_visualization_topic_, rclcpp::QoS(rclcpp::KeepLast(1)).reliable().transient_local());
@@ -427,6 +455,17 @@ nav2_util::CallbackReturn RegulatedNavigator::on_cleanup(const rclcpp_lifecycle:
   cancelTask("节点清理");
   navigate_pose_server_.reset();
   navigation_service_server_.reset();
+  {
+    // 充电状态机随服务器一起清理：摘回 IDLE、停掉截止与消费定时器并摘除句柄
+    // （cancelTask 已重置其余任务状态并请求在途跟随停止）。
+    std::lock_guard<std::mutex> lock(charging_mutex_);
+    charging_phase_ = ChargingPhase::IDLE;
+    charging_qr_timeout_timer_.reset();
+    charging_qr_poll_timer_.reset();
+    charging_follow_goal_.reset();
+    active_charging_goal_.reset();
+  }
+  charging_server_.reset();
   compute_pose_client_.reset();
   follow_client_.reset();
   lattice_follow_client_.reset();
@@ -445,6 +484,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_cleanup(const rclcpp_lifecycle:
   }
   chassis_control_subscriber_.reset();
   motion_state_subscriber_.reset();
+  qr_code_sub_.reset();
   controller_velocity_sub_.reset();
   smoothed_velocity_sub_.reset();
   velocity_odom_sub_.reset();

@@ -30,6 +30,7 @@ find_package(visualization_msgs REQUIRED)
 find_package(nav2_rotation_shim_controller REQUIRED)
 find_package(nav2_controller REQUIRED)
 find_package(nav2_smac_planner REQUIRED)
+find_package(Eigen3 REQUIRED)
 
 # 协调器进程将按职责拆分的 navigator_* 文件链接在一起，共享同一 RegulatedNavigator 实例状态。
 add_executable(regulated_navigator_node
@@ -43,6 +44,7 @@ add_executable(regulated_navigator_node
   src/navigator_unified.cpp
   src/navigator_planning.cpp
   src/navigator_fixed_path.cpp
+  src/charging_function.cpp
   src/navigator_autonomous_fixed.cpp
   src/navigator_control.cpp
   src/navigator_monitor.cpp
@@ -72,11 +74,15 @@ ament_target_dependencies(regulated_navigator_node
   spdlog_wrapper
   visualization_msgs
 )
+target_link_libraries(regulated_navigator_node Eigen3::Eigen)
 
 # Controller 与 GoalChecker 编译为同一插件共享库，由 pluginlib 根据 XML 导出声明加载。
+# ChargingController 继承 FixedPathController，与基类同库导出，无需单独链接。
 add_library(nav2_regulated_modules_fixed_path_controller SHARED
   src/fixed_path_controller.cpp
-  src/fixed_path_goal_checker.cpp)
+  src/fixed_path_goal_checker.cpp
+  src/charging_controller.cpp
+  src/charging_goal_checker.cpp)
 target_include_directories(nav2_regulated_modules_fixed_path_controller PUBLIC $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include> $<INSTALL_INTERFACE:include>)
 target_compile_features(nav2_regulated_modules_fixed_path_controller PUBLIC cxx_std_17)
 ament_target_dependencies(nav2_regulated_modules_fixed_path_controller rclcpp rclcpp_lifecycle geometry_msgs nav2_core nav2_costmap_2d nav2_util nav_msgs pluginlib tf2 tf2_ros tf2_geometry_msgs spdlog_wrapper)
@@ -94,6 +100,8 @@ target_link_libraries(nav2_regulated_modules_autonomous_fixed_controller nav2_re
 install(TARGETS nav2_regulated_modules_autonomous_fixed_controller LIBRARY DESTINATION lib)
 install(FILES include/nav2_regulated_modules/autonomous_fixed_controller.hpp DESTINATION include/nav2_regulated_modules)
 install(FILES include/nav2_regulated_modules/fixed_path_controller.hpp DESTINATION include/nav2_regulated_modules)
+install(FILES include/nav2_regulated_modules/charging_controller.hpp DESTINATION include/nav2_regulated_modules)
+install(FILES include/nav2_regulated_modules/charging_goal_checker.hpp DESTINATION include/nav2_regulated_modules)
 install(FILES include/nav2_regulated_modules/tf_diagnostics.hpp DESTINATION include/nav2_regulated_modules)
 install(FILES include/nav2_regulated_modules/detail/tf_timing.hpp DESTINATION include/nav2_regulated_modules/detail)
 install(FILES include/nav2_regulated_modules/detail/fixed_path_start_speed_guard.hpp DESTINATION include/nav2_regulated_modules/detail)

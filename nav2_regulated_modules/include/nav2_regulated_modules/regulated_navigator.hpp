@@ -14,8 +14,10 @@
 
 #include "geometry_msgs/msg/pose_stamped.hpp"
 #include "geometry_msgs/msg/twist.hpp"
+#include "byd_custom_msgs/action/charging.hpp"
 #include "byd_custom_msgs/action/navigation_service.hpp"
 #include "byd_custom_msgs/msg/navi_segment.hpp"
+#include "byd_custom_msgs/msg/qr_code.hpp"
 #include "nav2_msgs/action/compute_path_to_pose.hpp"
 #include "nav2_msgs/action/follow_path.hpp"
 #include "nav2_msgs/action/navigate_to_pose.hpp"
@@ -51,12 +53,22 @@ class RegulatedNavigator : public nav2_util::LifecycleNode
   using FollowPath = nav2_msgs::action::FollowPath;
   using NavigateToPose = nav2_msgs::action::NavigateToPose;
   using NavigationService = byd_custom_msgs::action::NavigationService;
+  using Charging = byd_custom_msgs::action::Charging;
   using ClearCostmap = nav2_msgs::srv::ClearEntireCostmap;
 
   using ComputePoseHandle = rclcpp_action::ClientGoalHandle<ComputePathToPose>;
   using FollowHandle = rclcpp_action::ClientGoalHandle<FollowPath>;
   using NavigatePoseHandle = rclcpp_action::ServerGoalHandle<NavigateToPose>;
   using NavigationServiceHandle = rclcpp_action::ServerGoalHandle<NavigationService>;
+  using ChargingHandle = rclcpp_action::ServerGoalHandle<Charging>;
+
+  // 充电任务阶段：AWAIT_QR 等待二维码缓存出现新鲜观测；FOLLOWING 已下发 map 路径等待执行结果。
+  enum class ChargingPhase
+  {
+    IDLE,
+    AWAIT_QR,
+    FOLLOWING,
+  };
 
   // 仅声明运行参数；ROS 实体在 configure 建立，业务入口在 activate 后才允许接收。
   // 构造中的 false 等值是节点回退，不覆盖 Launch 从项目 YAML 注入的配置。
@@ -138,6 +150,34 @@ private:
   // 构造几何路径、等待 FollowPath，再接管旧任务并计算总长与最小段限速。
   // 车头姿态由切线和方向生成，当前定位不被重置；超过全局速度上限时钳位，不因此自动拒绝 Goal。
   void handleNavigationServiceAccepted(const std::shared_ptr<NavigationServiceHandle> goal);
+  // 仅接受节点激活、task_id 非空且起点终点坐标有限度的充电请求；已有导航任务时拒绝。
+  // 这里只校验请求，接受后到 handleChargingAccepted 才保存句柄与更新任务快照。
+  rclcpp_action::GoalResponse handleChargingGoal(const rclcpp_action::GoalUUID & uuid, const std::shared_ptr<const Charging::Goal> goal);
+  // 取消直接把充电目标摘回 IDLE、停充电侧定时器并把在途 FollowPath 置取消，再以 canceled 终结。
+  // 返回 ACCEPT 后取消即完成，不存在需延迟消费的取消标记。
+  rclcpp_action::CancelResponse handleChargingCancel(const std::shared_ptr<ChargingHandle> goal);
+  // 保存充电句柄并进入 AWAIT_QR：配对一次性截止定时器（charging_qr_wait_timeout_）与消费定时器。
+  // 消费定时器非阻塞轮询二维码缓存，认领到新鲜观测后转入 startChargingFollow 下发执行。
+  void handleChargingAccepted(const std::shared_ptr<ChargingHandle> goal);
+  // AWAIT_QR 截止定时器回调：等待窗口内未认领到新鲜二维码即以失败收口。
+  void handleChargingQrTimeout(const std::shared_ptr<ChargingHandle> goal);
+  // AWAIT_QR 消费定时器回调：每拍检查缓存，出现新鲜二维码即认领一次并转入路径下发；不 sleep。
+  void handleChargingQrPoll(const std::shared_ptr<ChargingHandle> goal);
+  // 用二维码坐标修正 map 帧终点、生成充电路径并异步下发 FollowPath；
+  // 进度由 feedback 回调实时上报，结果回调走 finalizeChargingGoal 收口。
+  void startChargingFollow(const std::shared_ptr<ChargingHandle> goal);
+  // 临界收口：仅当 goal 仍是活动充电任务时终结一次（摘回 IDLE、停定时器、作废在途 FollowPath），
+  // 迟到或重复的收口请求静默返回，保证动作 Goal 不会被二次终结。
+  void finalizeChargingGoal(const std::shared_ptr<ChargingHandle> goal, bool success, const std::string & message);
+  // 从起点到终点沿直线按 step 均匀插值，并在终点方向额外延长 extension 距离。
+  // 两输入点约定为同一帧（充电起终点都在 map 帧），输出路径按 global_frame 自动盖章。
+  // 路径 z 置 0，车头航向由行进方向生成；两端点重合或参数非法时不生成路径，
+  // 这里不进行碰撞可行性验证，只承担几何采样，后续由充电执行流程消费。
+  std::optional<nav_msgs::msg::Path> generateChargingPath(const geometry_msgs::msg::Point & start, const geometry_msgs::msg::Point & target) const;
+  // 无阻塞读取最新二维码快照，用二维码坐标只修正输入的 map 帧终点：转 QR 系把横纵轴中
+  // 较小分量置零再转回 map 帧写出；起点不做处理（仍在 map 帧）。快照锁内复核消息年龄
+  // （≤qr_max_age 秒），过期或定位不可用返回 false；不等待、不阻塞。
+  bool correctChargingTargetToMap(geometry_msgs::msg::Point & target);
   // 检查有限坐标、非重合端点、相邻连接与段类型，再为直线／贝塞尔生成统一采样。
   // 路径位于 global_frame，输出 z=0；按整条方向编码车头姿态，不在这里进行全程碰撞可行性验证。
   std::optional<nav_msgs::msg::Path> prepareFixedPath(const std::vector<byd_custom_msgs::msg::NaviSegment> & segments);
@@ -201,6 +241,9 @@ private:
   // 缓存速度反馈，供速度观测和 autonomous_fixed 连续停稳判断；不作为地图定位。
   void onVelocityOdometry(const nav_msgs::msg::Odometry::SharedPtr odometry);
   void onVelocityMotionState(const byd_custom_msgs::msg::MotionState::SharedPtr motion);
+  // 记录二维码标签与相对位姿，并将原始 mm／度单位归一化为 m／弧度。
+  // 缓存只是本机最新观测，不代替地图定位，也不证明车身已经对齐充电桩。
+  void qrCodeMsgCallback(const byd_custom_msgs::msg::QrCode::SharedPtr msg);
   // 先在锁内复制三路快照，再在锁外写日志，减少回调持锁时间。
   // 没有任何样本时不打印；独立订阅的 latest 值不能当作同步传感器帧。
   void logVelocityChain();
@@ -304,10 +347,19 @@ private:
   std::string global_frame_;
   std::string robot_base_frame_;
   std::string navigation_service_action_;
+  std::string charging_action_;
+  // 充电直线路径的采样步幅（m）与终点方向延长量（m）。
+  double charging_path_step_ { 0.04 };
+  double charging_path_extension_ { 0.3 };
+  // 充电等待二维码的截止时长（s）与二维码消息允许的最大年龄（s）。
+  double charging_qr_wait_timeout_ { 2.0 };
+  double charging_qr_max_age_ { 0.5 };
   std::string fixed_path_visualization_topic_;
   std::string fixed_path_boundaries_topic_;
   std::string fixed_path_controller_id_;
   std::string fixed_path_goal_checker_id_;
+  std::string charging_controller_id_;
+  std::string charging_checker_id_;
   std::string controller_cmd_vel_topic_;
   std::string smoothed_cmd_vel_topic_;
   std::string velocity_odom_topic_;
@@ -363,6 +415,13 @@ private:
   rclcpp_action::Client<FollowPath>::SharedPtr follow_client_;
   rclcpp_action::Server<NavigateToPose>::SharedPtr navigate_pose_server_;
   rclcpp_action::Server<NavigationService>::SharedPtr navigation_service_server_;
+  rclcpp_action::Server<Charging>::SharedPtr charging_server_;
+  // 等待二维码的截止定时器（charging_qr_wait_timeout_）；AWAIT_QR 超时未等到新鲜观测即失败收口。
+  rclcpp::TimerBase::SharedPtr charging_qr_timeout_timer_;
+  // AWAIT_QR 的二维码消费定时器：非阻塞轮询缓存，认领到新鲜观测即转入路径下发，定期空转后复位。
+  rclcpp::TimerBase::SharedPtr charging_qr_poll_timer_;
+  // 充电任务阶段；接受、二维码消费、跟随时限与取消分处不同回调，切换受 charging_mutex_ 保护。
+  ChargingPhase charging_phase_ { ChargingPhase::IDLE };
   rclcpp::Client<ClearCostmap>::SharedPtr clear_local_client_;
   rclcpp::Client<ClearCostmap>::SharedPtr clear_global_client_;
 
@@ -371,10 +430,23 @@ private:
   FollowHandle::SharedPtr active_follow_goal_;
   std::shared_ptr<NavigatePoseHandle> active_pose_goal_;
   std::shared_ptr<NavigationServiceHandle> active_navigation_service_goal_;
+  // 充电状态机锁：保护 active_charging_goal_、charging_phase_、charging_follow_goal_ 的认领与收口。
+  // 节点跑在 MultiThreadedExecutor 上，截止/消费定时器、FollowPath 回调与取消应答可能并发，
+  // 只有持锁把目标从 active 摘除的一方允许终结动作 Goal，避免同一 Goal 被重复终结。
+  std::mutex charging_mutex_;
+  std::shared_ptr<ChargingHandle> active_charging_goal_;
+  // 充电正在跟踪的 FollowPath 句柄与跟踪轮次；结果/反馈/取消用它区分当前跟踪与迟到结果。
+  FollowHandle::SharedPtr charging_follow_goal_;
+  uint64_t charging_follow_sequence_ { 0 };
 
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr controller_velocity_sub_;
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr smoothed_velocity_sub_;
   rclcpp::SubscriptionBase::SharedPtr velocity_odom_sub_;
+  rclcpp::Subscription<byd_custom_msgs::msg::QrCode>::SharedPtr qr_code_sub_;  //二维码信息订阅
+  // 仅保护二维码观测缓存；传感器回调与消费者不同线程，不把变速箱状态放进同一锁。
+  std::mutex qr_code_mutex_;
+  // 已解码到 m／弧度的最新二维码观测，由 qrCodeMsgCallback 写入、充电续态在锁内读取。
+  byd_custom_msgs::msg::QrCode current_qr_code_;
   rclcpp::Publisher<nav2_msgs::msg::SpeedLimit>::SharedPtr speed_limit_pub_;
   rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr stop_cmd_pub_;
   rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr fixed_path_pub_;

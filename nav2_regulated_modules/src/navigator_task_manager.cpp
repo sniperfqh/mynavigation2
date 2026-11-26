@@ -204,6 +204,23 @@ void RegulatedNavigator::resetTask()
   current_speed_ = 0.0;
   cancel_requested_ = false;
   active_navigation_service_goal_.reset();
+  std::shared_ptr<FollowHandle> charging_follow_to_cancel;
+  {
+    // 充电状态机归零：摘回 IDLE、停掉截止与消费定时器，防止残留定时器对已废弃句柄收口；
+    // 在途充电跟随作废并请求控制器停止，迟到回调不再打扰新的任务。
+    std::lock_guard<std::mutex> lock(charging_mutex_);
+    charging_follow_sequence_++;
+    charging_follow_to_cancel = charging_follow_goal_;
+    charging_follow_goal_.reset();
+    charging_phase_ = ChargingPhase::IDLE;
+    charging_qr_timeout_timer_.reset();
+    charging_qr_poll_timer_.reset();
+    active_charging_goal_.reset();
+  }
+  if (charging_follow_to_cancel)
+  {
+    follow_client_->async_cancel_goal(charging_follow_to_cancel);
+  }
 }
 
 }
