@@ -1,0 +1,17 @@
+# 充电动作（Charging action）
+# 目标：从 start_point 出发，行驶到 target_point（充电桩位置）执行充电动作
+
+# ===== Goal：请求充电任务 =====
+string task_id           # 任务唯一标识
+geometry_msgs/Point start_point   # 充电任务起点（通常为车辆当前位置）
+geometry_msgs/Point target_point  # 充电桩位置（终点）
+
+---
+# ===== Result：任务最终结果 =====
+bool success            # 任务是否成功完成
+string message          # 结果描述（失败原因 / 成功说明）
+
+---
+# ===== Feedback：执行过程中的进度反馈 =====
+float32 progress        # 进度 0.0 ~ 1.0
+string status           # 当前状态描述（如 navigating / charging / done）
