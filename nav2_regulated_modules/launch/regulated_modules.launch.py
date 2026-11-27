@@ -288,12 +288,20 @@ def launch_unified(context, rewrites, rviz):
     fixed_controller = fixed['controller_server']['ros__parameters']
     fixed_controller['progress_checker']['movement_time_allowance'] = float(
         arg('fixed_path_progress_timeout'))
+    navigator_parameters = fixed['regulated_navigator']['ros__parameters']
     fixed_controller['controller_plugins'] = [
-        fixed['regulated_navigator']['ros__parameters'].get(
-            'fixed_path_controller_id', 'FixedPathController')]
+        navigator_parameters.get('fixed_path_controller_id', 'FixedPathController')]
     fixed_controller['goal_checker_plugins'] = [
-        fixed['regulated_navigator']['ros__parameters'].get(
-            'fixed_path_goal_checker_id', 'fixed_path_goal_checker')]
+        navigator_parameters.get('fixed_path_goal_checker_id', 'fixed_path_goal_checker')]
+    # 充电专用插件：charging_controller_id／charging_checker_id 非空即在 fixed 通道一并注册，
+    # 否则 Charging 下发的 FollowPath 会因控制器名不存在被 controller_server 拒绝；
+    # 两者的参数块由共享 YAML 的 controller_server 同名键携带，无需在此展开。
+    charging_controller = navigator_parameters.get('charging_controller_id', '')
+    if charging_controller:
+        fixed_controller['controller_plugins'].append(charging_controller)
+    charging_checker = navigator_parameters.get('charging_checker_id', '')
+    if charging_checker:
+        fixed_controller['goal_checker_plugins'].append(charging_checker)
     if adaptive:
         fixed['velocity_smoother']['ros__parameters'].update(
             max_decel=[-1.0, 0.0, -3.2], immediate_stop_on_zero_command=True)

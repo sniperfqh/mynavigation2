@@ -223,6 +223,9 @@ regulated_navigator:
     charging_controller_id: "ChargingController"
     # 充电对接使用的目标检查器标识；需在 controller_server 侧注册同名插件。
     charging_checker_id: "charging_goal_checker"
+    # 充电跟随的固定通道速度基准（m/s），不应低于 ChargingController 的 desired_linear_vel；
+    # 固定通道 velocity_smoother 的 collision 门控以它放行控制器输出，0 会导致车不动。
+    charging_task_speed: 0.1
     # 固定路径可视化话题。
     fixed_path_visualization_topic: "fixed_path_plan"
     # 固定路径边界 Marker 话题。

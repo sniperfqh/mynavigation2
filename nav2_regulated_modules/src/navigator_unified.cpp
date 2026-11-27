@@ -88,10 +88,12 @@ bool RegulatedNavigator::executionReady(const bool lattice) const
 }
 
 // 在接收 Goal 前检查生命周期、交接状态、底盘许可与定位，空闲启动还要求旧请求收口和实测停稳。
+// 充电任务占用车辆期间（含等待二维码）同样拒绝导航 Goal，与 handleChargingGoal 的
+// task_／pending 检查互为镜像，保证两条上层业务不并发驱动同一底盘。
 bool RegulatedNavigator::admitUnified(const bool lattice)
 {
   if (!active_ || pending_fixed_ || pending_pose_ || task_.state == NavigationState::CANCELING ||
-    !executionReady(lattice) || !chassis_control_subscriber_->canStartNavigation())
+    chargingTaskActive() || !executionReady(lattice) || !chassis_control_subscriber_->canStartNavigation())
   {
     return false;
   }
@@ -167,6 +169,12 @@ bool RegulatedNavigator::monitorUnified()
       return true;
     }
     return false;
+  }
+  // 充电跟随同样受固定通道生命周期守护：执行节点掉活即内部取消充电，不等 FollowPath 超时。
+  if (chargingFollowActive() && !executionReady(false))
+  {
+    cancelChargingTask("充电固定执行通道生命周期失效");
+    return true;
   }
   if (!pending_pose_ && !pending_fixed_)
   {

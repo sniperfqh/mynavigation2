@@ -150,7 +150,8 @@ private:
   // 构造几何路径、等待 FollowPath，再接管旧任务并计算总长与最小段限速。
   // 车头姿态由切线和方向生成，当前定位不被重置；超过全局速度上限时钳位，不因此自动拒绝 Goal。
   void handleNavigationServiceAccepted(const std::shared_ptr<NavigationServiceHandle> goal);
-  // 仅接受节点激活、task_id 非空且起点终点坐标有限度的充电请求；已有导航任务时拒绝。
+  // 仅接受节点激活、固定通道就绪、底盘准入、task_id 非空且起点终点坐标有限的充电请求；
+  // 已有导航任务或待执行导航 Goal 时拒绝，与导航准入 admitUnified 形成双向互斥。
   // 这里只校验请求，接受后到 handleChargingAccepted 才保存句柄与更新任务快照。
   rclcpp_action::GoalResponse handleChargingGoal(const rclcpp_action::GoalUUID & uuid, const std::shared_ptr<const Charging::Goal> goal);
   // 取消直接把充电目标摘回 IDLE、停充电侧定时器并把在途 FollowPath 置取消，再以 canceled 终结。
@@ -169,6 +170,19 @@ private:
   // 临界收口：仅当 goal 仍是活动充电任务时终结一次（摘回 IDLE、停定时器、作废在途 FollowPath），
   // 迟到或重复的收口请求静默返回，保证动作 Goal 不会被二次终结。
   void finalizeChargingGoal(const std::shared_ptr<ChargingHandle> goal, bool success, const std::string & message);
+  // 内部取消充电任务：接管保护、生命周期停用／清理与导航任务收口共用，
+  // 无活动充电目标时静默返回；以 abort 终结（外部取消才报 canceled）。
+  void cancelChargingTask(const std::string & reason);
+  // 充电任务处于任意在途阶段（含 AWAIT_QR）：车辆被占用，导航 Goal 准入据此互斥。
+  bool chargingTaskActive() const;
+  // 充电 FollowPath 执行中：底盘统一出口应把固定通道当作当前导航速度源。
+  bool chargingFollowActive() const;
+  // 充电跟随的跟踪轮次，供底盘出口的速度缓存做代次匹配。
+  uint64_t chargingFollowGeneration() const;
+  // 在固定通道速度基准话题发布绝对值 SpeedLimit：下发跟随前置 charging_task_speed_，
+  // 收口时置 0 复位——固定通道 velocity_smoother 的 collision 门控以任务速度为基准，
+  // 速度为 0 时会把控制器输出全部清零（车不动），充电流程必须像导航任务一样显式声明。
+  void publishChargingSpeedLimit(double speed);
   // 从起点到终点沿直线按 step 均匀插值，并在终点方向额外延长 extension 距离。
   // 两输入点约定为同一帧（充电起终点都在 map 帧），输出路径按 global_frame 自动盖章。
   // 路径 z 置 0，车头航向由行进方向生成；两端点重合或参数非法时不生成路径，
@@ -360,6 +374,9 @@ private:
   std::string fixed_path_goal_checker_id_;
   std::string charging_controller_id_;
   std::string charging_checker_id_;
+  // 充电跟随的固定通道速度基准（m/s）：固定通道 velocity_smoother 的 collision 门控基准，
+  // 应不低于 ChargingController 的 desired_linear_vel，否则跟踪段线速度会被截低。
+  double charging_task_speed_ { 0.1 };
   std::string controller_cmd_vel_topic_;
   std::string smoothed_cmd_vel_topic_;
   std::string velocity_odom_topic_;
@@ -433,7 +450,8 @@ private:
   // 充电状态机锁：保护 active_charging_goal_、charging_phase_、charging_follow_goal_ 的认领与收口。
   // 节点跑在 MultiThreadedExecutor 上，截止/消费定时器、FollowPath 回调与取消应答可能并发，
   // 只有持锁把目标从 active 摘除的一方允许终结动作 Goal，避免同一 Goal 被重复终结。
-  std::mutex charging_mutex_;
+  // const 查询（chargingTaskActive 等）也要持锁，故声明为 mutable。
+  mutable std::mutex charging_mutex_;
   std::shared_ptr<ChargingHandle> active_charging_goal_;
   // 充电正在跟踪的 FollowPath 句柄与跟踪轮次；结果/反馈/取消用它区分当前跟踪与迟到结果。
   FollowHandle::SharedPtr charging_follow_goal_;

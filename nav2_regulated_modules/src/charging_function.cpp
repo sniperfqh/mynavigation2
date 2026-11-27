@@ -1,7 +1,9 @@
 // 充电动作的三段回调 + 异步执行状态机。
 // 接受后进入 AWAIT_QR：消费定时器非阻塞轮询二维码缓存，出现新鲜观测即认领一次，
-// 用二维码坐标修正 map 帧终点、生成充电路径并借 follow_client_ 下发 FollowPath，随后由
-// FollowPath 的 feedback 同步上报进度、result 回调收口。任何回调都不得 sleep 阻塞，
+// 用二维码坐标修正 map 帧终点、生成充电路径并固定经 fixed 通道（follow_client_）下发
+// FollowPath——充电不占 task_，followClient() 的任务分派不适用；在途请求计入
+// fixed_path_outstanding_follows_，交接监控的 unifiedDrained 据此不会放行并发任务。
+// 随后由 FollowPath 的 feedback 同步上报进度、result 回调收口。任何回调都不得 sleep 阻塞，
 // 否则二维码订阅与动作应答送不进来；重计算（折算/插值）因此放在消费定时器回调里，
 // 而不放在可能高频到达的 qrCodeMsgCallback 里。
 // 状态机由 charging_mutex_ 保护：截止/消费定时器、FollowPath 回调与取消应答在多线程
@@ -64,8 +66,9 @@ constexpr std::chrono::milliseconds kChargingQrPollInterval { 50 };
 namespace nav2_regulated_modules
 {
 
-// 仅接受节点激活、task_id 非空、起点终点坐标有限且当前无其他任务的充电请求。
-// 已有导航任务时拒绝，避免与在途任务共用车辆；充电尚未接入执行，因此不再校验底盘控制权。
+// 仅接受节点激活、固定通道就绪、底盘准入、task_id 非空、起点终点坐标有限且当前无其他任务的充电请求。
+// 已有导航任务（含待执行 Goal）时拒绝，与 admitUnified 的充电检查形成双向互斥，避免共用车辆。
+// 底盘准入与通道就绪沿用导航任务的统一纪律：遥控占用或未停稳、执行节点未激活时不接单。
 rclcpp_action::GoalResponse RegulatedNavigator::handleChargingGoal(const rclcpp_action::GoalUUID &, const std::shared_ptr<const Charging::Goal> goal)
 {
   if (!active_)
@@ -76,6 +79,21 @@ rclcpp_action::GoalResponse RegulatedNavigator::handleChargingGoal(const rclcpp_
   if (task_.type != TaskType::NONE)
   {
     LOG_WARN("拒绝 Charging Goal：当前已有其他导航任务在执行");
+    return rclcpp_action::GoalResponse::REJECT;
+  }
+  if (pending_pose_ || pending_fixed_)
+  {
+    LOG_WARN("拒绝 Charging Goal：已有导航任务待执行");
+    return rclcpp_action::GoalResponse::REJECT;
+  }
+  if (!executionReady(false))
+  {
+    LOG_WARN("拒绝 Charging Goal：固定执行通道未就绪");
+    return rclcpp_action::GoalResponse::REJECT;
+  }
+  if (!chassis_control_subscriber_->canStartNavigation())
+  {
+    LOG_WARN("拒绝 Charging Goal：底盘控制权未就绪（遥控占用或未停稳）");
     return rclcpp_action::GoalResponse::REJECT;
   }
   {
@@ -131,6 +149,10 @@ rclcpp_action::CancelResponse RegulatedNavigator::handleChargingCancel(const std
     {
       follow_client_->async_cancel_goal(follow_to_cancel);
     }
+    // 与 cancelTask 同款收口：取消子 Goal 后再向速度链入口请求停车（task_ 为 NONE，
+    // stopRobot 自动选择固定通道），不单靠控制器的取消握手兜底。
+    stopRobot();
+    publishChargingSpeedLimit(0.0);
     auto result = std::make_shared<Charging::Result>();
     result->success = false;
     result->message = "充电任务被取消";
@@ -142,8 +164,19 @@ rclcpp_action::CancelResponse RegulatedNavigator::handleChargingCancel(const std
 
 // 保存句柄并进入 AWAIT_QR：启动截止定时器与二维码消费定时器。二者只在各自回调里做有限工作，
 // 不 sleep；重计算（折算/插值/下发）由消费定时器在认领到新鲜观测后转入 startChargingFollow。
+// 接受后先复核占用：Goal 回调与 Accepted 回调之间可能插进导航任务（与 handlePoseAccepted
+// 的 admitUnified 复核互为镜像），冲突时立即 abort，保证同时最多一个上层任务占用车辆。
 void RegulatedNavigator::handleChargingAccepted(const std::shared_ptr<ChargingHandle> goal)
 {
+  if (!active_ || task_.type != TaskType::NONE || pending_pose_ || pending_fixed_)
+  {
+    LOG_WARN("Charging 接受后复核失败：车辆已被导航任务占用或节点未激活");
+    auto result = std::make_shared<Charging::Result>();
+    result->success = false;
+    result->message = "充电任务被导航任务抢占";
+    goal->abort(result);
+    return;
+  }
   {
     std::lock_guard<std::mutex> lock(charging_mutex_);
     active_charging_goal_ = goal;
@@ -215,12 +248,23 @@ void RegulatedNavigator::handleChargingQrPoll(const std::shared_ptr<ChargingHand
 
 // 用二维码坐标修正 map 帧终点、生成充电路径并异步下发 FollowPath。
 // 起点与修正后的终点都留在 map 帧；进度由 feedback 回调转成 Charging 反馈实时上报，
-// 结果回调调用 finalizeChargingGoal 收口。借用 navigator_control.cpp sendFollowPath 的
-// action client 用法；controller_server 不重投影，按 charging_controller_id_ 交给充电
-// 专用控制器（继承 FixedPathController，只在位姿变换环节插充电修正）。
+// 结果回调调用 finalizeChargingGoal 收口。下发对齐 navigator_control.cpp sendFollowPath 的
+// 通道纪律：充电固定走 fixed 通道（follow_client_，不设 task_ 故不经 followClient() 分派），
+// 发送前校验 executionReady，在途请求计入 fixed_path_outstanding_follows_，让
+// unifiedDrained／canStartNavigation 把充电跟随视作占用中的子任务。
+// controller_server 不重投影，按 charging_controller_id_ 交给充电专用控制器
+// （继承 FixedPathController，只在位姿变换环节插充电修正）。
 // 充电对接固定使用倒车模式：下发前把生成路径的首点车头航向旋转 π，让控制器判定为 backward。
 void RegulatedNavigator::startChargingFollow(const std::shared_ptr<ChargingHandle> goal)
 {
+  // 认领后、下发前复核固定通道：与导航任务的 executionReady 门槛同源，
+  // 执行节点掉活或 Action 不可发现时立即失败收口，不把路径发给失效通道。
+  if (!executionReady(false))
+  {
+    LOG_WARN("充电跟随下发前固定执行通道未就绪，task_id={}", goal->get_goal()->task_id);
+    finalizeChargingGoal(goal, false, "固定执行通道未就绪");
+    return;
+  }
   const auto & request = *goal->get_goal();
   geometry_msgs::msg::Point start = request.start_point;
   geometry_msgs::msg::Point target = request.target_point;
@@ -275,10 +319,12 @@ void RegulatedNavigator::startChargingFollow(const std::shared_ptr<ChargingHandl
 
   auto options = rclcpp_action::Client<FollowPath>::SendGoalOptions();
   // 发送时尚未持有已接受句柄；响应到达时先核对跟踪轮次与活动任务，过期则取消迟到接管。
+  // 被拒的请求在此处递减在途计数（不会有 result 回调），被接受的请求统一在 result 递减。
   options.goal_response_callback = [this, sequence, goal](const FollowHandle::SharedPtr & handle)
   {
     if (!handle)
     {
+      --fixed_path_outstanding_follows_;
       finalizeChargingGoal(goal, false, "FollowPath 目标被控制器拒绝");
       return;
     }
@@ -315,6 +361,8 @@ void RegulatedNavigator::startChargingFollow(const std::shared_ptr<ChargingHandl
   };
   options.result_callback = [this, sequence, goal](const auto & result)
   {
+    // 无论是否当前轮次，本请求已到终态，固定通道在途计数先行归零。
+    --fixed_path_outstanding_follows_;
     if (sequence != charging_follow_sequence_)
     {
       return;  // 已取消或新跟踪接管，迟到结果不终结当前任务。
@@ -324,12 +372,18 @@ void RegulatedNavigator::startChargingFollow(const std::shared_ptr<ChargingHandl
       ok ? "充电对接路径执行完成" :
         (result.code == rclcpp_action::ResultCode::ABORTED ? "充电 FollowPath 执行失败" : "充电 FollowPath 被取消"));
   };
+  // 与 sendFollowPath 同款在途计数：交接监控据此不会在充电跟随时放行新的导航任务。
+  ++fixed_path_outstanding_follows_;
+  // 下发前声明充电速度基准：固定通道 smoother 的 collision 门控否则以任务速度 0
+  // 把控制器输出清零（对齐阶段角速度也会被清掉，车完全不动）。
+  publishChargingSpeedLimit(charging_task_speed_);
   try
   {
     follow_client_->async_send_goal(follow_goal, options);
   }
   catch (...)
   {
+    --fixed_path_outstanding_follows_;
     LOG_ERROR("Charging 下发 FollowPath 异常，task_id={}", request.task_id);
     finalizeChargingGoal(goal, false, "FollowPath 下发异常");
   }
@@ -354,6 +408,8 @@ void RegulatedNavigator::finalizeChargingGoal(const std::shared_ptr<ChargingHand
     charging_qr_poll_timer_.reset();
     active_charging_goal_.reset();
   }
+  // 收口复位固定通道速度基准，避免 collision 门控残留充电速度影响后续任务。
+  publishChargingSpeedLimit(0.0);
   auto result = std::make_shared<Charging::Result>();
   if (success)
   {
@@ -364,16 +420,92 @@ void RegulatedNavigator::finalizeChargingGoal(const std::shared_ptr<ChargingHand
   }
   else
   {
-    // 失败收口时若仍有在途跟随，先请控制器停止；成功收口的结果已到，无需再取消。
+    // 失败收口时若仍有在途跟随，先请控制器停止并向速度链入口请求停车；
+    // 成功收口的结果已到，无需再取消。
     if (follow_to_cancel)
     {
       follow_client_->async_cancel_goal(follow_to_cancel);
+      stopRobot();
     }
     result->success = false;
     result->message = message;
     LOG_WARN("Charging 失败，task_id={}：{}", goal->get_goal()->task_id, message);
     goal->abort(result);
   }
+}
+
+// 内部取消充电任务：统一出口接管保护、生命周期停用／清理与导航任务收口共用。
+// 与 handleChargingCancel 共享临界摘除逻辑，但以 abort 终结（外部取消才报 canceled）；
+// 无活动充电目标时静默返回，调用方无需自行判空。
+void RegulatedNavigator::cancelChargingTask(const std::string & reason)
+{
+  std::shared_ptr<ChargingHandle> goal;
+  std::shared_ptr<FollowHandle> follow_to_cancel;
+  {
+    std::lock_guard<std::mutex> lock(charging_mutex_);
+    if (!active_charging_goal_)
+    {
+      return;
+    }
+    goal = active_charging_goal_;
+    follow_to_cancel = charging_follow_goal_;
+    charging_follow_goal_.reset();
+    charging_follow_sequence_++;
+    charging_phase_ = ChargingPhase::IDLE;
+    charging_qr_timeout_timer_.reset();
+    charging_qr_poll_timer_.reset();
+    active_charging_goal_.reset();
+  }
+  if (follow_to_cancel)
+  {
+    follow_client_->async_cancel_goal(follow_to_cancel);
+  }
+  // 充电期间 task_ 为 NONE，stopRobot 自动选择固定通道的停车入口。
+  stopRobot();
+  publishChargingSpeedLimit(0.0);
+  auto result = std::make_shared<Charging::Result>();
+  result->success = false;
+  result->message = reason;
+  LOG_WARN("Charging 被内部取消，task_id={}：{}", goal->get_goal()->task_id, reason);
+  goal->abort(result);
+}
+
+// 充电任务处于任意在途阶段（含等待二维码）：导航 Goal 准入据此拒绝，保证车辆独占。
+bool RegulatedNavigator::chargingTaskActive() const
+{
+  std::lock_guard<std::mutex> lock(charging_mutex_);
+  return active_charging_goal_ != nullptr;
+}
+
+// 充电 FollowPath 执行中：底盘统一出口需把固定通道当作当前导航速度源放行。
+bool RegulatedNavigator::chargingFollowActive() const
+{
+  std::lock_guard<std::mutex> lock(charging_mutex_);
+  return active_charging_goal_ != nullptr && charging_phase_ == ChargingPhase::FOLLOWING;
+}
+
+// 充电跟随的跟踪轮次；充电期间该值稳定，供底盘出口的速度缓存做代次匹配。
+uint64_t RegulatedNavigator::chargingFollowGeneration() const
+{
+  std::lock_guard<std::mutex> lock(charging_mutex_);
+  return charging_follow_sequence_;
+}
+
+// 固定通道 velocity_smoother 的 collision 门控以最近一次 SpeedLimit 为任务速度基准：
+// 基准为 0 时 collisionVelocityTarget 会把控制器输出整包清零，车不会动。
+// 导航任务在 goal_response 里发布 requested_speed、在收口时归零（navigator_control.cpp /
+// navigator_task_manager.cpp）；充电不设 task_，走不到那两处，必须在此对齐同一纪律——
+// 下发跟随时置 charging_task_speed_，任何收口路径复位为 0。
+void RegulatedNavigator::publishChargingSpeedLimit(const double speed)
+{
+  if (!speed_limit_pub_)
+  {
+    return;
+  }
+  nav2_msgs::msg::SpeedLimit speed_limit;
+  speed_limit.percentage = false;
+  speed_limit.speed_limit = speed;
+  speed_limit_pub_->publish(speed_limit);
 }
 
 // 只做观测缓存：把原始单位 mm／度归一化为 m／弧度后写入 current_qr_code_。
@@ -448,10 +580,10 @@ std::optional<nav_msgs::msg::Path> RegulatedNavigator::generateChargingPath(cons
   return output;
 }
 
-// 无阻塞读取二维码快照并沿 world→QR→world 链路只修正 map 帧终点。
-// 起点不做处理，仍按 goal 的 start_point 原样使用；两条路径都在 map 帧，无需里程计链路。
-// 本函数只取两路位姿快照计算，不等待：快照锁内复核消息年龄（≤charging_qr_max_age_），
-// 过期或定位缺失返回 false，由调用方决定收口。
+// 无阻塞读取二维码快照并沿 map→QR→map 链路只修正 map 帧终点。
+// 起点不做处理，仍按 goal 的 start_point 原样使用；二维码位姿与终点都在 map 帧。
+// 变换锚定 map 原点（二维码位姿即 QR 系在 map 的摆放），不引入机器人位姿；
+// 快照锁内复核消息年龄（≤charging_qr_max_age_），过期或定位缺失返回 false，由调用方决定收口。
 bool RegulatedNavigator::correctChargingTargetToMap(geometry_msgs::msg::Point & target)
 {
   // 1) 取两路位姿快照：二维码相对位姿、当前 map 位姿。
@@ -467,24 +599,26 @@ bool RegulatedNavigator::correctChargingTargetToMap(geometry_msgs::msg::Point & 
     }
     qr_snapshot = current_qr_code_;
   }
-  Point3D current_pose;
   {
+    // 定位健康检查：修正链路本身只用二维码位姿（map 帧），但定位缺失时不应继续对接。
     geometry_msgs::msg::PoseStamped pose;
     if (!lookupCurrentPose(pose))
     {
       LOG_WARN("充电二维码修正终点前定位不可用");
       return false;
     }
-    current_pose.x = pose.pose.position.x;
-    current_pose.y = pose.pose.position.y;
-    current_pose.theta = tf2::getYaw(pose.pose.orientation);
   }
   const Point3D qr_point { qr_snapshot.x, qr_snapshot.y, qr_snapshot.theta };
 
-  // 2) 把终点对齐二维码横纵轴再写回 map 帧：先 world→QR 转进二维码系、把较小分量置零，
-  //    再 QR→world 转回 map。与外部算法逐行一致，只是目标帧从 odom 换成 map。
-  const Eigen::Matrix3d tf_qr_w = getTransformMatrixFromAToB(current_pose, qr_point);
-  const Eigen::Matrix3d tf_w_qr = getTransformMatrixFromAToB(qr_point, current_pose);
+  // 2) 把终点对齐二维码横纵轴再写回 map 帧：二维码位姿按 map 帧解释，
+  //    world→QR 取「QR 位姿→map 原点」的坐标变换 R(-θ)(P-q)，把绝对值较小的分量置零
+  //    （只保留沿二维码主轴的偏差），再沿「map 原点→QR 位姿」转回 map。
+  //    旧实现以机器人位姿做 world 锚点且两变换参数颠倒：QR 远离 map 原点时
+  //    投影混入平移量、终点被甩到数米外；锚定 map 原点后 QR 上的点投影为 (0,0)，
+  //    几何上才是真正的二维码系投影。
+  const Point3D map_origin { 0.0, 0.0, 0.0 };
+  const Eigen::Matrix3d tf_qr_w = getTransformMatrixFromAToB(qr_point, map_origin);
+  const Eigen::Matrix3d tf_w_qr = getTransformMatrixFromAToB(map_origin, qr_point);
 
   Eigen::Vector3d tp_in_world(target.x, target.y, 1.0);
   Eigen::Vector3d tp_in_qr = tf_qr_w * tp_in_world;

@@ -47,6 +47,7 @@ RegulatedNavigator::RegulatedNavigator(const rclcpp::NodeOptions & options) : na
   declare_parameter("fixed_path_goal_checker_id", "fixed_path_goal_checker");
   declare_parameter("charging_controller_id", "ChargingController");
   declare_parameter("charging_checker_id", "charging_goal_checker");
+  declare_parameter("charging_task_speed", 0.1);
   declare_parameter("goal_checker_id", "stopped_goal_checker");
   declare_parameter("smoother_id", "simple_smoother");
   declare_parameter("use_smoother", true);
@@ -134,6 +135,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   fixed_path_goal_checker_id_ = get_parameter("fixed_path_goal_checker_id").as_string();
   charging_controller_id_ = get_parameter("charging_controller_id").as_string();
   charging_checker_id_ = get_parameter("charging_checker_id").as_string();
+  charging_task_speed_ = get_parameter("charging_task_speed").as_double();
   // 按 collision_state_enabled 参数配置状态消费，与两条执行通道的速度门是否创建分别控制。
   collision_state_enabled_ = get_parameter("collision_state_enabled").as_bool();
   const auto collision_topic = get_parameter("collision_state_topic").as_string();
@@ -227,6 +229,11 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
     LOG_ERROR("charging_checker_id 不能为空");
     return nav2_util::CallbackReturn::FAILURE;
   }
+  if (!std::isfinite(charging_task_speed_) || charging_task_speed_ <= 0.0)
+  {
+    LOG_ERROR("charging_task_speed 必须为正的有限值");
+    return nav2_util::CallbackReturn::FAILURE;
+  }
 
   planning_module_.configure(get_parameter("planner_id").as_string(), get_parameter("smoother_id").as_string(), get_parameter("use_smoother").as_bool(), get_parameter("replan_frequency").as_double(), get_parameter("max_consecutive_planning_failures").as_int());
   control_module_.configure(get_parameter("controller_id").as_string(), get_parameter("goal_checker_id").as_string(), get_parameter("progress_timeout").as_double());
@@ -238,9 +245,16 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   {
     finishPending(false);
     cancelTask("后台遥控／统一出口保护接管，旧路径不自动恢复");
+    // 充电任务同样受统一出口接管保护：遥控接入即内部取消充电，避免充电目标挂着零速输出僵持。
+    cancelChargingTask("后台遥控／统一出口保护接管");
   };
   chassis_control_config.navigation_active = [this]()
   {
+    // 充电跟随不设 task_，需单独放行；否则统一出口会在充电期间持续发布零速。
+    if (active_ && chargingFollowActive())
+    {
+      return true;
+    }
     return active_ && (task_.type != TaskType::NONE &&
       task_.state != NavigationState::CANCELING);
   };
@@ -252,13 +266,26 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
     chassis_control_config.lattice_navigation_topic = get_parameter("smoothed_cmd_vel_topic").as_string();
     chassis_control_config.navigation_source = [this]()
     {
+      // 充电跟随固定在 fixed 通道（源 0），与 NAVIGATION_SERVICE 一致。
+      if (chargingFollowActive())
+      {
+        return 0;
+      }
       if (task_.state != NavigationState::CONTROLLING || !active_follow_goal_)
       {
         return -1;
       }
       return task_.type == TaskType::TO_POSE ? 1 : 0;
     };
-    chassis_control_config.navigation_generation = [this]() {return follow_sequence_;};
+    chassis_control_config.navigation_generation = [this]()
+    {
+      // 充电跟随用自身的跟踪轮次做代次匹配，与导航任务的 follow_sequence_ 分开计数。
+      if (chargingFollowActive())
+      {
+        return chargingFollowGeneration();
+      }
+      return follow_sequence_;
+    };
   }
   chassis_control_config.input_topic = get_parameter("chassis_input_topic").as_string();
   chassis_control_config.output_topic = get_parameter("chassis_output_topic").as_string();
@@ -296,7 +323,8 @@ nav2_util::CallbackReturn RegulatedNavigator::on_configure(const rclcpp_lifecycl
   clear_global_client_ = create_client<ClearCostmap>("global_costmap/clear_entirely_global_costmap");
 
   navigate_pose_server_ = rclcpp_action::create_server<NavigateToPose>(this, get_parameter("navigate_to_pose_action").as_string(), std::bind(&RegulatedNavigator::handlePoseGoal, this, std::placeholders::_1, std::placeholders::_2), std::bind(&RegulatedNavigator::handlePoseCancel, this, std::placeholders::_1), std::bind(&RegulatedNavigator::handlePoseAccepted, this, std::placeholders::_1));
-  // 充电动作在各非遥控模式均可用；路径生成与控制尚未实现，当前仅在接受回调处记录占位结果。
+  // 充电动作与导航任务互斥共用车辆：接受后等待二维码、修正终点生成倒车直线路径，
+  // 经固定通道 FollowPath 对接，进度与终态由 Charging Action 反馈／结果上报。
   charging_server_ = rclcpp_action::create_server<Charging>(this, charging_action_, std::bind(&RegulatedNavigator::handleChargingGoal, this, std::placeholders::_1, std::placeholders::_2), std::bind(&RegulatedNavigator::handleChargingCancel, this, std::placeholders::_1), std::bind(&RegulatedNavigator::handleChargingAccepted, this, std::placeholders::_1));
   qr_code_sub_ = this->create_subscription<byd_custom_msgs::msg::QrCode>(get_parameter("qrcode_topic").as_string(), rclcpp::SensorDataQoS(), std::bind(&RegulatedNavigator::qrCodeMsgCallback, this, std::placeholders::_1));
   {
@@ -427,6 +455,9 @@ nav2_util::CallbackReturn RegulatedNavigator::on_deactivate(const rclcpp_lifecyc
   }
   finishPending(false);
   cancelTask("节点停用");
+  // 充电任务随停用一并内部取消：cancelTask 只覆盖 task_ 流程，充电状态机需单独收口，
+  // 防止停用后残留的消费定时器认领二维码并继续下发。
+  cancelChargingTask("节点停用");
   collision_state_.reset();
   collision_progress_paused_ = false;
   if (fixed_path_pub_)
@@ -453,18 +484,10 @@ nav2_util::CallbackReturn RegulatedNavigator::on_cleanup(const rclcpp_lifecycle:
   collision_state_.reset();
   collision_progress_paused_ = false;
   cancelTask("节点清理");
+  // 充电状态机随服务器一起清理：内部取消会摘回 IDLE、停定时器、取消在途跟随并终结句柄。
+  cancelChargingTask("节点清理");
   navigate_pose_server_.reset();
   navigation_service_server_.reset();
-  {
-    // 充电状态机随服务器一起清理：摘回 IDLE、停掉截止与消费定时器并摘除句柄
-    // （cancelTask 已重置其余任务状态并请求在途跟随停止）。
-    std::lock_guard<std::mutex> lock(charging_mutex_);
-    charging_phase_ = ChargingPhase::IDLE;
-    charging_qr_timeout_timer_.reset();
-    charging_qr_poll_timer_.reset();
-    charging_follow_goal_.reset();
-    active_charging_goal_.reset();
-  }
   charging_server_.reset();
   compute_pose_client_.reset();
   follow_client_.reset();
@@ -516,6 +539,7 @@ nav2_util::CallbackReturn RegulatedNavigator::on_shutdown(const rclcpp_lifecycle
     chassis_control_subscriber_->deactivate();
   }
   cancelTask("节点关闭");
+  cancelChargingTask("节点关闭");
   LOG_INFO("独立规控导航器已关闭");
   return nav2_util::CallbackReturn::SUCCESS;
 }
